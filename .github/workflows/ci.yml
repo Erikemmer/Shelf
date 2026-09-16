@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # The core on Linux is the guard rail that keeps `ShelfCore` free of AppKit,
+  # ImageIO and PDFKit. Every rule that can be wrong – the EPUB reader, the
+  # index schema, duplicate detection, folder names – is verified here.
+  core-linux:
+    name: ShelfCore tests (Linux)
+    runs-on: ubuntu-24.04
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v4
+      # GRDB reaches the system SQLite through a `systemLibrary` target on
+      # Linux, so the headers have to be there. Ubuntu's libsqlite3 is built
+      # with FTS5, which the index needs.
+      - name: Install SQLite headers
+        run: apt-get update && apt-get install -y libsqlite3-dev
+      - run: swift build
+      - run: swift test
+
+  core-and-app-macos:
+    name: ShelfCore tests + app build (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s /Applications/Xcode.app
+      - run: swift --version
+      - run: swift test
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - run: xcodegen generate
+      - name: Build app (unsigned)
+        run: >
+          xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Debug
+          CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build

@@ -1,0 +1,552 @@
+import AppKit
+import Observation
+import ShelfCore
+import os
+
+/// What the window is looking at, and every action it can take.
+///
+/// `@MainActor` throughout, with the work handed to actors (`LibraryIndex`,
+/// `CoverLoader`) and detached tasks. The rule from Selector: the view model
+/// holds state and orchestrates; nothing slow happens on the main actor.
+@MainActor
+@Observable
+final class LibraryModel {
+    private static let logger = Logger(subsystem: "de.erikemmer.shelf", category: "library")
+
+    // MARK: What is open
+
+    private(set) var library: Library?
+    private(set) var descriptor: LibraryDescriptor?
+    /// Every book in the library, in the current sort order. Held whole: 8 000
+    /// entries are a few megabytes, and filtering them in memory is under a
+    /// millisecond where a query per sidebar click would be a round trip.
+    private(set) var entries: [LibraryEntry] = []
+    private(set) var isLoading = false
+    /// Books whose cover is in the cache – what "Missing Cover" is answered from.
+    private(set) var coversOnDisk: Set<UUID> = []
+
+    // MARK: What is being shown
+
+    var filter = LibraryFilter.everything {
+        didSet { if filter != oldValue { refilter() } }
+    }
+    var sort: BookSort = .titleSort {
+        didSet { if sort != oldValue { reloadEntries() } }
+    }
+    /// The books the grid shows: `entries` after the filter and the search.
+    private(set) var visible: [LibraryEntry] = []
+    var selectedBookID: UUID? {
+        didSet { if selectedBookID != oldValue { selectionChanged() } }
+    }
+
+    /// Cover size in points, driven by the slider and ⌘±.
+    var coverSide: CGFloat = 160 {
+        didSet { noteInteraction() }
+    }
+    static let coverSideRange: ClosedRange<CGFloat> = 90...320
+    static let coverSideStep: CGFloat = 30
+
+    var isInspectorShown = true
+    /// Bumped by ⌘F. A counter rather than a Bool, so pressing ⌘F twice in a
+    /// row focuses the field twice instead of once.
+    private(set) var focusSearchRequest = 0
+
+    func focusSearch() {
+        focusSearchRequest += 1
+    }
+
+    // MARK: The sidebar's contents
+
+    private(set) var totals = LibraryIndex.Totals()
+    private(set) var tagFacets: [LibraryIndex.Facet] = []
+    private(set) var authorFacets: [LibraryIndex.Facet] = []
+    private(set) var seriesFacets: [LibraryIndex.Facet] = []
+    private(set) var formatFacets: [LibraryIndex.Facet] = []
+
+    // MARK: Messages
+
+    /// Shown as a banner over the content. Cleared by the next successful action.
+    private(set) var errorMessage: String?
+    /// The warning a library in a synced folder gets (CONCEPT §12).
+    private(set) var syncWarning: String?
+
+    // MARK: Import
+
+    var isImportSheetPresented = false
+    private(set) var importModel: ImportModel?
+
+    // MARK: Services
+
+    let recents = RecentLibrariesStore()
+    let warmer = CoverWarmer()
+    private(set) var loader: CoverLoader?
+    @ObservationIgnored private var index: LibraryIndex?
+    /// Cleared 250 ms after the last scroll or key press, which is when warming
+    /// may start again.
+    @ObservationIgnored private var interaction = InteractionWindow()
+    @ObservationIgnored private var interactionTask: Task<Void, Never>?
+    @ObservationIgnored private var searchTask: Task<Void, Never>?
+
+    // MARK: Opening and creating
+
+    func presentOpenPanel() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Open Library"
+        panel.message = "Choose a Shelf library folder."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        open(url)
+    }
+
+    func presentNewLibraryPanel() {
+        let panel = NSSavePanel()
+        panel.prompt = "Create Library"
+        panel.message = "Choose where the new library folder goes."
+        panel.nameFieldStringValue = "My Library"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        createLibrary(at: url)
+    }
+
+    func createLibrary(at url: URL) {
+        do {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            _ = try Library.create(at: url)
+            open(url)
+        } catch {
+            show(error, doing: "create a library at \(url.lastPathComponent)")
+        }
+    }
+
+    /// Opens a library folder, or offers to make one when the folder is not a
+    /// library yet.
+    func open(_ url: URL) {
+        recents.beginAccess(to: url)
+        guard Library.isLibrary(url) else {
+            // A plain folder is a reasonable thing to drop; say what is missing
+            // and what to do rather than only refusing.
+            errorMessage =
+                "“\(url.lastPathComponent)” is not a Shelf library. "
+                + "Use New Library… to make one there, or open a folder that already holds one."
+            return
+        }
+        Task { await load(url) }
+    }
+
+    func open(recent entry: RecentLibrary) {
+        guard let url = recents.openable(entry) else {
+            errorMessage = "“\(entry.name)” is not available right now. Is the disk connected?"
+            return
+        }
+        open(url)
+    }
+
+    private func load(_ url: URL) async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let (library, descriptor) = try Library.open(url)
+            let index = try LibraryIndex(library: library)
+            let loader = CoverLoader(library: library)
+
+            self.library = library
+            self.descriptor = descriptor
+            self.index = index
+            self.loader = loader
+            importModel = ImportModel(library: library, index: index)
+            errorMessage = nil
+            syncWarning = library.syncWarning
+            warmer.reset()
+
+            coversOnDisk = await loader.cachedBookIDs()
+            await reload()
+            recents.record(library, bookCount: entries.count)
+
+            // Once per open, in the background: a cache over its limit is
+            // trimmed oldest first.
+            Task.detached(priority: .background) { await loader.trimDiskCache() }
+        } catch {
+            show(error, doing: "open \(url.lastPathComponent)")
+        }
+    }
+
+    func closeLibrary() {
+        library = nil
+        descriptor = nil
+        index = nil
+        loader = nil
+        importModel = nil
+        entries = []
+        visible = []
+        selectedBookID = nil
+        totals = LibraryIndex.Totals()
+        tagFacets = []
+        authorFacets = []
+        seriesFacets = []
+        formatFacets = []
+        warmer.reset()
+    }
+
+    // MARK: Reading the index
+
+    /// Everything the window shows about a library, in one pass.
+    func reload() async {
+        guard let index else { return }
+        do {
+            entries = try await index.allEntries(sortedBy: sort)
+            totals = try await index.totals(coversOnDisk: coversOnDisk)
+            tagFacets = try await index.tagFacets()
+            authorFacets = try await index.authorFacets()
+            seriesFacets = try await index.seriesFacets()
+            formatFacets = try await index.formatFacets()
+            refilter()
+        } catch {
+            show(error, doing: "read the library index")
+        }
+    }
+
+    private func reloadEntries() {
+        Task { await reload() }
+    }
+
+    /// Applies the filter and the search to `entries`.
+    ///
+    /// The facets are matched in memory; only the text search goes to the index,
+    /// because only FTS5 can answer it.
+    private func refilter() {
+        let text = filter.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            applyFilter(matching: nil)
+            return
+        }
+        searchTask?.cancel()
+        searchTask = Task { [weak self] in
+            guard let self, let index = self.index else { return }
+            // Debounced: the field re-queries on every keystroke, and FTS5 is
+            // fast but not free.
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            let ids = (try? await index.search(text)) ?? []
+            guard !Task.isCancelled else { return }
+            self.applyFilter(matching: Set(ids))
+        }
+    }
+
+    private func applyFilter(matching ids: Set<UUID>?) {
+        let shelved = Set<UUID>()
+        visible = entries.filter { entry in
+            if let ids, !ids.contains(entry.id) { return false }
+            return filter.matches(entry, coversOnDisk: coversOnDisk, shelvedBooks: shelved)
+        }
+        // A selection the filter just hid is not kept: the inspector would show
+        // a book that is not on screen.
+        if let selected = selectedBookID, !visible.contains(where: { $0.id == selected }) {
+            selectedBookID = visible.first?.id
+        } else if selectedBookID == nil {
+            selectedBookID = visible.first?.id
+        }
+        warmVisible()
+    }
+
+    // MARK: Selection
+
+    var selectedEntry: LibraryEntry? {
+        guard let selectedBookID else { return nil }
+        return visible.first { $0.id == selectedBookID } ?? entries.first { $0.id == selectedBookID }
+    }
+
+    var selectedIndex: Int? {
+        guard let selectedBookID else { return nil }
+        return visible.firstIndex { $0.id == selectedBookID }
+    }
+
+    func select(_ entry: LibraryEntry) {
+        selectedBookID = entry.id
+    }
+
+    func selectNext() {
+        move(by: 1)
+    }
+
+    func selectPrevious() {
+        move(by: -1)
+    }
+
+    /// One row down or up in the grid. The columns are decided by the view, so
+    /// it tells the model how wide a row is.
+    var gridColumns = 1
+
+    func selectRowBelow() {
+        move(by: max(1, gridColumns))
+    }
+
+    func selectRowAbove() {
+        move(by: -max(1, gridColumns))
+    }
+
+    func selectFirst() {
+        selectedBookID = visible.first?.id
+    }
+
+    func selectLast() {
+        selectedBookID = visible.last?.id
+    }
+
+    private func move(by offset: Int) {
+        guard !visible.isEmpty else { return }
+        noteInteraction()
+        let current = selectedIndex ?? 0
+        let next = min(max(current + offset, 0), visible.count - 1)
+        selectedBookID = visible[next].id
+    }
+
+    private func selectionChanged() {
+        warmVisible()
+    }
+
+    // MARK: Warming and interaction
+
+    /// Called on every scroll, key repeat and slider drag.
+    ///
+    /// Warming stands still while this window is open: a decode cannot be
+    /// called back once started, so not starting one is the only lever there is
+    /// (Selector's ADR 0003, follow-up).
+    func noteInteraction() {
+        interaction.note()
+        guard let loader else { return }
+        interactionTask?.cancel()
+        interactionTask = Task { [weak self] in
+            await loader.setInteracting(true)
+            guard let remaining = self?.interaction.remainingQuietTime() else {
+                await loader.setInteracting(false)
+                return
+            }
+            try? await Task.sleep(for: .seconds(remaining))
+            guard !Task.isCancelled, self?.interaction.isActive() == false else { return }
+            await loader.setInteracting(false)
+        }
+    }
+
+    private func warmVisible() {
+        guard let loader else { return }
+        warmer.warm(visible, around: selectedIndex ?? 0, using: loader)
+    }
+
+    // MARK: Cover size
+
+    func enlargeCovers() {
+        coverSide = min(Self.coverSideRange.upperBound, coverSide + Self.coverSideStep)
+    }
+
+    func shrinkCovers() {
+        coverSide = max(Self.coverSideRange.lowerBound, coverSide - Self.coverSideStep)
+    }
+
+    // MARK: Adding books
+
+    func presentAddBooksPanel() {
+        guard let importModel else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = true
+        panel.prompt = "Choose"
+        panel.message = "Choose books or a folder of books to add."
+        panel.allowedContentTypes = []
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+        isImportSheetPresented = true
+        Task { await importModel.examine(panel.urls) }
+    }
+
+    /// Books dropped on the window. The same path as the panel, so the counting
+    /// protocol appears either way – nothing is copied without being shown first.
+    func handleDrop(_ urls: [URL]) {
+        guard let importModel else {
+            // Dropping a library folder onto the welcome screen opens it.
+            if let first = urls.first, first.hasDirectoryPath { open(first) }
+            return
+        }
+        guard !urls.isEmpty else { return }
+        isImportSheetPresented = true
+        Task { await importModel.examine(urls) }
+    }
+
+    /// Runs the import the sheet is showing, then reloads.
+    func runImport() async {
+        guard let importModel, let library, let index else { return }
+        await importModel.run()
+        // The descriptor's counter moved on, so it has to be written back.
+        if var descriptor {
+            descriptor.nextBookNumber = importModel.nextBookNumber
+            try? library.write(descriptor)
+            self.descriptor = descriptor
+        }
+        if let loader { coversOnDisk = await loader.cachedBookIDs() }
+        _ = index
+        await reload()
+    }
+
+    // MARK: Actions on the selection
+
+    func revealSelectedInFinder() {
+        guard let library, let entry = selectedEntry else { return }
+        let folder = library.root.appendingPathComponent(entry.folder, isDirectory: true)
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
+    }
+
+    /// Opens the book in whatever app the system uses for its format.
+    ///
+    /// Shelf is not a reader (CONCEPT §1), so this hands the file to Books,
+    /// Preview or whatever the user prefers. The file is opened, never modified.
+    func openSelectedInDefaultApp() {
+        guard let library, let entry = selectedEntry, let format = entry.preferredFormat else { return }
+        let url = library.root
+            .appendingPathComponent(entry.folder, isDirectory: true)
+            .appendingPathComponent(format.fileName)
+        NSWorkspace.shared.open(url)
+    }
+
+    // MARK: The cover cache
+
+    private(set) var coverCacheBytes: Int64 = 0
+
+    func refreshCoverCacheSize() async {
+        guard let loader else { return }
+        coverCacheBytes = await loader.diskCacheBytes()
+    }
+
+    func clearCoverCache() async {
+        guard let loader else { return }
+        await loader.clearDiskCache()
+        coversOnDisk = []
+        coverCacheBytes = 0
+        warmer.reset()
+        await reload()
+    }
+
+    // MARK: Rebuilding
+
+    /// Throws the index away and rebuilds it from the folders.
+    ///
+    /// Offered in the menu because it is the answer to every "the index and the
+    /// folders disagree" – and it is safe to offer precisely because the folder
+    /// is the truth (ADR 0001). It never writes or deletes a book file.
+    func rebuildIndex() async {
+        guard let library, let index else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let rebuilder = IndexRebuilder(makeHasher: SHA256Hasher.factory)
+            // Reuse the digests of files that have not changed: hashing a whole
+            // library again is minutes of disk for no new information.
+            var known: [String: String] = [:]
+            for entry in entries {
+                for format in entry.formats {
+                    known[
+                        IndexRebuilder.digestKey(
+                            folder: entry.folder, fileName: format.fileName, byteSize: format.byteSize,
+                            modifiedAt: format.modifiedAt)] = format.sha256
+                }
+            }
+            let result = try await Task.detached(priority: .userInitiated) {
+                try rebuilder.rebuild(library, knownDigests: known)
+            }.value
+
+            try await index.eraseAll()
+            try await index.save(result.entries)
+            if var descriptor {
+                descriptor.nextBookNumber = max(descriptor.nextBookNumber, result.highestNumber + 1)
+                try? library.write(descriptor)
+                self.descriptor = descriptor
+            }
+            warmer.reset()
+            await reload()
+
+            if !result.unreadableFolders.isEmpty {
+                errorMessage =
+                    "\(result.unreadableFolders.count) folder(s) hold no readable book. "
+                    + "Nothing was changed or removed – see \(ImportReport.fileName)."
+            }
+        } catch {
+            show(error, doing: "rebuild the index")
+        }
+    }
+
+    // MARK: Errors
+
+    /// Says what happened and what to do, never only that something failed.
+    private func show(_ error: any Error, doing what: String) {
+        let detail: String
+        switch error {
+        case let failure as Library.Failure:
+            detail = Self.describe(failure)
+        case let failure as LibraryIndex.Failure:
+            detail = Self.describe(failure)
+        case let failure as ImportRunner.Failure:
+            detail = Self.describe(failure)
+        default:
+            detail = (error as NSError).localizedDescription
+        }
+        errorMessage = "Could not \(what): \(detail)"
+        Self.logger.error("\(self.errorMessage ?? "", privacy: .public)")
+    }
+
+    private static func describe(_ failure: Library.Failure) -> String {
+        switch failure {
+        case .notALibrary(let name):
+            return "“\(name)” is not a Shelf library. Use New Library… to make one there."
+        case .alreadyALibrary(let name):
+            return "“\(name)” already holds a library. Open it instead."
+        case .cannotCreate(let name):
+            return "the folder “\(name)” could not be created. Is the disk writable?"
+        case .cannotWriteDescriptor(let name):
+            return "library.json in “\(name)” could not be written. Is the disk full or read-only?"
+        case .newerSchema(let found, let supported):
+            return "it was written by a newer Shelf (format \(found); this one reads \(supported)). "
+                + "Update Shelf to open it."
+        }
+    }
+
+    private static func describe(_ failure: LibraryIndex.Failure) -> String {
+        switch failure {
+        case .cannotOpen(let name, let reason):
+            return "the index of “\(name)” could not be opened (\(reason)). "
+                + "The books are safe – the index can be rebuilt from the folders."
+        }
+    }
+
+    private static func describe(_ failure: ImportRunner.Failure) -> String {
+        switch failure {
+        case .notEnoughSpace(let needed, let available):
+            return "there is not enough room: \(ByteCount.format(needed)) needed, "
+                + "\(ByteCount.format(available)) free. Nothing was copied."
+        case .cannotCreateFolder(let name):
+            return "the folder for “\(name)” could not be created."
+        }
+    }
+
+    func dismissError() {
+        errorMessage = nil
+    }
+
+    func dismissSyncWarning() {
+        syncWarning = nil
+    }
+
+    // MARK: What the status bar says
+
+    var statusLine: String {
+        guard library != nil else { return "" }
+        var parts: [String] = []
+        if filter.isNarrowed || visible.count != entries.count {
+            parts.append("\(visible.count) of \(entries.count) books")
+        } else {
+            parts.append("\(entries.count) book\(entries.count == 1 ? "" : "s")")
+        }
+        if !authorFacets.isEmpty { parts.append("\(authorFacets.count) authors") }
+        if !seriesFacets.isEmpty { parts.append("\(seriesFacets.count) series") }
+        return parts.joined(separator: " · ")
+    }
+}

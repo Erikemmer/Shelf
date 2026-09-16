@@ -1,0 +1,38 @@
+# Swift / SPM
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode (the project is generated from project.yml). The wildcard also catches
+# the "Shelf 2.xcodeproj" copies the Finder makes when a generate collides.
+Shelf*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+*.xcuserstate
+
+# macOS
+.DS_Store
+
+# Secrets – never commit real ones
+.env
+*.p12
+*.mobileprovision
+
+# Books and libraries never belong in git: they are large, they are the user's,
+# and some of them carry DRM. Test material is synthetic and generated.
+*.epub
+*.azw3
+*.mobi
+*.cbz
+*.cbr
+*.pdf
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Local clean-up staging (Erik deletes manually)
+_to_delete/
+
+# Cowork session outputs synced into this folder – not part of the app
+Claude outputs/

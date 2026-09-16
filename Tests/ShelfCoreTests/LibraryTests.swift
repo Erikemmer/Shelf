@@ -1,0 +1,145 @@
+import Foundation
+import Testing
+
+@testable import ShelfCore
+
+@Suite("The library folder")
+struct LibraryTests {
+
+    @Test("creating a library lays out .shelf/ and writes library.json")
+    func create() throws {
+        let folder = try TemporaryFolder()
+        let root = try folder.folder("My Library")
+        let (library, descriptor) = try Library.create(at: root, name: "My Library")
+
+        #expect(Library.isLibrary(root))
+        #expect(folder.exists("My Library/.shelf/library.json"))
+        #expect(folder.exists("My Library/.shelf/covers"))
+        #expect(descriptor.name == "My Library")
+        #expect(descriptor.schemaVersion == LibraryDescriptor.currentSchemaVersion)
+        #expect(descriptor.nextBookNumber == 1)
+        #expect(library.name == "My Library")
+    }
+
+    @Test("a library takes its name from the folder when none is given")
+    func defaultName() throws {
+        let folder = try TemporaryFolder()
+        let (_, descriptor) = try Library.create(at: try folder.folder("Books"))
+        #expect(descriptor.name == "Books")
+    }
+
+    /// Overwriting `library.json` would orphan the index and with it every
+    /// shelf the user built by hand.
+    @Test("creating a library where one already is, is refused")
+    func createTwice() throws {
+        let folder = try TemporaryFolder()
+        let root = try folder.folder("Lib")
+        try Library.create(at: root)
+        #expect(throws: Library.Failure.alreadyALibrary("Lib")) { try Library.create(at: root) }
+    }
+
+    @Test("opening a folder that is not a library says so")
+    func openNonLibrary() throws {
+        let folder = try TemporaryFolder()
+        let root = try folder.folder("Just A Folder")
+        #expect(throws: Library.Failure.notALibrary("Just A Folder")) { try Library.open(root) }
+    }
+
+    @Test("what was created is what is read back")
+    func reopen() throws {
+        let folder = try TemporaryFolder()
+        let root = try folder.folder("Lib")
+        var (library, descriptor) = try Library.create(at: root, name: "Lib")
+        descriptor.nextBookNumber = 42
+        descriptor.shelves = [Shelf(name: "Fiction")]
+        try library.write(descriptor)
+
+        let (reopened, read) = try Library.open(root)
+        #expect(read.nextBookNumber == 42)
+        #expect(read.shelves.map(\.name) == ["Fiction"])
+        #expect(reopened.root == library.root)
+    }
+
+    /// A library written by a newer Shelf could hold fields this version does
+    /// not know, and writing it back would drop them.
+    @Test("a library from a newer Shelf is refused rather than risked")
+    func newerSchema() throws {
+        let folder = try TemporaryFolder()
+        let root = try folder.folder("Future")
+        let (library, _) = try Library.create(at: root)
+        var descriptor = try library.readDescriptor()
+        descriptor.schemaVersion = LibraryDescriptor.currentSchemaVersion + 5
+        try library.write(descriptor)
+
+        #expect(
+            throws: Library.Failure.newerSchema(
+                found: LibraryDescriptor.currentSchemaVersion + 5,
+                supported: LibraryDescriptor.currentSchemaVersion)
+        ) { try Library.open(root) }
+    }
+
+    @Test("a lost covers folder is recreated on open rather than failing")
+    func coversFolderRecreated() throws {
+        let folder = try TemporaryFolder()
+        let root = try folder.folder("Lib")
+        let (library, _) = try Library.create(at: root)
+        try FileManager.default.removeItem(at: library.coversFolder)
+        #expect(!folder.exists("Lib/.shelf/covers"))
+
+        _ = try Library.open(root)
+        #expect(folder.exists("Lib/.shelf/covers"))
+    }
+
+    /// The number is stored rather than derived from the highest folder, so a
+    /// book deleted in the Finder cannot make the next import reuse its number
+    /// and land in a folder that still has files in it.
+    @Test("book numbers are handed out from a stored counter and never reused")
+    func bookNumbers() {
+        var descriptor = LibraryDescriptor(name: "x")
+        #expect(descriptor.takeBookNumber() == 1)
+        #expect(descriptor.takeBookNumber() == 2)
+        #expect(descriptor.nextBookNumber == 3)
+    }
+
+    @Test("the paths inside a library are the ones the concept names")
+    func paths() {
+        let library = Library(root: URL(fileURLWithPath: "/books/My Library"))
+        #expect(library.privateFolder.lastPathComponent == ".shelf")
+        #expect(library.indexURL.lastPathComponent == "library.sqlite")
+        #expect(library.descriptorURL.lastPathComponent == "library.json")
+        #expect(library.coversFolder.lastPathComponent == "covers")
+        #expect(
+            library.folder(for: Book(title: "Emma", authors: ["Jane Austen"]), number: 3).path
+                == "/books/My Library/Austen, Jane/Emma (3)")
+    }
+
+    /// SQLite in a synced folder is a known way to lose a database. Shelf opens
+    /// it anyway – the folder is still the truth – but says so first.
+    @Test("a library in a synced folder is opened with a warning, not refused")
+    func syncWarning() {
+        let iCloud = Library(
+            root: URL(fileURLWithPath: "/Users/x/Library/Mobile Documents/com~apple~CloudDocs/Books"))
+        #expect(iCloud.syncWarning?.contains("iCloud Drive") == true)
+
+        let dropbox = Library(root: URL(fileURLWithPath: "/Users/x/Dropbox/Books"))
+        #expect(dropbox.syncWarning?.contains("Dropbox") == true)
+
+        #expect(Library(root: URL(fileURLWithPath: "/Volumes/Books/Library")).syncWarning == nil)
+    }
+
+    @Test("library.json is readable text with sorted keys and ISO dates")
+    func descriptorFormat() throws {
+        let folder = try TemporaryFolder()
+        let root = try folder.folder("Lib")
+        try Library.create(at: root, name: "Lib")
+        let text = try String(contentsOf: Library(root: root).descriptorURL, encoding: .utf8)
+        #expect(text.contains("\"createdAt\""))
+        #expect(text.contains("\"schemaVersion\" : 1"))
+        // Sorted keys: createdAt comes before name comes before nextBookNumber.
+        guard let created = text.range(of: "createdAt"), let name = text.range(of: "\"name\"") else {
+            Issue.record("the descriptor is missing its keys")
+            return
+        }
+        #expect(created.lowerBound < name.lowerBound)
+    }
+}
