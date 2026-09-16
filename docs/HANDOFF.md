@@ -92,6 +92,24 @@ elemente, nicht des Aufbaus. Die Liste steht in `docs/BACKLOG.md` unter
   (`Parsed.unmappedMetas`). Beim Schreiben eines editierten Buchs müssen sie
   wieder mitgehen, sonst verliert ein Calibre-Import seine eigenen Spalten.
 
+## Eine Entscheidung, die dir gehört: SlateKit und CI
+
+`Erikemmer/SlateKit` ist **privat**. Der Kern braucht es nicht – seine Tests
+laufen auf Linux und auf macOS und sichern jeden Push ab. Die *App* braucht es,
+und GitHub Actions kommt ohne Zugangsdaten nicht an ein privates Repo. Der
+Job überspringt den App-Build deshalb mit einer sichtbaren Warnung, statt jeden
+Lauf rot zu machen. Zwei Wege, einer davon ist zu wählen:
+
+1. **Ein Secret `SLATEKIT_TOKEN`** im Shelf-Repo anlegen (fine-grained token mit
+   Leserecht auf `Erikemmer/SlateKit`). Der Job nimmt es automatisch und baut
+   die App dann mit. Nichts wird öffentlich.
+2. **SlateKit öffentlich machen.** Dann entfällt das Secret. Das Paket enthält
+   nur Aussehen und Layout, keinen Fachcode – aber es öffentlich zu machen ist
+   eine Veröffentlichung, und die trifft diese Sitzung nicht von sich aus.
+
+Bis dahin heißt „CI grün": der Kern ist auf beiden Plattformen grün und die App
+wurde nicht gebaut. Lokal baut sie `make app`, und `make smoke` startet sie.
+
 ## Offene Punkte, die keiner Sitzung gehören
 
 - **Handprüfungen aus Sprint 1** stehen in `docs/BACKLOG.md` unter „Measurements

@@ -114,12 +114,18 @@ correctly — titles, authors, subtitles and covers. The three findings:
    `FileHandle` does, so a linked book arrived with the right content and a size
    of about eighty bytes. `FileFacts` now resolves the link first, in one place
    the importer and the command-line tool share.
-6. **The Linux CI job caught two portability faults on the first push**, which
-   is exactly what it is for: `autoreleasepool` does not exist in
-   swift-corelibs-foundation (there is a `withAutoreleasePool` shim now), and one
-   expression in `MinimalPNG` exceeded the type checker's budget on **Swift 6.1**
-   — which CI uses on both Linux *and* macOS — while the 6.4 toolchain on this
-   Mac compiled it happily. A local green build is not a green build.
+6. **CI caught three portability faults on its first two runs**, which is
+   exactly what it is for. `autoreleasepool` does not exist in
+   swift-corelibs-foundation (there is a `withAutoreleasePool` shim now). One
+   expression in `MinimalPNG` exceeded the type checker's budget on **Swift
+   6.1** — which CI uses on both Linux *and* macOS — while the 6.4 toolchain on
+   this Mac compiled it happily. And `FileManager.replaceItemAt` is not
+   implemented on Linux either, so every *second* write of a `metadata.opf`
+   failed there: the first write took the `moveItem` path and worked, which is
+   why only two tests noticed. `Data.write(options: .atomic)` is the
+   write-to-temp-and-`rename(2)` that CONCEPT §5.1 asks for, does it portably,
+   and is less code than doing it by hand. **A local green build is not a green
+   build.**
 
 The seventeenth real book, *Greenlights*, has no readable metadata: the file is
 not a valid ZIP at all, and `unzip` refuses it too. Shelf imported it anyway,
@@ -150,4 +156,10 @@ Everything that needs somebody looking at the screen. In full in
 - `make smoke` no longer needs permission to automate System Events, because a
   library can be handed to the app on the command line — but that also means the
   front window's *title* cannot be read, so the evidence that a library really
-  opened is the covers appearing in its cache.
+  opened is its appearance in the app's recent list and the covers in its cache.
+- **CI does not build the app.** SlateKit is a private repository and GitHub
+  Actions has no credentials for it, so that job skips with a warning; the core
+  is verified on Linux and macOS and gates every push. Either add a
+  `SLATEKIT_TOKEN` secret or make SlateKit public — the choice is Erik's, and
+  `docs/HANDOFF.md` sets out both. Until then the app is built by `make app`
+  here, not by CI.
