@@ -174,15 +174,24 @@ public enum AuthorSort {
     public static let suffixes: Set<String> = ["jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "phd", "ph.d."]
 
     public static func of(_ name: String) -> String {
-        let parts = name.split(separator: " ").map(String.init).filter { !$0.isEmpty }
-        guard parts.count > 1 else { return name.trimmingCharacters(in: .whitespaces) }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A name that already has a comma in it is already in sort form, and
+        // sorting it again is how "McFadden, Freida" became "Freida, McFadden,".
+        // Real EPUBs write `dc:creator` both ways – found in a shop download,
+        // and in a large share of any real library.
+        guard !trimmed.contains(",") else {
+            return trimmed.split(separator: " ").filter { !$0.isEmpty }.joined(separator: " ")
+        }
+
+        let parts = trimmed.split(separator: " ").map(String.init).filter { !$0.isEmpty }
+        guard parts.count > 1 else { return trimmed }
 
         var words = parts
         var suffix: String?
         if let last = words.last, suffixes.contains(last.lowercased()) {
             suffix = words.removeLast()
         }
-        guard words.count > 1, let surname = words.popLast() else { return name.trimmingCharacters(in: .whitespaces) }
+        guard words.count > 1, let surname = words.popLast() else { return trimmed }
 
         let given = words.joined(separator: " ")
         let tail = suffix.map { "\(given) \($0)" } ?? given

@@ -42,12 +42,21 @@ public enum MinimalPNG {
     /// A cover-shaped image with a visible pattern, so a wrong cover in the
     /// grid is noticeable by eye and not only by a test.
     public static func cover(width: Int = 300, height: Int = 450, seed: UInt8) -> Data {
-        grayscale(width: width, height: height) { x, y in
+        // Each step on its own line with an explicit type. Written as one
+        // expression, mixing `Int` arithmetic with `UInt8` operands, Swift's
+        // type checker gave up on it – on **Swift 6.1**, which is what CI uses
+        // on both Linux and macOS, while the 6.4 toolchain on this Mac compiled
+        // it without complaint. A local green build is not a green build.
+        let across = max(width, 1)
+        let down = max(height, 1)
+        return grayscale(width: width, height: height) { x, y in
             // A diagonal gradient with a band across it: distinguishable at
             // thumbnail size, and different for every seed.
-            let gradient = UInt8((x * 160 / max(width, 1) + y * 60 / max(height, 1)) % 200)
-            let band: UInt8 = (y * 8 / max(height, 1)) == 2 ? 240 : 0
-            return gradient &+ seed &+ band
+            let diagonal: Int = (x * 160 / across + y * 60 / down) % 200
+            let isBand: Bool = (y * 8 / down) == 2
+            let band: Int = isBand ? 240 : 0
+            let value: Int = (diagonal + Int(seed) + band) % 256
+            return UInt8(value)
         }
     }
 

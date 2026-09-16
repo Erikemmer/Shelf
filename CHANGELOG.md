@@ -98,6 +98,34 @@ therefore the folder a book lives in; and the shelf list was joined with
 `U+001F`, which is **not legal in XML 1.0** and made the parser refuse the whole
 OPF. Both are tested now.
 
+### Three more, from real books and from CI
+
+Seventeen real EPUBs were copied out of `~/Downloads` into a throw-away library
+(the originals only read, the copies deleted afterwards). Sixteen read
+correctly — titles, authors, subtitles and covers. The three findings:
+
+4. **An author name that already had a comma was sorted again.** Shop EPUBs
+   write `dc:creator` both ways, and `AuthorSort.of("McFadden, Freida")` gave
+   `"Freida, McFadden,"` — a second author folder for the same person, in a
+   library where thirteen of seventeen books were hers. A name with a comma is
+   already in sort form and is now left alone, with a test.
+5. **Symlinked books imported with the wrong size.**
+   `FileManager.attributesOfItem(atPath:)` does *not* follow a symlink while
+   `FileHandle` does, so a linked book arrived with the right content and a size
+   of about eighty bytes. `FileFacts` now resolves the link first, in one place
+   the importer and the command-line tool share.
+6. **The Linux CI job caught two portability faults on the first push**, which
+   is exactly what it is for: `autoreleasepool` does not exist in
+   swift-corelibs-foundation (there is a `withAutoreleasePool` shim now), and one
+   expression in `MinimalPNG` exceeded the type checker's budget on **Swift 6.1**
+   — which CI uses on both Linux *and* macOS — while the 6.4 toolchain on this
+   Mac compiled it happily. A local green build is not a green build.
+
+The seventeenth real book, *Greenlights*, has no readable metadata: the file is
+not a valid ZIP at all, and `unzip` refuses it too. Shelf imported it anyway,
+named from its file, and said so in the report — which is what the fallback
+chain is designed to do, working on a real broken file rather than a contrived one.
+
 ### Not verified
 
 Everything that needs somebody looking at the screen. In full in

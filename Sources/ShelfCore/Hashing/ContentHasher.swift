@@ -33,9 +33,10 @@ extension FileManager {
 /// SHA-256 over a file, in chunks, using whatever hasher the caller brings.
 ///
 /// The one place that knows how to read a file for hashing, so the importer and
-/// the duplicate check cannot disagree about it. The `autoreleasepool` is not
+/// the duplicate check cannot disagree about it. The autorelease pool is not
 /// decoration: without a pool of its own the loop holds every chunk until the
 /// file ends, which in Selector measured 1.2 GB peak for a 7.4 GB folder.
+/// See `withAutoreleasePool` for why it is not `autoreleasepool` directly.
 public enum FileDigest {
     /// Big enough that per-read overhead disappears, small enough that a
     /// cancelled run stops promptly and memory stays flat.
@@ -54,7 +55,7 @@ public enum FileDigest {
         var reachedEnd = false
         while !reachedEnd {
             if Task.isCancelled { throw CancellationError() }
-            try autoreleasepool {
+            try withAutoreleasePool {
                 let chunk = try handle.read(upToCount: chunkSize) ?? Data()
                 if chunk.isEmpty {
                     reachedEnd = true

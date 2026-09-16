@@ -320,7 +320,7 @@ public struct ImportRunner: Sendable {
             // Each chunk is backed by an autoreleased buffer. Without a pool of
             // its own the loop holds every chunk of the file until it ends –
             // measured at 1.2 GB peak in Selector for a 7.4 GB folder.
-            try autoreleasepool {
+            try withAutoreleasePool {
                 let chunk = try input.read(upToCount: FileDigest.chunkSize) ?? Data()
                 if chunk.isEmpty {
                     reachedEnd = true

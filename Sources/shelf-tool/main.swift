@@ -219,23 +219,23 @@ enum Commands {
 
     /// Reads one file into a candidate: metadata, cover and digest.
     static func readCandidate(_ url: URL) throws -> ImportCandidate? {
-        guard let format = BookFileFormat.of(url) else { return nil }
-        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-        let byteSize = (attributes[.size] as? Int64) ?? 0
-        let modified = (attributes[.modificationDate] as? Date) ?? Date()
-        let digest = try FileDigest.sha256(of: url, makeHasher: PortableSHA256Hasher.factory)
+        // `FileFacts` follows symlinks; `attributesOfItem` does not, and the
+        // difference is a book imported with a size of eighty bytes.
+        guard let format = BookFileFormat.of(url), let facts = FileFacts.of(url) else { return nil }
+        let digest = try FileDigest.sha256(of: facts.url, makeHasher: PortableSHA256Hasher.factory)
 
-        if format.hasReadableMetadata, let read = try? EPUBMetadata.read(url: url) {
+        if format.hasReadableMetadata, let read = try? EPUBMetadata.read(url: facts.url) {
             return ImportCandidate(
-                source: url, byteSize: byteSize, format: format, sha256: digest, book: read.book,
-                cover: read.cover, coverName: read.coverName, drm: read.drm, modifiedAt: modified,
+                source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: read.book,
+                cover: read.cover, coverName: read.coverName, drm: read.drm, modifiedAt: facts.modifiedAt,
                 warnings: read.warnings)
         }
         // Everything else imports by file name in Sprint 1 (CONCEPT §6).
         let stem = url.deletingPathExtension().lastPathComponent
         let book = Book(title: FileNameMetadata.title(from: stem), authors: FileNameMetadata.authors(from: stem))
         return ImportCandidate(
-            source: url, byteSize: byteSize, format: format, sha256: digest, book: book, modifiedAt: modified,
+            source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: book,
+            modifiedAt: facts.modifiedAt,
             warnings: ["metadata from the file name – \(format.rawValue.uppercased()) is read in Sprint 4"])
     }
 

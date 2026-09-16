@@ -143,3 +143,50 @@ struct LibraryTests {
         #expect(created.lowerBound < name.lowerBound)
     }
 }
+
+@Suite("What the file system says about a file")
+struct FileFactsTests {
+
+    @Test("size and date come from the file itself")
+    func plainFile() throws {
+        let folder = try TemporaryFolder()
+        let payload = Data(repeating: 0xAB, count: 4_096)
+        let url = try folder.write("book.epub", data: payload)
+
+        guard let facts = FileFacts.of(url) else {
+            Issue.record("no facts for a file that exists")
+            return
+        }
+        #expect(facts.byteSize == 4_096)
+        #expect(facts.url.lastPathComponent == "book.epub")
+    }
+
+    /// `attributesOfItem(atPath:)` reports a *symlink's* own size – about eighty
+    /// bytes – while `FileHandle` follows the link and reads the real content.
+    /// A symlinked book therefore imported with the right bytes and the wrong
+    /// size. Found by importing real books through symlinks.
+    @Test("a symlink is followed, so the size is the real file's")
+    func symlink() throws {
+        let folder = try TemporaryFolder()
+        let payload = Data(repeating: 0xCD, count: 10_000)
+        let real = try folder.write("real/book.epub", data: payload)
+        let link = folder.url.appendingPathComponent("link.epub")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+
+        // What the naive reading would have said.
+        let naive = try FileManager.default.attributesOfItem(atPath: link.path)[.size] as? Int64
+        #expect(naive != 10_000)
+
+        guard let facts = FileFacts.of(link) else {
+            Issue.record("no facts for a symlink")
+            return
+        }
+        #expect(facts.byteSize == 10_000)
+        #expect(facts.url.lastPathComponent == "book.epub")
+    }
+
+    @Test("a file that is not there has no facts, rather than zero ones")
+    func missing() {
+        #expect(FileFacts.of(URL(fileURLWithPath: "/nonexistent/nothing.epub")) == nil)
+    }
+}

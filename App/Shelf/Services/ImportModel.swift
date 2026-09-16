@@ -175,25 +175,27 @@ final class ImportModel {
     /// and a static method of a `@MainActor` type would be main-actor isolated
     /// like everything else in here.
     nonisolated private static func candidate(for url: URL) -> ImportCandidate? {
+        // The format comes from the name the *user* sees; everything else from
+        // the file the name points at (`FileFacts` follows symlinks).
         guard let format = BookFileFormat.of(url),
-            let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-            let byteSize = attributes[.size] as? Int64,
-            let digest = try? FileDigest.sha256(of: url, makeHasher: SHA256Hasher.factory)
+            let facts = FileFacts.of(url),
+            let digest = try? FileDigest.sha256(of: facts.url, makeHasher: SHA256Hasher.factory)
         else { return nil }
-        let modified = (attributes[.modificationDate] as? Date) ?? Date()
 
-        if format.hasReadableMetadata, let read = try? EPUBMetadata.read(url: url) {
+        if format.hasReadableMetadata, let read = try? EPUBMetadata.read(url: facts.url) {
             return ImportCandidate(
-                source: url, byteSize: byteSize, format: format, sha256: digest, book: read.book,
-                cover: read.cover, coverName: read.coverName, drm: read.drm, modifiedAt: modified,
+                source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: read.book,
+                cover: read.cover, coverName: read.coverName, drm: read.drm, modifiedAt: facts.modifiedAt,
                 warnings: read.warnings)
         }
         // Everything else imports by file name in Sprint 1 (CONCEPT §6). The
         // book is still added, and the report says where its metadata came from.
+        // The *original* name is used, because that is what the user chose.
         let stem = url.deletingPathExtension().lastPathComponent
         let book = Book(title: FileNameMetadata.title(from: stem), authors: FileNameMetadata.authors(from: stem))
         return ImportCandidate(
-            source: url, byteSize: byteSize, format: format, sha256: digest, book: book, modifiedAt: modified,
+            source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: book,
+            modifiedAt: facts.modifiedAt,
             warnings: [
                 "metadata from the file name – \(format.rawValue.uppercased()) is read from Sprint 4 on"
             ])
