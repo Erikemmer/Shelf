@@ -325,28 +325,25 @@ public enum OPFDocument {
 
     /// Writes the OPF into a book's folder, atomically.
     ///
-    /// Through a `.opf.part` file that is renamed into place – the same rule as
-    /// Selector's `.ingest-*.part` (CONCEPT §5.1). A crash or a full disk then
-    /// leaves either the old file or the new one, never half of either, and the
-    /// OPF is the only record of a book's metadata once the index is gone.
+    /// CONCEPT §5.1 asks for a `.part` file that is renamed into place, the same
+    /// rule as Selector's `.ingest-*.part`, so that a crash or a full disk leaves
+    /// either the old file or the new one and never half of either – the OPF is
+    /// the only record of a book's metadata once the index is gone.
+    ///
+    /// `Data.write(options: .atomic)` *is* that: it writes a temporary file in
+    /// the same directory and renames it over the target with `rename(2)`, which
+    /// is atomic. Doing it by hand instead is how this first went wrong — the
+    /// hand-written version used `FileManager.replaceItemAt`, which is not
+    /// implemented in swift-corelibs-foundation, so every second write of an OPF
+    /// failed on Linux. The Linux CI job found it; no Mac would have.
     public static func write(
         _ book: Book, to folder: URL, shelfPaths: [String] = [], unmappedMetas: [String: String] = [:]
     ) throws {
         let text = render(book, shelfPaths: shelfPaths, unmappedMetas: unmappedMetas)
-        let target = folder.appendingPathComponent(fileName)
-        let partial = folder.appendingPathComponent("\(fileName).part")
-
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            try Data(text.utf8).write(to: partial)
-            // `replaceItemAt` is the atomic swap; it also removes the partial.
-            if FileManager.default.fileExists(atPath: target.path) {
-                _ = try FileManager.default.replaceItemAt(target, withItemAt: partial)
-            } else {
-                try FileManager.default.moveItem(at: partial, to: target)
-            }
+            try Data(text.utf8).write(to: folder.appendingPathComponent(fileName), options: .atomic)
         } catch {
-            try? FileManager.default.removeItem(at: partial)
             throw Failure.cannotWrite(folder.lastPathComponent)
         }
     }

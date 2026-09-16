@@ -6,9 +6,13 @@ on:
   pull_request:
 
 jobs:
-  # The core on Linux is the guard rail that keeps `ShelfCore` free of AppKit,
-  # ImageIO and PDFKit. Every rule that can be wrong – the EPUB reader, the
-  # index schema, duplicate detection, folder names – is verified here.
+  # The core on Linux is the guard rail that keeps AppKit, ImageIO and PDFKit
+  # out of `ShelfCore`. Every rule that can be wrong – the EPUB reader, the
+  # index schema, duplicate detection, folder names – is verified here. On the
+  # first run it earned its keep three times over: `autoreleasepool` does not
+  # exist in swift-corelibs-foundation, `FileManager.replaceItemAt` is not
+  # implemented there either, and one expression exceeded the type checker's
+  # budget on Swift 6.1.
   core-linux:
     name: ShelfCore tests (Linux)
     runs-on: ubuntu-24.04
@@ -23,8 +27,10 @@ jobs:
       - run: swift build
       - run: swift test
 
-  core-and-app-macos:
-    name: ShelfCore tests + app build (macOS)
+  # The same core on the platform Shelf ships on. `ShelfCore` has no dependency
+  # on SlateKit, so this needs no credentials and always runs.
+  core-macos:
+    name: ShelfCore tests (macOS)
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -32,10 +38,40 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s /Applications/Xcode.app
       - run: swift --version
       - run: swift test
+
+  # The app needs SlateKit, which is a *private* repository, so this job can
+  # only run with credentials for it. Rather than fail every run with a
+  # misleading red, it says loudly why it skipped. Either add a
+  # `SLATEKIT_TOKEN` secret (a fine-grained token with read access to
+  # Erikemmer/SlateKit) or make SlateKit public – see docs/HANDOFF.md.
+  app-macos:
+    name: App build (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Can SlateKit be reached?
+        id: access
+        env:
+          TOKEN: ${{ secrets.SLATEKIT_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=App build skipped::SlateKit is private and no SLATEKIT_TOKEN secret is set, so the app was not built. The core tests still gate this run. Add the secret or make SlateKit public – docs/HANDOFF.md."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            git config --global url."https://x-access-token:$TOKEN@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Select Xcode
+        if: steps.access.outputs.available == 'true'
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s /Applications/Xcode.app
       - name: Install XcodeGen
+        if: steps.access.outputs.available == 'true'
         run: brew install xcodegen
-      - run: xcodegen generate
+      - name: Generate the project
+        if: steps.access.outputs.available == 'true'
+        run: xcodegen generate
       - name: Build app (unsigned)
+        if: steps.access.outputs.available == 'true'
         run: >
           xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Debug
           CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
