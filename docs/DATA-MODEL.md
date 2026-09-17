@@ -55,6 +55,10 @@ book that cannot be found again:
     { "id" : "…", "name" : "Fiction", "position" : 0 },
     { "id" : "…", "name" : "Science Fiction", "parentID" : "…", "position" : 0 }
   ],
+  "customColumns" : [
+    { "number" : 1, "label" : "read_date", "name" : "Date read",
+      "kind" : "datetime", "isMultiple" : false, "isNormalized" : false }
+  ],
   "view" : {
     "mode" : "table",
     "order" : { "field" : "author", "ascending" : false },
@@ -160,6 +164,7 @@ list ([`Sources/ShelfCore/Library/BookFieldEdit.swift`](../Sources/ShelfCore/Lib
 | Shelves | `<meta name="shelf:shelves">` | a JSON array of stored paths, sorted |
 | Rating | `<meta name="calibre:rating">` | Calibre's 0…10, five stars × 2 |
 | Read | `<meta name="shelf:read">` | Shelf's own |
+| Calibre's own columns | `<meta name="shelf:custom">` | a JSON object, label → text; read-only (ADR 0010) |
 
 Rules that come with the table:
 
@@ -258,6 +263,29 @@ Rules worth knowing:
   that is there and copies across only the fields that actually changed, so
   Calibre's custom columns, the shelves and the identifiers survive an edit made
   from a window that never loaded them.
+
+### Calibre's custom columns
+
+`<meta name="shelf:custom" content="{&quot;pages&quot;:&quot;341&quot;}"/>` — one
+meta holding a JSON object, keys sorted, for the two reasons `shelf:shelves` is
+one meta holding an array: `<meta name=…>` is looked up by name, so a column
+called `read` would collide with Shelf's own field, and a label is free-form
+text a joined string cannot carry back.
+
+*Which* columns a library has — their names and their kinds — is in
+`library.json`, not here; a book carries only its values
+([ADR 0010](adr/0010-calibre-custom-columns-are-read-only.md)).
+
+**Calibre's own `calibre:user_metadata:#…` metas are untouched.** They carry
+Calibre's JSON definition of the column, not a value, and Shelf writes its own
+meta rather than pretending to speak that dialect. They survive an edit like
+every meta Shelf does not model — which they had *not* until Sprint 3, because
+the reader treated the whole `calibre:` prefix as understood and dropped them.
+The metas Shelf models are named one by one now:
+
+    calibre:title_sort · calibre:series · calibre:series_index
+    calibre:rating · calibre:timestamp
+    shelf:read · shelf:shelves · shelf:custom
 
 ## 4. The index (`.shelf/library.sqlite`)
 
@@ -366,7 +394,61 @@ Rules that are easy to get wrong and are therefore written down:
   further — a cache that trims itself to half spends the next session rebuilding
   what it threw away.
 
-## 6. `Import-Report.txt`
+## 6. Coming from Calibre
+
+What `CalibreReader` reads out of `metadata.db`, and what it becomes. The
+database is read **through a copy**, never in place
+([ADR 0009](adr/0009-calibre-is-read-through-a-copy-of-metadata-db.md)).
+
+| in `metadata.db` | in Shelf | in `metadata.opf` |
+|---|---|---|
+| `books.uuid` | `Book.id` — the identity (CONCEPT §5.3) | `dc:identifier opf:scheme="uuid"` |
+| `books.title` | `Book.title` | `dc:title` |
+| `books.sort` | `Book.titleSort` | `calibre:title_sort` |
+| `books.timestamp` | `Book.addedAt` | `calibre:timestamp` |
+| `books.last_modified` | `Book.modifiedAt` | `dcterms:modified` |
+| `books.pubdate` | `Book.published` | `dc:date` |
+| `authors` + `books_authors_link` | `Book.authors`, in link order | one `dc:creator` each |
+| `series` + `books_series_link`, `books.series_index` | `Book.series` | `calibre:series`, `calibre:series_index` |
+| `tags` + `books_tags_link` | `Book.tags`, sorted | one `dc:subject` each |
+| `ratings` + `books_ratings_link` | `Book.rating`, Calibre's 0…10 kept whole | `calibre:rating` |
+| `comments.text` | `Book.description` | `dc:description` |
+| `identifiers` | `Book.identifiers`, scheme lower-cased | `dc:identifier opf:scheme=…` |
+| `publishers` + link | `Book.publisher` | `dc:publisher` |
+| `languages` + link, first by `item_order` | `Book.language` | `dc:language` |
+| `data` | one `BookFormat` per file | — (the files themselves) |
+| `custom_columns` | `LibraryDescriptor.customColumns` | — (`library.json`) |
+| `custom_column_<n>` / `books_custom_column_<n>_link` | `Book.customValues` | `shelf:custom` |
+| `books_plugin_data` | **ignored** (CONCEPT §7) | — |
+
+Rules worth knowing:
+
+* **Publishers and languages are read although CONCEPT §7 does not list them.**
+  `Book` models both and every OPF gets a `dc:publisher` and a `dc:language`;
+  an import that dropped a field the model has would not be the lossless one
+  CONCEPT §2 promises.
+* **Calibre writes a real comma in a name as a `|`.** `Le Guin|Ursula` is one
+  name with a comma in it. Undone on the way in, before it can reach a folder
+  name.
+* **`books.isbn` is Calibre's legacy column** and the `identifiers` table wins
+  where both have something.
+* **A custom column has two shapes** and which one is Calibre's decision, not
+  the datatype's: *normalized* keeps its values in their own table with a link
+  table beside it (that is how one value is shared by many books), and a plain
+  one keeps the value in the row. Both are read.
+* **A `composite` column has no stored value** — Calibre computes it from a
+  template — so there is nothing to import. A datatype this Shelf has never
+  heard of is a line in the report and the other columns come in around it.
+* **The cover comes from Calibre's `cover.jpg`**, not out of the book file:
+  somebody who replaced a bad cover did it there. `CoverFile.name(for:)` then
+  names the file after what the bytes actually are, so a PNG that Calibre calls
+  `cover.jpg` arrives as `cover.png`.
+* **The counting protocol counts the database *and* the disk**, because they
+  disagree: `data` is what the library believes and the folder is what it has.
+  A count from one of them alone is the one that makes an import look fine and
+  then fail halfway.
+
+## 7. `Import-Report.txt`
 
 Plain text, appended to, one block per import, because the history of what came
 into a library and what was skipped is worth more than the last run alone. It

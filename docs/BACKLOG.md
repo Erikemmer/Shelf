@@ -121,9 +121,10 @@ change of controls, not of layout.
 - [ ] **Reordering shelves among their sisters.** `Shelf.position` exists and is
       honoured; nothing in the window sets it yet, so shelves sit in the order
       they were made
-- [ ] **Scrolling 5 000 table rows, measured.** The `sample` run that Sprint 1
-      did for the grid needs the window, and the screen locked during the run
-      that would have taken it (see below)
+- [x] **Scrolling 5 000 table rows, measured.** Done in Sprint 3:
+      `Scripts/table-scroll.sh`, 4 996 rows, no decode and no file I/O on the
+      main thread, 282 MB peak. Keyboard-driven — the SwiftUI `Table` does not
+      move for a posted scroll-wheel event at all
 
 ### Still open, carried from 2b
 
@@ -166,24 +167,62 @@ change of controls, not of layout.
       happened twice more during 2c. The app is fine: it still creates and shows
       its window, and `make smoke` passes while locked.
 
-      `Scripts/shots-2c.sh` now refuses to start on a locked screen and re-runs
-      itself under `caffeinate -di`. `Scripts/screenshots.sh`,
-      `Scripts/shelf-proof.sh` and `Scripts/keyboard-proof.sh` should get the
-      same guard
+      All four scripts have the guard now, and it asks *again* whenever one of
+      them is about to blame the app — the version that only asked at the start
+      let a run pass the guard and then lose the screen underneath it.
+      `caffeinate -di` was not enough on this Mac either; it is `-dimsu`, since
+      `-u` is what the screen saver watches
 
-## Sprint 3 – Calibre import
+## Sprint 3 – Calibre import · done, except against a real library
 
-- [ ] `CalibreReader`: `metadata.db` read-only **through a copy** in
-      `~/Library/Caches/Shelf/`, schema version checked, unknown version a
-      warning rather than an abort
-- [ ] Counting protocol before: books, formats per type, tags, series, authors,
-      custom columns with their types, files in the DB missing on disk, files on
-      disk missing from the DB, total size, free space × 1.05
-- [ ] Import runner with resume over UUID + hash; `Import-Report.txt`
-- [ ] Custom columns read-only: `custom_columns` / `custom_values` are already
-      in the schema
-- [ ] **Proof run against Erik's real Calibre library**: counts before/after,
-      sample hashes, and `find -newer` showing the Calibre folder untouched
+- [x] `CalibreReader`: `metadata.db` read **through a copy**, and its
+      write-ahead log with it, schema version checked, unknown version a warning
+      rather than an abort
+      ([ADR 0009](adr/0009-calibre-is-read-through-a-copy-of-metadata-db.md))
+- [x] Counting protocol before, in the sheet and as `shelf-tool calibre-dry`:
+      books, formats per type, tags, series, authors, custom columns with their
+      kinds, files in the DB missing on disk, files on disk missing from the DB,
+      total size, free space × 1.05
+- [x] Import through the importer that was already there, with resume over
+      UUID + hash; `Import-Report.txt`
+- [x] Custom columns read-only: values in the book's OPF, definitions in
+      `library.json`, both cached in the index, shown in the inspector
+      ([ADR 0010](adr/0010-calibre-custom-columns-are-read-only.md))
+- [x] `shelf-tool calibre-synthesise`, so the fixtures and the proof run are
+      built rather than borrowed
+- [x] **Proof run against a synthetic Calibre library of 2 000 books**: counts
+      before and after, resume after an abort, 6 001 source files byte for byte
+      identical, ten sample digests against `shasum`. Numbers in `CHANGELOG.md`
+- [ ] **Proof run against Erik's real Calibre library.** Not done, and not
+      because it was forgotten: nothing above has met a library Calibre actually
+      wrote. `~/Downloads/Calibre Library Erik` holds a `metadata.db` with no
+      book folders, which exercises the schema and not the import. **Erik has to
+      name the path.**
+
+### What Sprint 3 found and did not finish
+
+- [ ] **An interrupted import copies up to 200 books twice.** The batch in
+      flight when the process is killed was never indexed, so the resumed run
+      copies those again — 23 of them in the measured run — and their files sit
+      in folders no book points at. Nothing is lost and a rebuild no longer
+      trips over them. The batch size is the whole of the window; a smaller one
+      narrows it, and flushing on `SIGTERM` would close it
+- [ ] **`Missing Cover` counts every book in a freshly imported library**, until
+      the cover cache has been warmed: the collection is answered from the cache
+      (one directory read, which is what makes it cheap) and a cache nobody has
+      filled is empty. It corrects itself as covers are drawn, which is worse
+      than being wrong — it is wrong and then quietly right
+- [ ] **The inspector's `Mixed` values carry no visible label.** On one book
+      those positions are the title, the series and the description; three bare
+      `Mixed` in three sizes is not obvious. The accessibility tree *does* name
+      them, so this is a visual gap, not an accessibility one
+- [ ] **`Published` reads blank across a selection** where its neighbours read
+      `Mixed`. Blank says neither "they differ" nor "none of them has one"
+- [ ] **`ZipWriter`, `MinimalPNG` and now `SyntheticCalibreLibrary` still live
+      in `ShelfCore`.** The move to a `ShelfFixtures` target is **not** the
+      drag-and-drop the entry below assumes: `OPFDocument.escaped` is internal
+      and `SyntheticEPUB` uses it, so the move is an API decision about what
+      `ShelfCore` publishes
 
 ## Sprint 4 – The other formats
 
@@ -292,6 +331,8 @@ than claimed:
       concept allows. The Sprint 1 figure of 312 MB was taken with the window
       occluded; it turns out to have been about right.
 - [ ] Whether trackpad scrolling stays smooth while the cover cache is filling.
+      Still open, and now known to need a hand: a posted scroll-wheel event does
+      not reach the table at all, so no script can answer it.
       Warming no longer pauses for scrolling (ADR 0005, decision 6), which is
       the one deliberate regression against Selector's behaviour.
 

@@ -5,6 +5,193 @@ on and what was *not* measured.
 
 ## Sprint 3 – Calibre import, and what Sprint 2c left open · 17 September 2026
 
+### Added — the Calibre import
+
+**`File ▸ Import from Calibre…`** asks for the folder that holds `metadata.db`
+and shows what is in it before a byte is copied. `metadata.db` is read **through
+a copy**, never in place, and the write-ahead log is copied with it
+([ADR 0009](docs/adr/0009-calibre-is-read-through-a-copy-of-metadata-db.md)) —
+Calibre uses WAL, so while Calibre is open the newest rows are in the log and
+not in the file, and a copy of the one file is the library as of the last
+checkpoint.
+
+**The counting protocol** counts the database *and* the disk, because they
+disagree: `data` is what the library believes and the folder is what it has.
+Books, authors, series, tags, formats per type, formats Shelf does not import,
+each custom column with its kind, the files the database lists and the disk has
+not got, the files on the disk it has never heard of, the ones with no cover,
+the total size, and the free space × 1.05 — the same margin `ImportPlan` uses, so
+the sheet and the runner cannot disagree about "enough room". Only room decides
+whether Import can be clicked. Also `shelf-tool calibre-dry`, which prints the
+same value and writes nothing anywhere.
+
+**The import is the importer that was already there.** `ImportPlanner`,
+`ImportRunner` and `ImportReport` were built in Sprint 1 and proved against
+5 000 books; this is that run with a better source of metadata (ADR 0002).
+Calibre's UUID becomes the book's identity, its 0…10 rating is kept whole so a
+half star survives a round trip, and the cover comes from Calibre's `cover.jpg`
+rather than out of the book file — somebody who replaced a bad cover did it
+there.
+
+**Calibre's custom columns, read-only**
+([ADR 0010](docs/adr/0010-calibre-custom-columns-are-read-only.md)): the values
+in each book's `metadata.opf` as one `shelf:custom` meta, the definitions in
+`library.json`, both cached in the index, and a `From Calibre` section in the
+inspector saying what kind each one is and that it cannot be edited. A datatype
+this Shelf has never heard of is a line in the report with the others imported
+around it; Calibre's own `calibre:user_metadata:` metas are left exactly where
+they were found.
+
+**`shelf-tool calibre-synthesise`** writes a Calibre library nobody wrote —
+Calibre's folder layout and its table shapes — which is what the proof run and
+the fixtures are made of. No borrowed book is in this repository.
+
+### Fixed — four things the proof run found, and one that reading a screenshot did
+
+None of these failed. That is what they have in common, and it is why they were
+there.
+
+- **An interrupted import started again instead of resuming.** The index was
+  written once, after the last file, so a run killed after 1 394 of 2 000 books
+  left an index holding **none** — and the next run planned all 2 000 again.
+  3 394 files where 2 000 belonged. `ImportRunner` now hands finished books to a
+  `saveBatch` closure every 200, so an interruption leaves an index that matches
+  the folder. The next run then reads `1600 new books · 400 skipped`.
+- **And then the resumed run died** on `UNIQUE constraint failed: books.number`,
+  because the counter is stored when a run *finishes*. The start is now
+  `max(library.json's counter, the highest number in the index + 1)`, which
+  never goes backwards, so a deleted book's number is still not reused.
+- **A rebuild died on the same constraint.** That is the one failure ADR 0001
+  cannot survive: the index is a cache *because* it can always be built again.
+  `books.number` is unique because two books in one folder would overwrite each
+  other — a rule about folders, not an invariant the cache may die over. A book
+  whose number is taken gets a free one; the folder on disk is not renamed.
+- **The window erased the custom columns it had just imported.** `runImport`
+  wrote its cached `library.json` back over the one the import had written,
+  taking the column *names* with it. The values were in every OPF and in the
+  index and the inspector had nothing to label them with.
+- **The grid drew one selection border for eight selected books** — the cell
+  asked for the *anchor* rather than the selection. Found by looking at
+  `docs/screenshots/sprint-2c/selection.jpg`, which is the argument for looking
+  at screenshots rather than only taking them.
+
+### Measured — Sprint 3
+
+On this machine (Apple silicon, macOS 26), against a synthetic Calibre library
+of **2 000 books** (`shelf-tool calibre-synthesise`), 41 MB in 6 001 files.
+
+**Reading and counting**
+
+| | |
+|---|---|
+| `calibre-dry`, database copied, read and counted | **3 s** |
+| the import, hashing + copying + verifying + indexing | **6.9 s** |
+| peak memory of the import process | **93 MB** |
+
+**What came across**
+
+    books 2000 · authors 3 · series 2 · tags 3 · formats 2000
+    ISBNs 2000 · custom columns 4 · custom values 8000 · rated 800
+    Calibre's UUIDs kept: 2000 of 2000
+
+**The Calibre library, before and after.** Every file hashed with
+`/usr/bin/shasum`, a tool that knows nothing about this code:
+
+    6001 files, byte for byte identical
+    nothing newer than metadata.db anywhere in it
+    ten sampled copies: digest in the index == shasum on disk, 10 of 10
+
+**Resume.** The import killed once copying had started, then run again:
+
+    after the interruption: 400 in the index, 423 files on disk
+    second run:  plan: 1600 new books · 400 skipped · 11.5 MB
+    third run:   plan: 2000 skipped · 0 B
+
+**Tests**: 376 in the core, up from 342 at the start of the sprint. SlateKit:
+23, up from 11.
+
+### The evidence Sprint 2c owed
+
+Its screen locked in the middle of its run. This one was held awake with
+`caffeinate -dimsu`, and the guard that only asked at the *start* now asks again
+whenever a window-driven script is about to blame the app for something.
+
+- **The three missing screenshots** are in `docs/screenshots/sprint-2c/`: the
+  table with its sort arrow, the inspector showing `Mixed` across eight books,
+  and the context menu's *Add to Shelf ▸*, each with its accessibility tree.
+- **The table at 4 996 rows**, `Scripts/table-scroll.sh`, twelve seconds of
+  scrolling with `/usr/bin/sample` on the process:
+
+      peak memory while scrolling:                  282 MB
+      main-thread frames mentioning a cover decode:   0
+      main-thread frames mentioning file I/O:         0
+      main-thread frames mentioning SQLite:           0
+      main-thread frames in SwiftUI/AppKit:       3 610
+      main-thread frames in mach_msg (idle):         13
+
+  That last pair is what makes the three noughts worth anything: the first
+  working version of the script reported the same noughts with the main thread
+  8 213 samples out of 8 440 *asleep*, because nothing had scrolled. It
+  photographs the window before and after now and refuses to report a
+  measurement of an idle app.
+
+  **282 MB replaces Sprint 2c's 295 MB**, which was read while the screen was
+  locked.
+
+- **`Scripts/shelf-proof.sh` and `keyboard-proof.sh` both run green**, exit 0 —
+  including the one path nothing had ever run: a shelf dragged onto the
+  **SHELVES heading**, which is the only way to get a shelf back out of another
+  one. `keyboard-proof` reads 5 of 5 both ways.
+
+- **`965bad8` is clean.** The commit Sprint 2c made while `make smoke` had just
+  failed, checked out into a worktree of its own and run unpiped:
+
+      make test   exit 0   (336 tests)
+      make app    exit 0
+      make lint   exit 0
+      make smoke  exit 0
+
+  The failure was the leftover Shelf instance the proof script had left running,
+  as Sprint 2c suspected. It is now measured rather than suspected.
+
+### Not verified
+
+Honestly, and in the order that matters.
+
+- **Nothing has been run against a real Calibre library.** Everything above is a
+  synthetic one, written by `calibre-synthesise` against Calibre's table shapes
+  *as this session understands them*. The shapes were written out by hand
+  precisely so the fixture would not agree with the reader by construction, but
+  a hand-written shape is still a claim. `~/Downloads/Calibre Library Erik`
+  holds a `metadata.db` with no book folders beside it; it would exercise the
+  schema and not the import, and it has not been touched.
+
+- **An interrupted import still copies up to 200 books twice.** The batch in
+  flight when the process is killed was never indexed, so the resumed run copies
+  those again — 23 of them in the measured run. Their files sit in folders no
+  book points at. Nothing is lost, nothing is overwritten, the source is
+  untouched, and a rebuild no longer trips over them. It is not nothing.
+
+- **The table measurement is of *keyboard* scrolling.** `Scripts/scroll-at.swift`
+  posts scroll-wheel events and reports success, and the SwiftUI `Table` does not
+  move for them at all — byte for byte identical after twenty clicks inside the
+  window, changed at once by one Page Down. Whether trackpad scrolling stays
+  smooth while the cover cache fills is still the open question it was.
+
+- **Shelf on a German Mac is still untested.** SlateKit speaks German again, and
+  a German window would now mix the package's nine German words into Shelf's
+  English ones — which is the state Selector is *not* in, and Shelf is, until
+  Sprint 7. Nobody has run either under a German locale.
+
+- **Selector has not been built against SlateKit 0.3.1.** The claim that raising
+  its pin changes nothing rests on the defaults being what 0.1.6 drew and on
+  seven tests that say so, not on a screenshot of Selector.
+
+- **`Missing Cover` counts every book in a freshly imported library** until the
+  cover cache has been warmed, because the collection is answered from the
+  cache. It corrects itself as covers are drawn. Seen in
+  `docs/screenshots/sprint-3/`; in the backlog.
+
 ### Changed — SlateKit 0.3.1, and Shelf looks exactly as it did
 
 0.3.0 changed how two components that **Selector also draws** look, and Selector

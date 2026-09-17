@@ -35,14 +35,14 @@ die Entscheidungen in `docs/adr/`.
   `git push` nach jedem abgeschlossenen Schritt, `git status --short` vor
   `git add -A`. WIP-Commit vor jeder Fehlersuche per Bisektion. Nie einen Prozess
   beenden, den du nicht gestartet hast.
-- **SlateKit-Änderungen laufen über Commit + Tag + Abhängigkeits-Update.** Das
-  Paket liegt in einem eigenen Repo (`~/Documents/SlateKit`,
-  https://github.com/Erikemmer/SlateKit). Shelf bindet es über einen **Tag** ein
-  (`project.yml`, derzeit `0.3.0`), nie über einen Pfad – sonst ändert ein
-  Nachmittag Arbeit an SlateKit still, was diese App baut und wogegen ihre Tests
-  gelaufen sind. Der Weg: dort ändern, `make test && make lint`, committen, Tag
-  setzen und pushen, dann hier `exactVersion` hochziehen, `make project &&
-  make app` und die vier Prüfungen. Was in SlateKit gehört, steht in
+- **SlateKit-Änderungen laufen über einen eigenen Arbeitsbaum, Commit, Tag und
+  Abhängigkeits-Update.** Das Paket liegt in einem eigenen Repo
+  (https://github.com/Erikemmer/SlateKit) und wird über einen **Tag** eingebunden
+  (`project.yml`, derzeit `0.3.1`), nie über einen Pfad. **Nie in
+  `~/Documents/SlateKit` arbeiten** – dort arbeitet die Selector-Sitzung, und ein
+  `git add -A` hat dort schon fremde Änderungen mitgenommen. Der ganze Weg,
+  samt der Regel über Defaults und Zweisprachigkeit, steht in `CLAUDE.md` unter
+  „Working on SlateKit“; was überhaupt in SlateKit gehört, in
   `docs/adr/0004-slatekit-shared-with-selector.md`.
 - Nichts Irreversibles. Buchdateien werden in v1.0 nie geschrieben, gelöscht
   oder überschrieben. Der Calibre-Ordner wird nur gelesen. Auf Geräten wird nur
@@ -54,83 +54,86 @@ die Entscheidungen in `docs/adr/`.
 
 ---
 
-## Nächster Schritt: Sprint 3 – Calibre-Import
+## Nächster Schritt: Sprint 4 – weitere Formate
 
-**Sprint 2c ist fertig.** Regale (hierarchisch, per Drag, mit Bestätigung beim
-Löschen), die Tabelle (⌘2, Spalten wählbar, Kopfzeile sortiert), sechs
-Sortierungen in beide Richtungen, Mehrfachauswahl mit einem Undo-Schritt, und
-die beiden letzten Smart Collections (*Duplicates*, *Not on any Shelf*). Die
-Zahlen stehen im `CHANGELOG.md`, die Belege in `docs/screenshots/sprint-2c/`
-und in `Scripts/shelf-proof.sh`.
+**Sprint 3 ist fertig, mit einer Ausnahme.** `CalibreReader` liest `metadata.db`
+über eine Kopie samt WAL, das Zählprotokoll steht im Sheet und in
+`shelf-tool calibre-dry`, der Import läuft über den vorhandenen `ImportRunner`
+mit Wiederaufnahme, und Calibres eigene Spalten kommen nur lesend mit. Die
+Zahlen stehen im `CHANGELOG.md`, die Belege in `docs/screenshots/sprint-3/`,
+die Entscheidungen in ADR 0009 und 0010.
 
-Was als Nächstes ansteht, in dieser Reihenfolge:
+**Die Ausnahme: es hat noch keine echte Calibre-Bibliothek gesehen.** Alles
+oben ist gegen eine synthetische gemessen, deren Tabellenformen diese Sitzung
+von Hand geschrieben hat — mit Absicht so, damit die Fixture dem Leser nicht
+per Konstruktion recht gibt, aber eine handgeschriebene Form ist trotzdem eine
+Behauptung. `~/Downloads/Calibre Library Erik` enthält nur `metadata.db` ohne
+Buchordner; das prüft das Schema und nicht den Import. **Erik muss den Pfad
+nennen.**
 
-1. **`CalibreReader`.** `metadata.db` **nur über eine Kopie** in
-   `~/Library/Caches/Shelf/` lesen – nie die Originaldatei öffnen, auch nicht
-   lesend (CLAUDE.md). Schema-Version prüfen; eine unbekannte ist eine Warnung,
-   kein Abbruch.
-2. **Das Zählprotokoll vor dem Import**: Bücher, Formate je Typ, Tags, Serien,
-   Autoren, Custom Columns mit ihren Typen, Dateien in der DB die auf der Platte
-   fehlen und umgekehrt, Gesamtgröße, freier Platz × 1,05. `ImportSheet` macht
-   das für einen Ordner schon; ein Calibre-Ordner ist derselbe Ablauf mit einer
-   besseren Quelle.
-3. **Der Import selbst**, mit Wiederaufnahme über UUID + Hash. `ImportRunner`
-   und `ImportReport` sind fertig; was fehlt, ist die Quelle.
-4. **Custom Columns read-only.** `custom_columns` / `custom_values` stehen seit
-   Migration 1 im Schema, und `OPFDocument` hebt unbekannte Metas ohnehin auf –
-   ein Import verliert sie also heute schon nicht.
-5. **Der Beweislauf gegen deine echte Calibre-Bibliothek**: Zahlen vorher und
-   nachher, Stichproben-Hashes, und `find -newer` als Beleg, dass der
-   Calibre-Ordner unangetastet geblieben ist.
+Was als Nächstes ansteht (CONCEPT §11, Sprint 4):
+
+1. **MOBI/AZW3** — PalmDB-Header und EXTH-Records (100 Autor, 503 Titel,
+   104 ISBN, 106 Datum, 201 Cover-Offset) in `ShelfCore/Formats/Mobi`.
+2. **PDF** — `documentAttributes` und Seite 1 gerendert, in der App-Schicht:
+   PDFKit ist nicht Linux-fähig und der Kern muss es bleiben.
+3. **CBZ** — Dateiname per Regex, optional `ComicInfo.xml`, erstes Bild als
+   Cover. **CBR** — libarchive in der App-Schicht, RAR5 zur Laufzeit geprüft
+   ([ADR 0003](adr/0003-zip-in-the-core.md)).
+4. **DRM-Erkennung** — Adobe ADEPT über `META-INF/encryption.xml`, Kindle über
+   EXTH 209. Erkennen, badgen, in Ruhe lassen (CONCEPT §12).
+5. **`BookFileFormat.hasReadableMetadata`** wird für diese wahr — das ist die
+   eine Stelle, die sich ändert.
+6. **Quick Look** (␛).
 
 ### Was dabei zu beachten ist
 
 - **Die Feldregeln liegen im Kern, nicht in der Ansicht.** `BookField`,
   `IdentifierEdit`, `TagEdit`, `ISBN`, `ShelfEdit` und `AcrossBooks` entscheiden,
-  was ein leeres Feld bedeutet, wie Autoren getrennt werden, ob „2,5" eine Zahl
-  ist, was ein Regalname sein darf, und was zwölf Bücher gemeinsam haben. Ein
-  neues Feld ist dort ein Fall und im Inspector drei Zeilen.
-- **Ein Regal steht im Buch, seine Form in `library.json`**
-  ([ADR 0008](adr/0008-shelves-membership-in-the-book-hierarchy-in-library-json.md)).
-  Beim Wiederaufbau **zuerst den Baum speichern, dann die Bücher** – der Index
-  löst die Pfade eines Buches gegen die Regale auf, die er kennt, und überspringt
-  stillschweigend, was er nicht findet. Die andere Reihenfolge verliert jede
-  Zuordnung, ohne zu klagen.
-- **Ein Regalpfad ist ein Name, kein Zeiger.** Ein Umbenennen schreibt jedes Buch
-  auf dem Regal neu. Das ist der Preis für lesbare Pfade in der OPF und steht so
-  in ADR 0008.
-- **Die Tabelle sortiert über das Modell**, nicht im Speicher. `BookSort` besitzt
-  die SQL-Reihenfolge; vier Spalten (Tags, Format, Gelesen, Größe) haben deshalb
-  keinen Pfeil.
-- **Der Ordner wird bei einer Metadatenänderung nicht umbenannt**
-  ([ADR 0007](adr/0007-a-metadata-change-does-not-rename-the-folder.md)).
-- **Attribut und Elementtext werden unterschiedlich escaped**, und `"\r\n"` ist
-  in Swift *ein* `Character` – beide Escaping-Funktionen laufen über
-  Unicode-Skalare.
-- **FTS5 kennt kein `ALTER TABLE ADD COLUMN`.** Eine neue Suchspalte heißt:
-  Tabelle neu bauen *und aus den Quelltabellen nachfüllen*.
+  was ein leeres Feld bedeutet, wie Autoren getrennt werden, ob „2,5“ eine Zahl
+  ist. Ein neues Feld ist dort ein Fall und im Inspector drei Zeilen.
+- **Ein Regal steht im Buch, seine Form in `library.json`** (ADR 0008), und
+  **eine eigene Spalte genauso**: der Wert im Buch, die Definition in
+  `library.json` (ADR 0010). Beim Wiederaufbau **zuerst den Baum und die
+  Spalten, dann die Bücher** — die andere Reihenfolge verliert die Zuordnung
+  bzw. die Namen, ohne zu klagen. Beides ist passiert und beides ist jetzt
+  getestet.
+- **Der Kern schreibt den Index während des Laufs**, nicht erst am Ende
+  (`ImportRunner.saveBatch`). Ein abgebrochener Import hat sonst Dateien auf der
+  Platte, von denen der Index nichts weiß, und der nächste Lauf kopiert alles
+  noch einmal. Wer den Runner anfasst, lässt das so.
+- **`books.number` ist eindeutig, und der Index stirbt nicht mehr daran.** Zwei
+  Ordner können dieselbe Nummer tragen; der Index gibt dem zweiten eine freie
+  und benennt den Ordner nicht um (ADR 0007).
+- **`Metas.known` in `OPFDocument` ist eine Liste von acht Namen, kein Präfix.**
+  Wer eine Meta zum Leser hinzufügt, trägt sie dort ein — sonst wird sie beim
+  nächsten Schreiben stillschweigend fallen gelassen, was mit Calibres
+  `user_metadata` genau so passiert ist.
 - **`SHELF_TIMING=1`** schaltet die Zeitmessungen im Fenster ein.
-- **SlateKit steht auf `0.3.0`.** Der Weg zu einer Änderung: dort ändern,
-  `make test && make lint && make contrast`, committen, taggen, pushen, dann hier
-  `exactVersion` hochziehen. Das Paket hat seit 2c ein `CHANGELOG.md`; 0.3.0
-  ändert das Aussehen von **Selector** mit, sobald Selector seinen Pin hochzieht
-  (graue Chips statt goldener, Platzhalter in Label-Farbe, kein „3/5" neben den
-  Sternen, keine deutsche Lokalisierung mehr).
+- **SlateKit steht auf `0.3.1`**, und der Weg zu einer Änderung steht jetzt in
+  `CLAUDE.md`: eigener Arbeitsbaum, Dateien namentlich stagen, bestehende
+  Komponenten behalten ihren Default, das Paket bleibt zweisprachig.
 
-### Ein Fallstrick, der eine Stunde gekostet hat
+### Fallstricke, die diese Sitzung bezahlt hat
 
-**Ein gesperrter Bildschirm macht jedes fenstergetriebene Skript still kaputt.**
-Nicht rot – still. `screencapture -l <window id>` liefert weiter das *zuletzt
-gezeichnete Bild* des Fensters, also kommen mehrere Aufnahmen byte-gleich heraus;
-System Events sieht keine Fenster; und der Accessibility-Baum schrumpft auf ein
-Application-Element, das nur sich selbst enthält, sodass jede Suche „nichts"
-antwortet statt zu scheitern. `Scripts/window-count.swift` liest dann `5 0 0`.
-
-Bestätigt mit `ioreg -n Root -d1 -r | grep CGSSessionScreenIsLocked` mitten im
-Screenshot-Lauf. Das ist mit hoher Wahrscheinlichkeit auch das, was Sprint 2b als
-„eine App ohne Fenster, nicht reproduzierbar, kein Absturzbericht" notiert hat.
-`Scripts/shots-2c.sh` prüft das jetzt beim Start und startet sich selbst unter
-`caffeinate -di` neu; die anderen Skripte sollten denselben Schutz bekommen.
+- **`grep -q` hinter einer Pipe macht unter `pipefail` aus einem Treffer den
+  Status 141.** Das Kommando auf der anderen Seite bekommt SIGPIPE. Es hat einen
+  ganzen Screenshot-Lauf gekostet („⌘2 hat die Tabelle nicht gezeigt“ — sie war
+  da). `tree_has` nutzt `grep -c`. Und: eine erste Prüfung davon lief in **zsh**
+  und kam mit 0 zurück. Die Skripte sind bash.
+- **Ein gesperrter Bildschirm** macht jedes fenstergetriebene Skript still
+  kaputt, und `caffeinate -di` reicht auf diesem Mac nicht: der Bildschirmschoner
+  schaut auf Benutzeraktivität, also `-dimsu`. Die Wache fragt jetzt auch
+  *während* des Laufs, nicht nur beim Start.
+- **`sample` auf dem PATH ist hier ein Python-Skript**, nicht `/usr/bin/sample`.
+  Es antwortet mit `ModuleNotFoundError` und Exit 1.
+- **Ein voller Accessibility-Abzug einer 5 000-Bücher-Ansicht ist nichts für
+  eine Schleife.** Drei Ebenen reichen für das Ansichts-Segment.
+- **System Events liefert ⌘⌥I nicht an diese App.** Die Blende kam einfach nicht,
+  ohne Fehler irgendwo. `Scripts/calibre-shot.sh` klickt den Menüpunkt.
+- **`UInt8(n)` trapt über 255.** Die Calibre-Fixture schrieb 255 Ordner, stürzte
+  mit SIGTRAP ab und ließ eine `metadata.db` von null Bytes zurück, die das
+  Zählprotokoll dann korrekt und nutzlos als „Bibliothek ohne Tabellen“ las.
 
 ## Eine Entscheidung, die dir gehört: SlateKit und CI
 
@@ -170,10 +173,13 @@ wurde nicht gebaut. Lokal baut sie `make app`, und `make smoke` startet sie.
 - **App-Icon.** `App/Shelf/Resources/Assets.xcassets/AppIcon.appiconset` ist
   leer bis auf die `Contents.json`. Bis dort PNGs liegen, zeigt die App das
   Standardsymbol. Selector hat ein Skript dafür (`docs/icon/make_icons.py`).
-- **SlateKit-Version.** Shelf hängt an `0.3.0`, Selector an `0.1.6`. Wenn
-  Selector nachzieht, ändert sich sein Aussehen an drei Stellen (Chips, Sterne,
-  Platzhalter) und die deutschen Strings des Pakets verschwinden – das ist so
-  gewollt und steht in SlateKits `CHANGELOG.md`.
+- **SlateKit-Version.** Shelf hängt an `0.3.1`, Selector weiter an `0.1.6`.
+  **Selector kann jetzt gefahrlos nachziehen**: 0.3.1 macht die drei
+  Aussehensänderungen aus 0.3.0 zu Optionen mit dem alten Default und holt die
+  deutsche Lokalisierung zurück, die Selector ausliefert. Shelf setzt die
+  Optionen und sieht aus wie vorher. Geprüft ist das durch sieben Tests über die
+  Defaults, **nicht** durch einen Selector-Build – den anzufassen war nicht
+  meine Sache.
 - **`Package.resolved` ist nicht im Repo** (`.gitignore`), wie in Selector. Wer
   reproduzierbare Abhängigkeiten will, nimmt die Zeile heraus; das ist eine
   Entscheidung, keine Nachlässigkeit.

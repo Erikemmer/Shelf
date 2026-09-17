@@ -42,6 +42,10 @@
 │  Formats:   ZipReader · Inflate · XMLTree · OPFDocument ·     │
 │             EPUBMetadata · FileNameMetadata · CoverFile ·     │
 │             ZipWriter + SyntheticEPUB + MinimalPNG (fixtures) │
+│  Calibre:   CalibreReader (metadata.db via a copy, WAL too) · │
+│             CalibreCensus (the counting protocol) ·           │
+│             CalibreImportSource → ImportCandidate ·           │
+│             SyntheticCalibreLibrary (the fixture)             │
 │  Import:    ImportPlanner → ImportRunner · ImportReport       │
 │  Loading:   LoadPriority · WarmOrder · DecodeGate ·           │
 │             InteractionWindow · CoverCacheKey/Policy          │
@@ -189,6 +193,36 @@ this happen. That is the whole of the debouncing: a timer would still write in
 the middle of a word and would have to be flushed before the window closed.
 
 No book file is opened for writing anywhere in that chain.
+
+## Data flow: coming from Calibre
+
+```
+a Calibre folder
+  → CalibreReader                                             (ShelfCore)
+      copies metadata.db — and its -wal — into a cache folder of its own,
+      opens the copy read-only, reads twelve tables, removes the copy
+      (ADR 0009). The source is only ever read.
+  → CalibreCensusTaker
+      counts the database *and* the disk, because they disagree, and asks
+      for the free space at the destination × 1.05
+  → the sheet, or `shelf-tool calibre-dry`             ← nothing written yet
+  → CalibreImportSource
+      one ImportCandidate per file that is actually there, hashed, carrying
+      Calibre's own metadata and Calibre's UUID
+  → ImportPlanner → ImportRunner → ImportReport      (the Sprint 1 importer)
+      the same copy-verify-then-trust run every import uses (ADR 0002)
+```
+
+Two orderings matter, and both were learned the hard way:
+
+* **The columns' definitions go into `library.json` and the index *before* the
+  books**, exactly as the shelf tree does — a value whose column the index has
+  never heard of has nowhere to go (ADR 0010).
+* **The index is written while the run goes on**, not after the last file.
+  `ImportRunner` hands finished books to a `saveBatch` closure every 200, so a
+  run that is killed leaves an index that matches the folder and the next run
+  resumes. Writing it only at the end meant a killed import of 2 000 books left
+  an index holding none, and the next run copied all 2 000 again.
 
 ## Data flow: rebuilding the index
 
