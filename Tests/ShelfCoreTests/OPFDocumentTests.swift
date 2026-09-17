@@ -61,6 +61,17 @@ struct OPFDocumentTests {
         #expect(parsed.book.shelves == ["Fiction/Science Fiction", "To Read"])
     }
 
+    /// The path is read by eye in the file, so the separator stays a slash.
+    /// `JSONEncoder` escapes it to `\/` unless told not to, which is legal and
+    /// unreadable — and the whole argument for JSON here was that it is
+    /// lossless *and* readable.
+    @Test("a shelf path is written as a path, not with escaped slashes")
+    func shelfPathIsReadable() throws {
+        let text = OPFDocument.render(Book(title: "x", shelves: ["Fiction/Sci-Fi"]))
+        #expect(text.contains("Fiction/Sci-Fi"))
+        #expect(!text.contains("\\/"))
+    }
+
     /// A shelf name may contain a comma, which is why the paths are a JSON
     /// array and not a joined string.
     @Test("a shelf name with a comma in it still survives")

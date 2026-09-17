@@ -114,7 +114,13 @@ public enum OPFDocument {
     /// One field rather than one meta per shelf, because `<meta name=…>` is
     /// looked up by name and repeated names would collapse into one.
     static func encodeShelves(_ paths: [String]) -> String {
-        guard let data = try? JSONEncoder().encode(paths), let text = String(data: data, encoding: .utf8) else {
+        let encoder = JSONEncoder()
+        // Otherwise `Fiction/Sci-Fi` is written `Fiction\/Sci-Fi`. Legal JSON,
+        // and unreadable in a file whose whole argument for being JSON is that
+        // it is lossless *and still readable by eye*. Nothing reads it back
+        // that cares either way — a decoder accepts both spellings.
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        guard let data = try? encoder.encode(paths), let text = String(data: data, encoding: .utf8) else {
             return "[]"
         }
         return text
