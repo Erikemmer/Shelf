@@ -91,19 +91,19 @@ struct SidebarView: View {
             // Capped, with a line saying how many more there are: a library
             // with 3 000 authors would otherwise make the sidebar a scroll
             // through nothing. The search field is the way to the rest.
-            ForEach(facets.prefix(Self.maximumRows), id: \.id) { facet in
+            ForEach(facets.prefix(Self.maximumRowsPerSection), id: \.id) { facet in
                 SlateSidebarRow(
-                    facet.name,
+                    displayName(facet, in: section),
                     icon: Theme.icon(for: section),
                     count: facet.count,
                     isActive: isActive(facet, in: section),
-                    help: "Show only \(facet.name)"
+                    help: "Show only \(displayName(facet, in: section))"
                 ) { _ in
                     apply(facet, from: section)
                 }
             }
-            if facets.count > Self.maximumRows {
-                Text("+ \(facets.count - Self.maximumRows) more — use ⌘F")
+            if facets.count > Self.maximumRowsPerSection {
+                Text("+ \(facets.count - Self.maximumRowsPerSection) more — use ⌘F")
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
                     .padding(.horizontal, 12)
@@ -112,7 +112,16 @@ struct SidebarView: View {
         }
     }
 
-    private static let maximumRows = 200
+    /// How many rows one section may take.
+    ///
+    /// It was 200, and a screenshot showed what that means: a 120-book library
+    /// already has 97 authors, so Series, Formats and Devices sat about a
+    /// thousand points below the fold and nobody scrolling past ninety-seven
+    /// names would have guessed they were there. A section that cannot be longer
+    /// than a screenful keeps every *section* reachable, which is what the
+    /// sidebar is for; the search field is the way to an individual name, and
+    /// the "+ N more" line says so.
+    private static let maximumRowsPerSection = 12
 
     private func facets(for section: SidebarSection) -> [LibraryIndex.Facet] {
         switch section {
@@ -121,6 +130,17 @@ struct SidebarView: View {
         case .series: return model.seriesFacets
         case .formats: return model.formatFacets
         case .shelves, .devices: return []
+        }
+    }
+
+    /// What the row reads. It is not always `facet.name`: a format's facet name
+    /// is the value in the index (`epub`), which is an identifier and is what
+    /// `apply` turns back into a `BookFileFormat` – but a person reads "EPUB",
+    /// and the inspector two columns to the right has always written it that way.
+    private func displayName(_ facet: LibraryIndex.Facet, in section: SidebarSection) -> String {
+        switch section {
+        case .formats: return BookFileFormat(rawValue: facet.name)?.label ?? facet.name.uppercased()
+        case .tags, .authors, .series, .shelves, .devices: return facet.name
         }
     }
 

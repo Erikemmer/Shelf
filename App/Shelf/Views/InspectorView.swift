@@ -147,7 +147,7 @@ struct InspectorView: View {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(entry.formats.sorted { $0.format < $1.format }, id: \.id) { format in
                     SlateValueRow(
-                        name: format.format.rawValue.uppercased(),
+                        name: format.format.label,
                         value: ByteCount.format(format.byteSize))
                 }
                 // Recognised, named, and otherwise left entirely alone

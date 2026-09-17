@@ -21,6 +21,16 @@ public enum BookFileFormat: String, CaseIterable, Sendable, Codable, Comparable 
 
     public var fileExtension: String { rawValue }
 
+    /// How the format is written where a person reads it: "EPUB", never "epub".
+    ///
+    /// Here rather than at each call site, because it was at each call site and
+    /// they disagreed: the inspector uppercased the raw value and the sidebar's
+    /// Formats section printed it as it comes out of SQLite, so one window said
+    /// "epub" on the left and "EPUB" on the right. The same class of defect as
+    /// the two number formats Sprint 2a found — small, and exactly the kind of
+    /// thing that makes an app look unfinished.
+    public var label: String { rawValue.uppercased() }
+
     /// Whether `ShelfCore` can read metadata out of the file itself.
     /// Everything else falls back to the file name.
     public var hasReadableMetadata: Bool {

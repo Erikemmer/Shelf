@@ -62,7 +62,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
     /// unexplained.
     var emptyNote: String {
         switch self {
-        case .shelves: return "Shelves arrive in Sprint 2"
+        case .shelves: return "Shelves arrive in Sprint 2c"
         case .devices: return "Devices arrive in Sprint 5"
         case .tags: return "No tags yet"
         case .authors: return "No authors yet"

@@ -26,7 +26,7 @@ public struct LibraryEntry: Identifiable, Equatable, Sendable {
 
     /// "EPUB · AZW3" for the grid badge and the table column.
     public var formatLine: String {
-        formats.map { $0.format.rawValue.uppercased() }.sorted().joined(separator: " · ")
+        formats.map(\.format.label).sorted().joined(separator: " · ")
     }
 
     public var totalBytes: Int64 {

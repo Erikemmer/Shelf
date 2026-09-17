@@ -249,6 +249,20 @@ struct BookFileFormatTests {
         #expect(BookFileFormat.from(fileExtension: "kfx") == .kfx)
         #expect(!BookFileFormat.importable.contains(.kfx))
     }
+
+    /// One window wrote "epub" in the sidebar and "EPUB" in the inspector,
+    /// because both call sites spelled the format themselves. There is one
+    /// spelling now and every case has it.
+    @Test("a format is written in capitals wherever a person reads it")
+    func label() {
+        #expect(BookFileFormat.epub.label == "EPUB")
+        #expect(BookFileFormat.azw3.label == "AZW3")
+        #expect(BookFileFormat.kepub.label == "KEPUB")
+        for format in BookFileFormat.allCases {
+            #expect(format.label == format.label.uppercased())
+            #expect(!format.label.isEmpty)
+        }
+    }
 }
 
 @Suite("The cover next to a book")
