@@ -88,8 +88,8 @@ struct InspectorView: View {
 
     private func title(for entry: LibraryEntry) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            field(.title, of: entry, font: .headline, placeholder: "Title")
-            field(.authors, of: entry, font: .callout, placeholder: "Author & Second Author")
+            field(.title, of: entry, font: .headline)
+            field(.authors, of: entry, font: .callout)
             series(for: entry)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -105,8 +105,8 @@ struct InspectorView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 SlateEditableBlock(
-                    value: BookField.seriesName.text(of: entry.book), placeholder: "Series",
-                    font: .caption
+                    value: BookField.seriesName.text(of: entry.book),
+                    placeholder: BookField.seriesName.placeholder, font: .caption
                 ) { model.commit(.seriesName, $0, undoManager: undoManager) }
                 // Named for the accessibility tree as well as for the
                 // pointer: a field whose only label is its placeholder has
@@ -116,12 +116,12 @@ struct InspectorView: View {
                 .help("Series — empty removes the book from its series")
                 if entry.book.series != nil {
                     SlateEditableBlock(
-                        value: BookField.seriesIndex.text(of: entry.book), placeholder: "#",
-                        font: .caption
+                        value: BookField.seriesIndex.text(of: entry.book),
+                        placeholder: BookField.seriesIndex.placeholder, font: .caption
                     ) { model.commit(.seriesIndex, $0, undoManager: undoManager) }
                     .frame(width: 44)
                     .accessibilityLabel("Series index")
-                    .help("Which book of the series – 3, or 2.5 for a novella")
+                    .help("Which book of the series — \(BookField.seriesIndex.hint)")
                 }
             }
             if let position = seriesPosition(for: entry) {
@@ -177,8 +177,8 @@ struct InspectorView: View {
         SlateInspectorSection("Details") {
             VStack(alignment: .leading, spacing: 4) {
                 row(.publisher, of: entry)
-                row(.published, of: entry, placeholder: "yyyy-mm-dd")
-                row(.language, of: entry, placeholder: "en")
+                row(.published, of: entry)
+                row(.language, of: entry)
                 // Not editable, and not a field: both are facts about the disk
                 // rather than claims about the book.
                 SlateValueRow(name: "Added", value: Self.day(entry.book.addedAt))
@@ -211,7 +211,12 @@ struct InspectorView: View {
                     .frame(width: 70)
                     .accessibilityLabel("New identifier name")
                     .help("The name of the identifier – ISBN, ASIN, DOI, Goodreads")
-                    SlateEditableBlock(value: "", placeholder: "new value") { typed in
+                    // Prompts for whatever is being added rather than for
+                    // "new value": half of an empty pair is a scheme, and a
+                    // field that says "Add ASIN…" once ASIN is typed beside it
+                    // is a field that has understood the question.
+                    SlateEditableBlock(value: "", placeholder: Self.identifierPlaceholder(newIdentifierScheme)) {
+                        typed in
                         guard !typed.isEmpty else { return }
                         model.commitIdentifier(
                             scheme: newIdentifierScheme, value: typed, undoManager: undoManager)
@@ -262,7 +267,8 @@ struct InspectorView: View {
             VStack(alignment: .leading, spacing: 4) {
                 SlateEditableBlock(
                     value: BookField.description.text(of: entry.book),
-                    placeholder: "Add a description…", isMultiline: true, lineLimit: 10, font: .caption
+                    placeholder: BookField.description.placeholder, isMultiline: true, lineLimit: 10,
+                    font: .caption
                 ) { model.commit(.description, $0, undoManager: undoManager) }
                 .accessibilityLabel("Description")
                 // ⏎ is a line break in here, so losing focus is what
@@ -305,11 +311,11 @@ struct InspectorView: View {
 
     /// A field with no name beside it, for the title block.
     private func field(
-        _ which: BookField, of entry: LibraryEntry, font: Font, placeholder: String
+        _ which: BookField, of entry: LibraryEntry, font: Font
     ) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             SlateEditableBlock(
-                value: which.text(of: entry.book), placeholder: placeholder,
+                value: which.text(of: entry.book), placeholder: which.placeholder,
                 isMultiline: which.isMultiline, font: font
             ) { model.commit(which, $0, undoManager: undoManager) }
             // Named for the accessibility tree as well as for the pointer. A
@@ -317,19 +323,18 @@ struct InspectorView: View {
             // once something is typed into it, and the tree showed exactly
             // that: a bare `AXTextField` with a value and nothing else.
             .accessibilityLabel(which.label)
-            .help("\(which.label) — ⏎ or clicking away saves, Escape discards")
+            .help(Self.help(for: which, ending: "⏎ or clicking away saves, Escape discards"))
             note(for: which.rawValue)
         }
     }
 
     /// A named row in the Details block.
-    private func row(
-        _ which: BookField, of entry: LibraryEntry, placeholder: String = ""
-    ) -> some View {
+    private func row(_ which: BookField, of entry: LibraryEntry) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             SlateEditableRow(
-                name: which.label, value: which.text(of: entry.book), placeholder: placeholder,
-                help: "\(which.label) — empty removes it from metadata.opf"
+                name: which.label, value: which.text(of: entry.book),
+                placeholder: which.placeholder,
+                help: Self.help(for: which, ending: "empty removes it from metadata.opf")
             ) { model.commit(which, $0, undoManager: undoManager) }
             note(for: which.rawValue)
         }
@@ -341,6 +346,20 @@ struct InspectorView: View {
         if let message = model.rejection(for: key) {
             SlateFieldNote(message)
         }
+    }
+
+    /// A field's help: what the field is, its own hint where it has one, and
+    /// what finishes it. Built in one place so nine fields cannot describe the
+    /// same gesture in nine ways.
+    private static func help(for field: BookField, ending: String) -> String {
+        [field.label, field.hint, ending]
+            .filter { !$0.isEmpty }
+            .joined(separator: " — ")
+    }
+
+    private static func identifierPlaceholder(_ scheme: String) -> String {
+        let trimmed = scheme.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? "Add ISBN…" : "Add \(trimmed.uppercased())…"
     }
 
     // MARK: Formatting

@@ -36,6 +36,46 @@ public enum BookField: String, CaseIterable, Sendable {
         }
     }
 
+    /// What an empty field invites, in the shape Selector uses: a verb, the
+    /// thing, an ellipsis.
+    ///
+    /// Beside `label` rather than in the inspector because the two belong
+    /// together — a field is named once and prompted once, and six placeholder
+    /// strings spread through a view are six strings that drift apart. It is
+    /// text a person reads, which is the same reason `label` is here.
+    ///
+    /// It never states a format. "yyyy-mm-dd" sat in the date field and read as
+    /// a value the book already had; the format belongs in the help text, which
+    /// is there when it is wanted and invisible when it is not.
+    public var placeholder: String {
+        switch self {
+        case .title: return "Add title…"
+        case .authors: return "Add authors…"
+        case .seriesName: return "Add series…"
+        // Never on its own — the index only appears once there is a series to
+        // count within, and beside a name a single "#" is clearer than a
+        // sentence.
+        case .seriesIndex: return "#"
+        case .publisher: return "Add publisher…"
+        case .published: return "Add date…"
+        case .language: return "Add language…"
+        case .description: return "Add description…"
+        }
+    }
+
+    /// The part of the help text that is about *this* field rather than about
+    /// editing in general — the format a date is read in, what separates two
+    /// authors. Empty where a field needs no explaining.
+    public var hint: String {
+        switch self {
+        case .authors: return "Several authors are separated by “ & ”"
+        case .seriesIndex: return "3, or 2.5 for a novella"
+        case .published: return "A year, a month or a day: 2019, 2019-04, 2019-04-23"
+        case .language: return "A language code: en, de, fr"
+        case .title, .seriesName, .publisher, .description: return ""
+        }
+    }
+
     /// Whether the field holds more than one line. The description does; a title
     /// with a line break in it is a title somebody pasted by accident.
     public var isMultiline: Bool { self == .description }

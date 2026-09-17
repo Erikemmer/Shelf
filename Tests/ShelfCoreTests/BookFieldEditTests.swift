@@ -26,6 +26,65 @@ struct BookFieldEditTests {
             identifiers: ["isbn": "9780061054884"])
     }
 
+    // MARK: What an empty field says about itself
+
+    /// A field that prompts with nothing is a field nobody can tell is empty
+    /// from one whose value happens to be blank.
+    @Test("every field has something to say when it is empty")
+    func everyFieldPrompts() {
+        for field in BookField.allCases {
+            #expect(!field.placeholder.isEmpty, "\(field.label) has no placeholder")
+        }
+    }
+
+    /// The hint is the only place a format is stated, now that the placeholders
+    /// stopped stating one — so every example a hint gives has to be a value
+    /// that field really takes. A hint that names a format the parser refuses
+    /// is worse than no hint: it is an instruction that does not work.
+    @Test("every example a hint gives is a value that field accepts")
+    func hintsNameValuesThatWork() {
+        var blank = book()
+        blank.published = nil
+        for text in ["2019", "2019-04", "2019-04-23"] {
+            #expect(
+                BookField.published.apply(text, to: blank) != .rejected(.notADate(text)),
+                "the Published hint offers “\(text)” and the field refuses it")
+        }
+
+        // "3, or 2.5 for a novella" – and the decimal comma a German keyboard
+        // produces, which is why `decimal` accepts one.
+        for text in ["3", "2.5", "2,5"] {
+            #expect(
+                BookField.seriesIndex.apply(text, to: book()) != .rejected(.notANumber(text)),
+                "the Series Index hint offers “\(text)” and the field refuses it")
+        }
+
+        // "Several authors are separated by “ & ”" – and the field has to make
+        // two authors of it, not one name with an ampersand in the middle.
+        guard case .changed(let two) = BookField.authors.apply("Jane Austen & Mary Shelley", to: book())
+        else {
+            Issue.record("the Authors hint offers “ & ” and the field did not split on it")
+            return
+        }
+        #expect(two.authors == ["Jane Austen", "Mary Shelley"])
+    }
+
+    /// The date field's placeholder used to be "yyyy-mm-dd", which reads in an
+    /// empty field as a value the book already has. A placeholder invites; a
+    /// hint explains. This is the line between them, held by a test because it
+    /// is the kind of thing that creeps back one field at a time.
+    @Test("a placeholder invites, it does not state a format")
+    func placeholdersDoNotStateFormats() {
+        for field in BookField.allCases where field != .seriesIndex {
+            #expect(
+                field.placeholder.hasPrefix("Add ") && field.placeholder.hasSuffix("…"),
+                "\(field.label) prompts with “\(field.placeholder)”, which is not an invitation")
+        }
+        // The index sits beside the series name in 44 points; a sentence does
+        // not fit and is not needed next to a name.
+        #expect(BookField.seriesIndex.placeholder == "#")
+    }
+
     /// The property the whole type exists for: what a field shows is always
     /// something the same field accepts back. Without it a field that displays
     /// "2019" and parses "yyyy-MM-dd" rewrites the book on every visit.
