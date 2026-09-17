@@ -154,19 +154,46 @@ public struct LibraryDescriptor: Codable, Equatable, Sendable {
     /// number and land in a folder that still has files in it.
     public var nextBookNumber: Int
     public var shelves: [Shelf]
+    /// How this library was last being looked at: grid or table, in what order,
+    /// with which columns.
+    ///
+    /// Per library rather than per app, because it is a fact about *this*
+    /// collection: a library of comics wants different columns from a library
+    /// of novels, and a person who sorts one by date added has not said
+    /// anything about the other.
+    public var view: LibraryViewSettings
 
     public init(
         schemaVersion: Int = currentSchemaVersion,
         name: String,
         createdAt: Date = Date(),
         nextBookNumber: Int = 1,
-        shelves: [Shelf] = []
+        shelves: [Shelf] = [],
+        view: LibraryViewSettings = LibraryViewSettings()
     ) {
         self.schemaVersion = schemaVersion
         self.name = name
         self.createdAt = createdAt
         self.nextBookNumber = nextBookNumber
         self.shelves = shelves
+        self.view = view
+    }
+
+    /// Decoded by hand so that a field added later can be missing.
+    ///
+    /// The synthesised initialiser refuses a file without `view`, and every
+    /// `library.json` written before this sprint is such a file. A new field
+    /// that makes existing libraries unopenable is a migration, and this is not
+    /// worth one: a missing setting means "the default", which is exactly what
+    /// a library that has never been arranged should get.
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try values.decode(Int.self, forKey: .schemaVersion)
+        name = try values.decode(String.self, forKey: .name)
+        createdAt = try values.decode(Date.self, forKey: .createdAt)
+        nextBookNumber = try values.decodeIfPresent(Int.self, forKey: .nextBookNumber) ?? 1
+        shelves = try values.decodeIfPresent([Shelf].self, forKey: .shelves) ?? []
+        view = try values.decodeIfPresent(LibraryViewSettings.self, forKey: .view) ?? LibraryViewSettings()
     }
 
     public var shelfTree: ShelfTree { ShelfTree(shelves) }
@@ -192,4 +219,44 @@ public struct LibraryDescriptor: Codable, Equatable, Sendable {
         decoder.dateDecodingStrategy = .iso8601
         return decoder
     }()
+}
+
+/// How a library was last being looked at.
+///
+/// Saved in `library.json` and not in the app's preferences: it describes this
+/// collection, and it should travel with the folder to another Mac the way the
+/// shelves do.
+public struct LibraryViewSettings: Codable, Equatable, Sendable {
+    public enum Mode: String, Codable, Sendable, CaseIterable {
+        case grid
+        case table
+
+        public var label: String {
+            switch self {
+            case .grid: return "Grid"
+            case .table: return "Table"
+            }
+        }
+
+        public var icon: String {
+            switch self {
+            case .grid: return "square.grid.2x2"
+            case .table: return "list.bullet"
+            }
+        }
+    }
+
+    public var mode: Mode
+    public var order: BookOrder
+    /// The table's hidden columns and their widths, as SwiftUI's own
+    /// customisation writes them. Opaque on purpose: it is SwiftUI's format,
+    /// and a second interpretation of it here would be a second thing to keep
+    /// in step with a framework that owns it.
+    public var tableColumns: String?
+
+    public init(mode: Mode = .grid, order: BookOrder = .byTitle, tableColumns: String? = nil) {
+        self.mode = mode
+        self.order = order
+        self.tableColumns = tableColumns
+    }
 }

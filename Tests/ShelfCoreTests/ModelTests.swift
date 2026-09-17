@@ -209,8 +209,24 @@ struct SortingTests {
     func sqlOrders() {
         // The clause itself is checked by LibraryIndexTests against real rows;
         // this is the part that is easy to get wrong by eye.
-        #expect(BookSort.seriesOrder.sqlOrder.contains("IS NULL"))
-        #expect(BookSort.allCases.allSatisfy { !$0.title.isEmpty })
+        #expect(BookSort.series.sqlOrder(ascending: true).contains("IS NULL"))
+        #expect(BookSort.series.sqlOrder(ascending: false).contains("IS NULL"))
+        #expect(BookSort.allCases.allSatisfy { !$0.label.isEmpty })
+        // Every order ends in the title, so two books that tie keep a fixed
+        // order instead of reshuffling on every reload.
+        #expect(BookSort.allCases.allSatisfy { $0.sqlOrder(ascending: true).contains("title_sort") })
+    }
+
+    /// A field's own preference decides what one click gives; both directions
+    /// are always offered.
+    @Test("a name sorts A–Z first, a date and a rating the other way")
+    func preferredDirections() {
+        #expect(BookOrder(.title).ascending)
+        #expect(BookOrder(.author).ascending)
+        #expect(!BookOrder(.added).ascending)
+        #expect(!BookOrder(.rating).ascending)
+        #expect(BookOrder(.added).reversed.ascending)
+        #expect(BookOrder(.title).label == "Title ↑")
     }
 }
 

@@ -331,7 +331,7 @@ public final class LibraryIndex: Sendable {
     /// with five `LEFT JOIN`s: the joined version returns a row per
     /// author × tag × format and 8 000 books become 200 000 rows to de-duplicate.
     /// Four small queries are both faster and easier to read.
-    public func allEntries(sortedBy sort: BookSort = .titleSort) async throws -> [LibraryEntry] {
+    public func allEntries(sortedBy sort: BookOrder = .byTitle) async throws -> [LibraryEntry] {
         try await pool.read { database in
             try Self.entries(matching: nil, sortedBy: sort, in: database)
         }
@@ -339,11 +339,11 @@ public final class LibraryIndex: Sendable {
 
     public func entry(id: UUID) async throws -> LibraryEntry? {
         try await pool.read { database in
-            try Self.entries(matching: [id], sortedBy: .titleSort, in: database).first
+            try Self.entries(matching: [id], sortedBy: .byTitle, in: database).first
         }
     }
 
-    public func entries(ids: [UUID], sortedBy sort: BookSort = .titleSort) async throws -> [LibraryEntry] {
+    public func entries(ids: [UUID], sortedBy sort: BookOrder = .byTitle) async throws -> [LibraryEntry] {
         guard !ids.isEmpty else { return [] }
         return try await pool.read { database in
             try Self.entries(matching: ids, sortedBy: sort, in: database)
@@ -351,7 +351,7 @@ public final class LibraryIndex: Sendable {
     }
 
     private static func entries(
-        matching ids: [UUID]?, sortedBy sort: BookSort, in database: Database
+        matching ids: [UUID]?, sortedBy sort: BookOrder, in database: Database
     ) throws -> [LibraryEntry] {
         var sql = """
             SELECT b.id, b.number, b.folder, b.title, b.title_sort, s.name AS series_name, b.series_index,
@@ -876,49 +876,110 @@ public final class LibraryIndex: Sendable {
     }
 }
 
-/// How the grid and the table are sorted.
+/// What the grid and the table are sorted by.
 ///
-/// A table rather than a `switch` in the view, so the sidebar, the table header
-/// and a saved sort order cannot disagree about what "by author" means.
-public enum BookSort: String, CaseIterable, Sendable {
-    case titleSort
-    case authorSort
-    case seriesOrder
-    case addedNewest
-    case ratingHighest
+/// A table rather than a `switch` in the view, so the sort menu, the table's
+/// column headers and a sort order saved in `library.json` cannot disagree
+/// about what "by author" means.
+///
+/// The *direction* is not in here. It was — `addedNewest` and `ratingHighest`
+/// baked it in — and that made three of the six orders reversible and three of
+/// them not, for no reason a person could see. Field and direction are two
+/// things, and `BookOrder` is the pair.
+public enum BookSort: String, CaseIterable, Sendable, Codable {
+    case title
+    case author
+    case series
+    case rating
+    case added
+    case modified
 
-    public var title: String {
+    public var label: String {
         switch self {
-        case .titleSort: return "Title"
-        case .authorSort: return "Author"
-        case .seriesOrder: return "Series"
-        case .addedNewest: return "Recently Added"
-        case .ratingHighest: return "Rating"
+        case .title: return "Title"
+        case .author: return "Author"
+        case .series: return "Series"
+        case .rating: return "Rating"
+        case .added: return "Date Added"
+        case .modified: return "Last Changed"
+        }
+    }
+
+    /// Which way round the field is usually wanted first.
+    ///
+    /// A name reads A–Z; a date and a rating read newest and best first. The
+    /// menu offers both either way — this only decides what one click gives.
+    public var prefersDescending: Bool {
+        switch self {
+        case .title, .author, .series: return false
+        case .rating, .added, .modified: return true
         }
     }
 
     /// `COLLATE NOCASE` everywhere a person's eye reads the column: a library
     /// that puts "Zola" before "adams" is a library nobody can scan.
-    var sqlOrder: String {
+    ///
+    /// Every order ends in the title, so two books that tie are in a fixed
+    /// order rather than in whatever order SQLite happened to read them — a
+    /// grid that reshuffles its ties on every reload looks broken.
+    func sqlOrder(ascending: Bool) -> String {
+        let direction = ascending ? "ASC" : "DESC"
+        let byTitle = "b.title_sort COLLATE NOCASE \(direction)"
         switch self {
-        case .titleSort:
-            return "b.title_sort COLLATE NOCASE"
-        case .authorSort:
+        case .title:
+            return byTitle
+        case .author:
             return """
                 (SELECT a.name_sort FROM book_authors ba JOIN authors a ON a.id = ba.author_id
-                 WHERE ba.book_id = b.id ORDER BY ba.position LIMIT 1) COLLATE NOCASE,
+                 WHERE ba.book_id = b.id ORDER BY ba.position LIMIT 1) COLLATE NOCASE \(direction),
                 b.title_sort COLLATE NOCASE
                 """
-        case .seriesOrder:
-            // Books without a series go last, not first: a NULL sorts before
-            // everything in SQLite, which would bury every series behind them.
-            return "s.name_sort IS NULL, s.name_sort COLLATE NOCASE, b.series_index, b.title_sort COLLATE NOCASE"
-        case .addedNewest:
-            return "b.added_at DESC, b.title_sort COLLATE NOCASE"
-        case .ratingHighest:
-            return "b.rating DESC, b.title_sort COLLATE NOCASE"
+        case .series:
+            // Books without a series go last whichever way round it is sorted.
+            // A NULL sorts before everything in SQLite, so ascending would bury
+            // every series behind the books that have none.
+            return """
+                s.name_sort IS NULL, s.name_sort COLLATE NOCASE \(direction),
+                b.series_index \(direction), b.title_sort COLLATE NOCASE
+                """
+        case .rating:
+            return "b.rating \(direction), b.title_sort COLLATE NOCASE"
+        case .added:
+            return "b.added_at \(direction), b.title_sort COLLATE NOCASE"
+        case .modified:
+            return "b.modified_at \(direction), b.title_sort COLLATE NOCASE"
         }
     }
+}
+
+/// A field and a direction: the whole of "how is this library sorted".
+///
+/// One value, so it can be compared, saved in `library.json` and restored —
+/// and so nothing can hold a field without a direction.
+public struct BookOrder: Equatable, Sendable, Codable {
+    public var field: BookSort
+    public var ascending: Bool
+
+    public init(field: BookSort = .title, ascending: Bool = true) {
+        self.field = field
+        self.ascending = ascending
+    }
+
+    /// What one click on a field gives: its own preferred direction.
+    public init(_ field: BookSort) {
+        self.field = field
+        self.ascending = !field.prefersDescending
+    }
+
+    public static let byTitle = BookOrder()
+
+    /// "Title ↑", "Date Added ↓" – what the menu shows and what a screen
+    /// reader reads.
+    public var label: String { "\(field.label) \(ascending ? "↑" : "↓")" }
+
+    public var reversed: BookOrder { BookOrder(field: field, ascending: !ascending) }
+
+    var sqlOrder: String { field.sqlOrder(ascending: ascending) }
 }
 
 /// How two books are compared for "these are the same book".

@@ -166,10 +166,35 @@ struct ShelfApp: App {
             .disabled(model.library == nil)
             Divider()
             Picker(
-                "Sort By",
-                selection: Binding(get: { model.sort }, set: { model.sort = $0 })
+                "Show As",
+                selection: Binding(get: { model.viewMode }, set: { model.viewMode = $0 })
             ) {
-                ForEach(BookSort.allCases, id: \.self) { Text($0.title).tag($0) }
+                // ⌘1 and ⌘2, as CONCEPT §3.2 asks. The shortcuts are on the
+                // items rather than on a pair of buttons so the menu says what
+                // the keys do.
+                ForEach(Array(LibraryViewSettings.Mode.allCases.enumerated()), id: \.element) { offset, mode in
+                    Label(mode.label, systemImage: mode.icon)
+                        .tag(mode)
+                        .keyboardShortcut(KeyEquivalent(Character("\(offset + 1)")), modifiers: .command)
+                }
+            }
+            .disabled(model.library == nil)
+            Divider()
+            // Every field, both ways round, the current one ticked. The same
+            // field again turns it round — what clicking a table header does.
+            Menu("Sort By") {
+                ForEach(BookSort.allCases, id: \.self) { field in
+                    Button {
+                        model.order =
+                            model.order.field == field
+                            ? model.order.reversed : BookOrder(field)
+                    } label: {
+                        Label(
+                            field.label,
+                            systemImage: model.order.field == field
+                                ? (model.order.ascending ? "arrow.up" : "arrow.down") : "")
+                    }
+                }
             }
             .disabled(model.library == nil)
         }

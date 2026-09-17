@@ -91,12 +91,7 @@ struct CoverGridView: View {
 
     private var toolbar: some View {
         HStack(spacing: 12) {
-            Picker("", selection: Binding(get: { model.sort }, set: { model.sort = $0 })) {
-                ForEach(BookSort.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            .labelsHidden()
-            .frame(width: 160)
-            .help("How the grid is ordered")
+            SortMenu()
 
             Spacer(minLength: 8)
 
@@ -304,5 +299,43 @@ struct BookCell: View {
             return
         }
         cover = await loader.cover(for: entry, size: size, priority: .interactive)
+    }
+}
+
+/// The sort menu above the grid.
+///
+/// Six fields, each available both ways round, with the current one ticked. A
+/// menu rather than a `Picker` because a picker of twelve entries — six fields
+/// times two directions — is a list nobody can scan; a field picked twice
+/// simply turns round, which is what a table header does when you click it
+/// again, and the menu says so.
+struct SortMenu: View {
+    @Environment(LibraryModel.self) private var model
+
+    var body: some View {
+        Menu {
+            ForEach(BookSort.allCases, id: \.self) { field in
+                Button {
+                    // The same field again reverses it; a new field arrives the
+                    // way round it is usually wanted — names A–Z, dates newest
+                    // first.
+                    model.order = model.order.field == field ? model.order.reversed : BookOrder(field)
+                } label: {
+                    Label(
+                        field.label,
+                        systemImage: model.order.field == field
+                            ? (model.order.ascending ? "arrow.up" : "arrow.down") : "")
+                }
+            }
+        } label: {
+            Text(model.order.label)
+                .font(.callout)
+                .foregroundStyle(Slate.textSecondary)
+        }
+        .menuStyle(.borderlessButton)
+        .frame(width: 150)
+        .help("How the library is ordered — the same field again turns it round")
+        .accessibilityLabel("Sort order")
+        .accessibilityValue(model.order.label)
     }
 }

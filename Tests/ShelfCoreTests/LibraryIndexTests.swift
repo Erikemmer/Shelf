@@ -115,8 +115,12 @@ struct LibraryIndexTests {
             entry(title: "apples", number: 2),
             entry(title: "Zebra", number: 3),
         ])
-        let titles = try await index.allEntries(sortedBy: .titleSort).map(\.book.title)
+        let titles = try await index.allEntries(sortedBy: BookOrder(.title)).map(\.book.title)
         #expect(titles == ["apples", "The Hobbit", "Zebra"])
+        // And the other way round, which is the half that used not to exist:
+        // three of the six orders were reversible and three were not.
+        let backwards = try await index.allEntries(sortedBy: BookOrder(.title).reversed).map(\.book.title)
+        #expect(backwards == ["Zebra", "The Hobbit", "apples"])
     }
 
     @Test("by author uses the surname")
@@ -127,7 +131,7 @@ struct LibraryIndexTests {
             entry(title: "B", authors: ["Ursula K. Le Guin"], number: 2),
             entry(title: "C", authors: ["Iain Banks"], number: 3),
         ])
-        let authors = try await index.allEntries(sortedBy: .authorSort).map(\.book.authors[0])
+        let authors = try await index.allEntries(sortedBy: BookOrder(.author)).map(\.book.authors[0])
         #expect(authors == ["Jane Austen", "Iain Banks", "Ursula K. Le Guin"])
     }
 
@@ -141,8 +145,13 @@ struct LibraryIndexTests {
             entry(title: "Second", series: SeriesRef(name: "Culture", index: 2), number: 2),
             entry(title: "First", series: SeriesRef(name: "Culture", index: 1), number: 3),
         ])
-        let titles = try await index.allEntries(sortedBy: .seriesOrder).map(\.book.title)
+        let titles = try await index.allEntries(sortedBy: BookOrder(.series)).map(\.book.title)
         #expect(titles == ["First", "Second", "No Series"])
+        // Reversed, the series turns round and the book with none stays last.
+        // A NULL sorts before everything in SQLite, so an ordinary DESC would
+        // have moved it to the front.
+        let backwards = try await index.allEntries(sortedBy: BookOrder(.series).reversed).map(\.book.title)
+        #expect(backwards == ["Second", "First", "No Series"])
     }
 
     @Test("by date added is newest first")
@@ -153,7 +162,12 @@ struct LibraryIndexTests {
             entry(title: "Older", added: now.addingTimeInterval(-1_000), number: 1),
             entry(title: "Newer", added: now, number: 2),
         ])
-        #expect(try await index.allEntries(sortedBy: .addedNewest).map(\.book.title) == ["Newer", "Older"])
+        // `BookOrder(.added)` is newest first without being asked: a date is
+        // usually wanted that way round, and the field says so itself.
+        #expect(try await index.allEntries(sortedBy: BookOrder(.added)).map(\.book.title) == ["Newer", "Older"])
+        #expect(
+            try await index.allEntries(sortedBy: BookOrder(.added).reversed).map(\.book.title)
+                == ["Older", "Newer"])
     }
 
     // MARK: Search

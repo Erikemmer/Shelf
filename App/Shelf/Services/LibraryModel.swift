@@ -43,8 +43,41 @@ final class LibraryModel {
     var filter = LibraryFilter.everything {
         didSet { if filter != oldValue { refilter() } }
     }
-    var sort: BookSort = .titleSort {
-        didSet { if sort != oldValue { reloadEntries() } }
+    /// How the library is ordered, and what the table's header arrow points at.
+    ///
+    /// Written back to `library.json` whenever it changes, so a library opens
+    /// the way it was left. The re-sort is a query rather than a sort in
+    /// memory: `BookSort` owns the SQL order, and a second sort here would be a
+    /// second answer to "what does by author mean".
+    var order: BookOrder = .byTitle {
+        didSet {
+            guard order != oldValue else { return }
+            rememberView()
+            reloadEntries()
+        }
+    }
+
+    /// Grid or table. The same selection, the same keys, the same inspector –
+    /// only the drawing differs.
+    var viewMode: LibraryViewSettings.Mode = .grid {
+        didSet { if viewMode != oldValue { rememberView() } }
+    }
+
+    /// SwiftUI's own record of which table columns are hidden and how wide they
+    /// are. Kept opaque – see `LibraryViewSettings.tableColumns`.
+    var tableColumns: String? {
+        didSet { if tableColumns != oldValue { rememberView() } }
+    }
+
+    /// Saves how the library is being looked at, without touching anything
+    /// else in the descriptor.
+    private func rememberView() {
+        guard var descriptor, let library else { return }
+        let settings = LibraryViewSettings(mode: viewMode, order: order, tableColumns: tableColumns)
+        guard descriptor.view != settings else { return }
+        descriptor.view = settings
+        try? library.write(descriptor)
+        self.descriptor = descriptor
     }
     /// The books the grid shows: `entries` after the filter and the search.
     private(set) var visible: [LibraryEntry] = []
@@ -218,6 +251,11 @@ final class LibraryModel {
 
             self.library = library
             self.descriptor = descriptor
+            // Before anything is read, so the first query is in the order the
+            // library was left in rather than in the default one.
+            order = descriptor.view.order
+            viewMode = descriptor.view.mode
+            tableColumns = descriptor.view.tableColumns
             self.index = index
             self.loader = loader
             importModel = ImportModel(library: library, index: index)
@@ -267,7 +305,7 @@ final class LibraryModel {
     func reload() async {
         guard let index else { return }
         do {
-            entries = try await index.allEntries(sortedBy: sort)
+            entries = try await index.allEntries(sortedBy: order)
             totals = try await index.totals(coversOnDisk: coversOnDisk)
             tagFacets = try await index.tagFacets()
             authorFacets = try await index.authorFacets()
