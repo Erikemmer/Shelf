@@ -86,10 +86,48 @@ builds on Linux), UI in `App/Shelf` (SwiftUI + AppKit) on top of the shared
   refuses the test bundle.
 - **The cover cache is on disk from Sprint 1**, not retrofitted later. Selector
   paid a sprint for learning that the second time a folder opens has to be fast.
-- **SlateKit is used through a tag, never a path.** Changing the look is: commit
-  in `~/Documents/SlateKit`, `make test && make lint`, tag, push, then raise
-  `exactVersion` in `project.yml`. Otherwise an afternoon's work in SlateKit
-  silently changes what this app builds and what its tests ran against.
+- **SlateKit is used through a tag, never a path.** Otherwise an afternoon's
+  work in SlateKit silently changes what this app builds and what its tests ran
+  against.
+
+## Working on SlateKit
+
+The package is shared with Selector and has two sessions working on it. Three
+rules, all of them paid for.
+
+- **Never work in `~/Documents/SlateKit`.** That is the Selector session's
+  working copy. Commit `6e4f2ec` was made there and swept up a change of
+  Selector's that happened to be lying uncommitted in the same tree
+  (`SlateShortcuts.swift`, +8 lines: the shortcut sheet's VoiceOver column
+  order). `git add -A` cannot tell whose work it is looking at.
+
+  This session works in its own worktree:
+
+      git -C ~/Documents/SlateKit worktree add ~/Documents/SlateKit-shelf -b shelf/work
+
+  If that fails because of somebody else's uncommitted changes, touch nothing
+  there and `git clone https://github.com/Erikemmer/SlateKit ~/Documents/SlateKit-shelf`
+  instead. Before every SlateKit commit: `git status --short` and
+  `git diff --stat`, and stage **files by name** — never `git add -A`.
+
+- **An existing component keeps its previous look in the default.** What is new
+  arrives as an option the host asks for (`SlateChip(style:)`,
+  `SlateStarRating(label:)`). The two apps are pinned to different versions on
+  purpose; raising a pin for one fix must not redraw a second thing. What cannot
+  be made compatible goes in SlateKit's `CHANGELOG.md` under **Breaking**, with
+  the reason. A tag is never moved — 0.3.0 stays where it is and the correction
+  is 0.3.1.
+
+- **The package is bilingual, whatever this app is.** Selector ships German;
+  Shelf is English until Sprint 7. Every string SlateKit draws *itself* has an
+  English and a German entry in `Localizable.xcstrings`, and a test fails if one
+  is missing. Strings Shelf hands in as parameters ("Mixed", "Add series…") are
+  Shelf's own and are translated when Shelf is.
+
+The route for a change: work in the worktree, `make test && make lint &&
+make contrast`, commit, tag, push the branch to `main` and push the tag, then
+raise `exactVersion` in `project.yml` here and run the four checks.
+
 
 ## Environment notes
 - Xcode project is generated from `project.yml` (XcodeGen). Edit the YAML, never
