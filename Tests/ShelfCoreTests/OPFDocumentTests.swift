@@ -86,6 +86,142 @@ struct OPFDocumentTests {
         #expect(parsed.book.description == "5 < 6 & 7 > 3")
     }
 
+    // MARK: What a person can type into a field
+    //
+    // Sprint 2b made every field editable, so every field now holds whatever
+    // somebody pasted into it. These are the characters that break an XML
+    // writer, and the two that break it *silently* – a newline in an attribute
+    // and a carriage return anywhere – are the reason there are two escaping
+    // functions rather than one.
+
+    /// One book carrying everything at once: the five entities, umlauts, an
+    /// emoji, line breaks, a tab, and a description the size of a real one.
+    private func awkwardBook() -> Book {
+        var book = Book(
+            title: "Tom & Jerry <the> \"Original\" 'Show' – Größenwahn 📚",
+            titleSort: "Größenwahn\t& <Sort>\nsecond line",
+            authors: ["Ursula & Karl <Le Guin>", "Émile Ölafsdóttir 🖋"],
+            series: SeriesRef(name: "Hainish & <Cycle> \"Two\"\nwrapped", index: 2.5),
+            publisher: "Gollancz & Söhne <Verlag>",
+            language: "de",
+            description: """
+                Zwei Welten, eine Mauer – und ein "Zitat" mit & und <Klammern>.
+
+                Ein zweiter Absatz, mit Umlauten (Grüße, Äpfel, Öl) und einem Emoji 📖.
+                \tEine eingerückte Zeile.
+                Und ein Windows-Umbruch:\r
+                danach geht es weiter.
+                """,
+            tags: ["science & fiction", "<utopia>", "Grüße"],
+            identifiers: ["isbn": "9780061054884", "custom": "a & b <c> \"d\""])
+        // 20 KB, which is what a real blurb plus a publisher's HTML comes to.
+        // No trailing space: the XML reader trims an element's text at both
+        // ends, so a value stored with one would not come back with one. That
+        // is why `BookField.apply` trims what a person types — "what was
+        // stored" and "what comes back" are then the same string.
+        book.description =
+            (book.description ?? "") + "\n"
+            + String(repeating: "Lange Beschreibung mit & und <Zeichen>. ", count: 500)
+            .trimmingCharacters(in: .whitespaces)
+        return book
+    }
+
+    @Test("every awkward character survives book → OPF → book")
+    func awkwardRoundTrip() throws {
+        let book = awkwardBook()
+        let text = OPFDocument.render(book)
+        let parsed = try OPFDocument.read(Data(text.utf8), fallbackTitle: "x")
+
+        for field in MetadataChange.Field.allCases {
+            #expect(!field.differs(book, parsed.book), "\(field.label) did not survive the round trip")
+        }
+        #expect((parsed.book.description?.count ?? 0) > 20_000)
+    }
+
+    /// The defect this catches without the two-function fix: XML
+    /// attribute-value normalisation turns a tab, a newline or a carriage
+    /// return inside an attribute into a *space* before the parser reports it.
+    /// `calibre:title_sort` and `calibre:series` are attributes, so a sort
+    /// title with a line break in it came back changed – and a round trip
+    /// through the folder would then alter a book nobody had edited.
+    @Test("a line break inside an attribute is not turned into a space")
+    func lineBreakInAttribute() throws {
+        var book = Book(title: "Anything")
+        book.titleSort = "First\nSecond\tTabbed"
+        book.series = SeriesRef(name: "Wrapped\nSeries", index: 1)
+
+        let text = OPFDocument.render(book)
+        #expect(text.contains("&#10;"))
+        #expect(text.contains("&#9;"))
+
+        let parsed = try OPFDocument.read(Data(text.utf8), fallbackTitle: "x")
+        #expect(parsed.book.titleSort == "First\nSecond\tTabbed")
+        #expect(parsed.book.series?.name == "Wrapped\nSeries")
+    }
+
+    /// And in element text: XML line-ending normalisation turns a literal CR
+    /// into LF before the parser sees it, so a description pasted from a
+    /// Windows tool came back with different bytes than it went in with.
+    @Test("a carriage return in a description survives as a carriage return")
+    func carriageReturnInText() throws {
+        let book = Book(title: "Anything", description: "One\r\nTwo\rThree")
+        let text = OPFDocument.render(book)
+        #expect(text.contains("&#13;"))
+        // Newlines stay newlines, so the file is still readable by eye.
+        #expect(text.contains("\n"))
+
+        let parsed = try OPFDocument.read(Data(text.utf8), fallbackTitle: "x")
+        #expect(parsed.book.description == "One\r\nTwo\rThree")
+    }
+
+    @Test("the OPF stays well-formed with everything awkward in it")
+    func awkwardStaysWellFormed() throws {
+        let text = OPFDocument.render(awkwardBook())
+        // A parse that throws is a file no other tool can read either – the
+        // return path to Calibre would be closed (CONCEPT §4).
+        let root = try XMLTree.parse(Data(text.utf8))
+        #expect(root.name == "package")
+        #expect(root.descendants(named: "title").count == 1)
+        #expect(root.descendants(named: "creator").count == 2)
+        #expect(root.descendants(named: "subject").count == 3)
+    }
+
+    @Test("a second round trip of an awkward book is still a fixed point")
+    func awkwardOutputIsStable() throws {
+        let once = OPFDocument.render(awkwardBook())
+        let parsed = try OPFDocument.read(Data(once.utf8), fallbackTitle: "x")
+        #expect(OPFDocument.render(parsed.book) == once)
+    }
+
+    /// The injection case. A title that looks like markup has to arrive as
+    /// *text*: if it landed as an element, a book could rename its own series
+    /// or set a rating by being called the right thing.
+    @Test("a value that looks like XML lands as text, not as an element")
+    func valueThatLooksLikeMarkup() throws {
+        let book = Book(
+            title: "<meta name=\"calibre:rating\" content=\"10\"/>",
+            description: "</dc:description><meta name=\"shelf:read\" content=\"true\"/>",
+            tags: ["</dc:subject><dc:subject>injected"])
+
+        let text = OPFDocument.render(book)
+        let root = try XMLTree.parse(Data(text.utf8))
+
+        // Not one meta has arrived that Shelf did not write itself.
+        let metaNames = root.descendants(named: "meta").compactMap { $0.attribute("name") }
+        #expect(!metaNames.contains("calibre:rating"))
+        #expect(metaNames.filter { $0 == "shelf:read" }.count == 1)
+        #expect(root.descendants(named: "subject").count == 1)
+
+        let parsed = try OPFDocument.read(Data(text.utf8), fallbackTitle: "x")
+        #expect(parsed.book.title == book.title)
+        #expect(parsed.book.description == book.description)
+        #expect(parsed.book.tags == book.tags)
+        // The rating and the read status are what the book says, not what the
+        // title tried to say.
+        #expect(parsed.book.rating == 0)
+        #expect(!parsed.book.isRead)
+    }
+
     @Test("a series index of 3.5 stays 3.5, and 3 does not become 3.0")
     func seriesIndexFormatting() throws {
         let half = OPFDocument.render(Book(title: "x", series: SeriesRef(name: "S", index: 3.5)))

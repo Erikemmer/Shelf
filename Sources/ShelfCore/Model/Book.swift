@@ -32,6 +32,14 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
     /// errors.
     public var language: String?
     public var description: String?
+    /// Keywords, sorted by name and treated as a set.
+    ///
+    /// Sorted because everything else that holds them is: the OPF writes one
+    /// `dc:subject` per tag in sorted order, and the index reads them back
+    /// `ORDER BY t.name`. If the model kept a third order, the same book read
+    /// from its folder and read from the index would differ in a field nobody
+    /// had touched, and a rebuild would report changes that are not changes.
+    /// Unlike `authors`, the order carries no information — no tag is "first".
     public var tags: [String]
     /// ISBN, ASIN, DOI, Google, Goodreads… keyed by scheme, lower-cased.
     public var identifiers: [String: String]
@@ -69,7 +77,7 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
         self.published = published
         self.language = language
         self.description = description
-        self.tags = tags
+        self.tags = tags.sorted()
         self.identifiers = identifiers
         self.addedAt = addedAt
         self.modifiedAt = modifiedAt

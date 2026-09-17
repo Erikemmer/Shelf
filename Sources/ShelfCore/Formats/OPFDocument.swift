@@ -261,7 +261,7 @@ public enum OPFDocument {
         lines.append("    <dc:title>\(escaped(book.title))</dc:title>")
         for author in book.authors {
             lines.append(
-                "    <dc:creator opf:role=\"aut\" opf:file-as=\"\(escaped(AuthorSort.of(author)))\">"
+                "    <dc:creator opf:role=\"aut\" opf:file-as=\"\(escapedAttribute(AuthorSort.of(author)))\">"
                     + "\(escaped(author))</dc:creator>")
         }
         if let language = book.language {
@@ -282,16 +282,16 @@ public enum OPFDocument {
         for scheme in book.identifiers.keys.sorted() {
             guard let value = book.identifiers[scheme] else { continue }
             lines.append(
-                "    <dc:identifier opf:scheme=\"\(escaped(scheme.uppercased()))\">\(escaped(value))"
+                "    <dc:identifier opf:scheme=\"\(escapedAttribute(scheme.uppercased()))\">\(escaped(value))"
                     + "</dc:identifier>")
         }
         for tag in book.tags.sorted() {
             lines.append("    <dc:subject>\(escaped(tag))</dc:subject>")
         }
 
-        lines.append("    <meta name=\"calibre:title_sort\" content=\"\(escaped(book.titleSort))\"/>")
+        lines.append("    <meta name=\"calibre:title_sort\" content=\"\(escapedAttribute(book.titleSort))\"/>")
         if let series = book.series {
-            lines.append("    <meta name=\"calibre:series\" content=\"\(escaped(series.name))\"/>")
+            lines.append("    <meta name=\"calibre:series\" content=\"\(escapedAttribute(series.name))\"/>")
             if let index = series.index {
                 lines.append("    <meta name=\"calibre:series_index\" content=\"\(number(index))\"/>")
             }
@@ -316,11 +316,12 @@ public enum OPFDocument {
             // answer, an ASCII separator such as the unit separator, is *not
             // legal in XML 1.0*: the parser refuses the whole file. JSON is
             // lossless, legal, and still readable by eye in the file.
-            lines.append("    <meta name=\"shelf:shelves\" content=\"\(escaped(encodeShelves(shelfPaths)))\"/>")
+            lines.append(
+                "    <meta name=\"shelf:shelves\" content=\"\(escapedAttribute(encodeShelves(shelfPaths)))\"/>")
         }
         for name in unmappedMetas.keys.sorted() {
             guard let content = unmappedMetas[name] else { continue }
-            lines.append("    <meta name=\"\(escaped(name))\" content=\"\(escaped(content))\"/>")
+            lines.append("    <meta name=\"\(escapedAttribute(name))\" content=\"\(escapedAttribute(content))\"/>")
         }
 
         lines.append("  </metadata>")
@@ -360,20 +361,69 @@ public enum OPFDocument {
         return abs(value - rounded) < 0.001 ? String(Int(rounded)) : String(format: "%g", value)
     }
 
-    /// The five XML entities. All five, always: an apostrophe inside a
-    /// double-quoted attribute is legal, but an OPF that goes through another
-    /// tool and comes back single-quoted would break.
+    /// The five XML entities, for text between tags. All five, always: an
+    /// apostrophe inside a double-quoted attribute is legal, but an OPF that
+    /// goes through another tool and comes back single-quoted would break.
+    ///
+    /// A carriage return is escaped as well, and that is not pedantry: XML
+    /// *line-ending normalisation* turns a literal CR in element text into LF
+    /// before the parser ever reports it, so a description pasted from a Windows
+    /// tool would come back with different bytes than it went in with. `&#13;`
+    /// survives, because a character reference is not normalised. A newline and
+    /// a tab are left as themselves here – they are legal, they survive, and a
+    /// 20 KB description with `&#10;` in place of every line break is a file no
+    /// person can read (DATA-MODEL §3: this is a file somebody may well open).
+    /// **Over unicode scalars, not characters.** `"\r\n"` is a *single*
+    /// `Character` in Swift – one grapheme cluster – so `case "\r"` never
+    /// matches a Windows line break, and the literal CRLF went into the file
+    /// and came back as a bare LF. Written down because the code reads
+    /// identically either way and only the test tells them apart.
     static func escaped(_ text: String) -> String {
         var result = ""
-        result.reserveCapacity(text.count)
-        for character in text {
-            switch character {
+        result.reserveCapacity(text.utf8.count)
+        for scalar in text.unicodeScalars {
+            switch scalar {
             case "&": result += "&amp;"
             case "<": result += "&lt;"
             case ">": result += "&gt;"
             case "\"": result += "&quot;"
             case "'": result += "&apos;"
-            default: result.append(character)
+            case "\r": result += "&#13;"
+            default: result.unicodeScalars.append(scalar)
+            }
+        }
+        return result
+    }
+
+    /// The same, for a value inside an attribute – where three more characters
+    /// cannot survive as themselves.
+    ///
+    /// XML *attribute-value normalisation* replaces every literal tab, newline
+    /// and carriage return in an attribute with a space before the parser
+    /// reports the value. A title sort of "Vol. 1\nSpecial" would therefore come
+    /// back as "Vol. 1 Special": a round trip through the folder would change a
+    /// book nobody had edited, and the index and the file would disagree for
+    /// good. As character references they survive untouched.
+    ///
+    /// Which fields this matters for is not hypothetical: `calibre:title_sort`,
+    /// `calibre:series`, `opf:file-as` and every one of Calibre's custom columns
+    /// in `unmappedMetas` are attributes, and all of them hold text a person
+    /// typed or pasted.
+    /// Over unicode scalars, for the same reason as `escaped`.
+    static func escapedAttribute(_ text: String) -> String {
+        var result = ""
+        result.reserveCapacity(text.utf8.count)
+        for scalar in text.unicodeScalars {
+            switch scalar {
+            case "&": result += "&amp;"
+            case "<": result += "&lt;"
+            case ">": result += "&gt;"
+            case "\"": result += "&quot;"
+            case "'": result += "&apos;"
+            case "\t": result += "&#9;"
+            case "\n": result += "&#10;"
+            case "\r": result += "&#13;"
+            default: result.unicodeScalars.append(scalar)
             }
         }
         return result
