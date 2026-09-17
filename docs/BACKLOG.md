@@ -174,16 +174,18 @@ than claimed:
       and reopen it, then `Scripts/screenshots.sh`.
       What could be read without it is the accessibility tree
       (`docs/screenshots/sprint-1/ax-tree.txt`), and it found two defects.
-- [x] **Is there more than one window?** Settled: **no.** Shelf reports
-      `5 1` – five layer-0 windows, one of them on screen – and the
-      accessibility API, which counts real windows, reports **one**. Selector,
-      read while it was running and never touched, reports **five** layer-0
-      windows too: four of them are 1512 × 33 at (0, 0), exactly the four Shelf
-      also has, and they belong to the system's menu bar rather than to either
-      app. Three quit-and-relaunch rounds and three kill-and-relaunch rounds
-      stayed at one window; the "six, growing by one per launch" of Sprint 1 was
-      restored window state from a saved-state folder that no longer exists and
-      did not come back. `window-count.swift` and `smoke.sh` say so now.
+- [x] **Is there more than one window?** Settled: **no.** Shelf reports `5 1` –
+      five layer-0 windows, one of them on screen – and the accessibility API,
+      which counts real windows, reports **one**. Four of the five are
+      1512 × 33 at (0, 0), never on screen, and belong to the system's menu bar:
+      every app has them. Selector, read while it was running and never touched,
+      reports the same four – and with a document window open it reports
+      **six**, which is exactly the number Shelf was suspected for. Shelf has one
+      fewer than a shipping app that works. Three quit-and-relaunch rounds and
+      three kill-and-relaunch rounds stayed at one window; the "six, growing by
+      one per launch" of Sprint 1 was restored window state from a saved-state
+      folder that no longer exists and did not come back. `window-count.swift`
+      and `smoke.sh` say so now.
 - [x] Time from opening a 5 000-book library until every *visible* cover is on
       screen, cold and warm (CONCEPT §11 target: warm cache under 2 s).
       Measured with `SHELF_TIMING=1`: **852 ms cold, 768 ms warm**, twelve

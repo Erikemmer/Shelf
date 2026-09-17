@@ -121,17 +121,26 @@ except the screenshots.
 nobody knew whether that was a SwiftUI artefact or a real extra window. It is
 neither, quite:
 
-| | layer-0 windows | windows the accessibility API reports |
-|---|---|---|
-| Shelf, library open | 5 (one on screen) | **1** |
-| Selector, running, read and not touched | 5 (none on screen) | 0 — it had none open |
+| | layer-0 windows | of those, on screen | windows the accessibility API reports |
+|---|---|---|---|
+| Shelf, library open | 5 | 1 | **1** |
+| Selector, no window open | 5 | 0 | 0 |
+| **Selector, one document window open** | **6** | **1** | — |
 
-Four of those five are **1512 × 33 at (0, 0)** and never on screen, and Selector
-reports exactly the same four: they are the system's menu bar, not the app's.
+Four of those windows are **1512 × 33 at (0, 0)** and never on screen, and every
+app has them: they are the system's menu bar, not the app's. Selector with a
+window open — "372_FUJI — Selector", 1400 × 861 — reports those four, its
+window, and one more 500 × 500 panel: **six**, which is exactly the number Shelf
+was suspected for. Shelf reports **five**, one fewer than a shipping app that
+works.
+
 Three quit-and-relaunch rounds and three kill-and-relaunch rounds stayed at one
 window; the "six, growing by one per launch" was restored window state from a
 saved-state folder that no longer exists and did not come back. The script and
 the smoke test say so now, so the next reader does not have to find it again.
+
+Selector was only ever read. The instance that was running when this session
+started is still running, untouched.
 
 ### The numbers, with the window in the foreground
 
