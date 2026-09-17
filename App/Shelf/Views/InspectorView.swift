@@ -230,11 +230,14 @@ struct InspectorView: View {
                 placeholder: "Add tag… (T)",
                 completions: model.tagCompletions,
                 focusRequest: model.focusTagFieldRequest,
+                // The help belongs to the entry field, not to the whole
+                // control: handed in with `.help()` it reached every chip and
+                // replaced each one's own "Remove science fiction".
+                help: "⏎ adds, ⌫ removes the last one, click the ✕ to remove one",
                 onDraftChange: { model.updateTagDraft($0) },
                 onAdd: { model.addTag($0, undoManager: undoManager) },
                 onRemove: { model.removeTag($0, undoManager: undoManager) }
             )
-            .help("⏎ adds, ⌫ removes the last one, click the ✕ to remove one")
         }
     }
 

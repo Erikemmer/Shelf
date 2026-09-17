@@ -42,7 +42,7 @@ struct CoverGridView: View {
                         spacing: 20
                     ) {
                         ForEach(model.visible) { entry in
-                            BookCell(entry: entry, side: model.coverSide) { isFocused = true }
+                            BookCell(entry: entry, side: model.coverSide) { takeFocus() }
                                 .id(entry.id)
                         }
                     }
@@ -79,6 +79,30 @@ struct CoverGridView: View {
                 .onKeyPress(phases: .down) { press in editingKey(press) }
             }
         }
+    }
+
+    /// Brings the keyboard back to the grid after a click on a cover.
+    ///
+    /// Not simply `isFocused = true`, and the difference is the whole point.
+    /// Once a text field in the inspector has been typed in and given focus up,
+    /// the accessibility tree reports the *window* as focused and no control at
+    /// all — but the grid's own `@FocusState` still says `true`. Assigning the
+    /// value it already holds is not a change, so nothing happens, and 1–5, 0,
+    /// R and T stay dead until the window is closed and opened again.
+    ///
+    /// Clearing it first is what makes the second assignment a change. The hop
+    /// through the main queue is needed too: both assignments in one turn of the
+    /// run loop collapse into "no change" again.
+    ///
+    /// Sprint 2a had the same line for the same reason ("otherwise clicking a
+    /// book and pressing 3 does nothing") and it worked, because the only other
+    /// focusable thing was the search field and clicking a cover really did take
+    /// focus from it. Sprint 2b put nine text fields in the inspector and the
+    /// state got out of step; found by pressing 3 after typing a tag and
+    /// watching the rating stay at 0.
+    private func takeFocus() {
+        isFocused = false
+        DispatchQueue.main.async { isFocused = true }
     }
 
     /// The editing keys: 1–5 rate, 0 clears, R marks read or unread, T puts the

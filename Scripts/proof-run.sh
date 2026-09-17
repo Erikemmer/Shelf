@@ -7,6 +7,12 @@
 # changes to one book and checking that the book file survived them byte for
 # byte while a rebuilt-from-scratch index still knows the rating.
 #
+# Section 7 is Sprint 2b's: 200 books get a new title, a new tag and a new
+# description, one write each, and the run reports the median and the worst
+# case including the search index; then the 200 book files are hashed again,
+# the new tag is searched for across the whole library, the index is thrown
+# away, and every one of the 200 changes has to come back out of the folders.
+#
 # The window's own numbers – how long until every visible cover is on screen,
 # and whether a held arrow key stutters – need the app open. `SHELF_TIMING=1`
 # and `docs/BACKLOG.md` say how.
@@ -136,6 +142,41 @@ else
         exit 1
     fi
 fi
+
+# ── 7. Sprint 2b: 200 books edited, and what it cost ─────────────────────────
+# The questions the Sprint 2b brief asks about a full library, in order: what
+# does a change cost including the search index, did the book files survive,
+# how long does a search over 5 000 books take, and does a rebuilt-from-scratch
+# index still know every change.
+#
+# 200 books rather than one, because the interesting number is not the average
+# but the worst case, and one write cannot have one.
+EDIT_COUNT="${EDIT_COUNT:-200}"
+say "$EDIT_COUNT books: title, tags and description each"
+
+DIGESTS_BEFORE="$ROOT/epub-digests-before.txt"
+DIGESTS_AFTER="$ROOT/epub-digests-after.txt"
+"$TOOL" epub-digests "$LIBRARY" "$EDIT_COUNT" > "$DIGESTS_BEFORE"
+echo "  hashed $(wc -l < "$DIGESTS_BEFORE" | tr -d ' ') book files before touching anything"
+
+"$TOOL" bulk-edit "$LIBRARY" "$EDIT_COUNT" || { echo "the bulk edit failed" >&2; exit 1; }
+
+say "are those $EDIT_COUNT book files still byte for byte what they were?"
+"$TOOL" epub-digests "$LIBRARY" "$EDIT_COUNT" > "$DIGESTS_AFTER"
+if diff -q "$DIGESTS_BEFORE" "$DIGESTS_AFTER" >/dev/null; then
+    echo "  every one of them is unchanged ✓"
+else
+    echo "  A BOOK FILE CHANGED – this must never happen" >&2
+    diff "$DIGESTS_BEFORE" "$DIGESTS_AFTER" | head -20 >&2
+    exit 1
+fi
+
+say "searching the whole library for a tag that did not exist five seconds ago"
+"$TOOL" search-time "$LIBRARY" proof-run-2b 20
+
+say "throwing the index away again, and asking the folders about all $EDIT_COUNT"
+"$TOOL" rebuild "$LIBRARY" 2>&1 | tail -3
+"$TOOL" verify-edits "$LIBRARY" "$EDIT_COUNT" || exit 1
 
 say "done"
 echo "source:  $SOURCE"

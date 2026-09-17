@@ -25,6 +25,22 @@ let usage = """
       show <library> <title>        print what the index holds about one book
       digest <file>                 SHA-256 of one file, to compare with shasum
 
+    The Sprint 2b proof run (Scripts/proof-run.sh section 7) uses these four.
+    They all address "the first <count> books by book number", which is a stable
+    order: the number is in the folder name and no edit changes it, where title
+    order moves the moment a title is edited.
+
+      bulk-edit <library> <count>   change the title, tags and description of
+                                    <count> books, one write each, and print how
+                                    long a change takes including the search index
+      epub-digests <library> <count>
+                                    SHA-256 of each of those books' EPUBs
+      search-time <library> <query> [rounds]
+                                    how long a search takes over the whole library
+      verify-edits <library> <count>
+                                    whether every one of those changes is still
+                                    there – run it after a rebuild
+
     Test material belongs under ~/Library/Caches/Shelf, never under ~/Documents.
     """
 
@@ -37,6 +53,10 @@ case "rebuild": try await Commands.rebuild(Array(arguments.dropFirst()))
 case "edit": try await Commands.edit(Array(arguments.dropFirst()))
 case "show": try await Commands.show(Array(arguments.dropFirst()))
 case "digest": try Commands.digest(Array(arguments.dropFirst()))
+case "bulk-edit": try await Commands.bulkEdit(Array(arguments.dropFirst()))
+case "epub-digests": try await Commands.epubDigests(Array(arguments.dropFirst()))
+case "search-time": try await Commands.searchTime(Array(arguments.dropFirst()))
+case "verify-edits": try await Commands.verifyEdits(Array(arguments.dropFirst()))
 default:
     print(usage)
     exit(2)
@@ -287,6 +307,199 @@ enum Commands {
             exit(1)
         }
         return entry
+    }
+
+    // MARK: The Sprint 2b proof run
+    //
+    // Four commands that between them answer the questions the sprint brief
+    // asks about 5 000 books: what a change costs including the search index,
+    // whether the book files survived, how long a search takes over the whole
+    // library, and whether a rebuilt-from-scratch index still knows every
+    // change.
+    //
+    // They all address "the first <count> books **by book number**". That
+    // order is stable and title order is not: the very first thing `bulk-edit`
+    // does is change a title, and "the first 200 by title" would then be a
+    // different 200 books before and after.
+
+    /// What `bulk-edit` writes, so `verify-edits` can look for it without a
+    /// state file between the two runs.
+    static let proofTag = "proof-run-2b"
+    static let proofTitleSuffix = " [2b]"
+    static func proofDescription(for number: Int) -> String {
+        "Edited by the Sprint 2b proof run, book number \(number)."
+    }
+
+    /// The first `count` books by book number.
+    static func firstBooks(_ count: Int, in index: LibraryIndex) async throws -> [LibraryEntry] {
+        let all = try await index.allEntries()
+        return Array(all.sorted { $0.number < $1.number }.prefix(count))
+    }
+
+    // MARK: bulk-edit
+
+    /// Changes the title, the tags and the description of `count` books, one
+    /// write each, and says how long a change takes.
+    ///
+    /// Each round is one `MetadataEditor.apply`, which is one `metadata.opf`
+    /// written and one index update – the search row included. That is what the
+    /// window does when a field is finished, so the number this prints is the
+    /// number a person waits for.
+    static func bulkEdit(_ arguments: [String]) async throws {
+        guard arguments.count >= 2, let count = Int(arguments[1]) else {
+            print("usage: shelf-tool bulk-edit <library> <count>")
+            exit(2)
+        }
+        let (library, index) = try openLibrary(arguments[0])
+        let books = try await firstBooks(count, in: index)
+        guard !books.isEmpty else {
+            print("no books to edit")
+            exit(1)
+        }
+        let editor = MetadataEditor(library: library)
+
+        var milliseconds: [Double] = []
+        milliseconds.reserveCapacity(books.count)
+        var skipped = 0
+
+        for entry in books {
+            // The three fields the brief names, through the same core rules the
+            // inspector uses – not by assigning to the model behind their back.
+            var edited = entry.book
+            switch BookField.title.apply(entry.book.title + proofTitleSuffix, to: edited) {
+            case .changed(let next): edited = next
+            case .unchanged, .rejected: break
+            }
+            switch TagEdit.add(proofTag, to: edited) {
+            case .changed(let next): edited = next
+            case .unchanged, .rejected: break
+            }
+            switch BookField.description.apply(proofDescription(for: entry.number), to: edited) {
+            case .changed(let next): edited = next
+            case .unchanged, .rejected: break
+            }
+
+            let change = MetadataChange.make(from: entry.book) { $0 = edited }
+            guard !change.isEmpty else {
+                skipped += 1
+                continue
+            }
+
+            let started = ContinuousClock.now
+            _ = try await editor.apply(change, to: entry, in: index)
+            let took = ContinuousClock.now - started
+            milliseconds.append(Double(took.components.attoseconds) / 1e15 + Double(took.components.seconds) * 1_000)
+        }
+
+        print("edited \(milliseconds.count) books, \(skipped) already carried the change")
+        printTimings(milliseconds, target: 50)
+    }
+
+    /// Median, worst case and how many were over the target. A mean would hide
+    /// the one write that took a second, and the worst case is the one a person
+    /// actually notices.
+    static func printTimings(_ milliseconds: [Double], target: Double) {
+        guard !milliseconds.isEmpty else { return }
+        let sorted = milliseconds.sorted()
+        let median = sorted[sorted.count / 2]
+        let worst = sorted[sorted.count - 1]
+        let over = sorted.filter { $0 > target }.count
+        print(String(format: "  median: %.1f ms", median))
+        print(String(format: "  slowest: %.1f ms", worst))
+        print(String(format: "  95th percentile: %.1f ms", sorted[min(sorted.count - 1, (sorted.count * 95) / 100)]))
+        print("  over the \(Int(target)) ms target: \(over) of \(sorted.count)")
+    }
+
+    // MARK: epub-digests
+
+    /// One line per book: the SHA-256 of its EPUB and the path, for a diff
+    /// before and after the edits. The whole promise of v1.0 in one file.
+    static func epubDigests(_ arguments: [String]) async throws {
+        guard arguments.count >= 2, let count = Int(arguments[1]) else {
+            print("usage: shelf-tool epub-digests <library> <count>")
+            exit(2)
+        }
+        let (library, index) = try openLibrary(arguments[0])
+        for entry in try await firstBooks(count, in: index) {
+            for format in entry.formats.sorted(by: { $0.fileName < $1.fileName }) {
+                let url = library.root
+                    .appendingPathComponent(entry.folder, isDirectory: true)
+                    .appendingPathComponent(format.fileName)
+                let digest = try FileDigest.sha256(of: url, makeHasher: PortableSHA256Hasher.factory)
+                print("\(digest)  \(entry.folder)/\(format.fileName)")
+            }
+        }
+    }
+
+    // MARK: search-time
+
+    /// How long a search takes over the whole library, run several times.
+    ///
+    /// Several times because the first one warms SQLite's page cache and the
+    /// first one is not what a person meets – they have already searched for
+    /// something else. Both numbers are printed so the difference is visible.
+    static func searchTime(_ arguments: [String]) async throws {
+        guard arguments.count >= 2 else {
+            print("usage: shelf-tool search-time <library> <query> [rounds]")
+            exit(2)
+        }
+        let rounds = arguments.count > 2 ? Int(arguments[2]) ?? 20 : 20
+        let (_, index) = try openLibrary(arguments[0])
+        let query = arguments[1]
+
+        var milliseconds: [Double] = []
+        var hits = 0
+        for round in 0..<max(1, rounds) {
+            let started = ContinuousClock.now
+            let found = try await index.search(query)
+            let took = ContinuousClock.now - started
+            let ms = Double(took.components.attoseconds) / 1e15 + Double(took.components.seconds) * 1_000
+            if round == 0 {
+                print(String(format: "  first search (cold page cache): %.1f ms", ms))
+            } else {
+                milliseconds.append(ms)
+            }
+            hits = found.count
+        }
+        print("  books in the library: \(try await index.count())")
+        print("  hits for “\(query)”: \(hits)")
+        printTimings(milliseconds, target: 100)
+    }
+
+    // MARK: verify-edits
+
+    /// Whether every one of the changes is still there. Run after a rebuild,
+    /// which is the point: the index was thrown away and the answer has to come
+    /// out of the folders.
+    static func verifyEdits(_ arguments: [String]) async throws {
+        guard arguments.count >= 2, let count = Int(arguments[1]) else {
+            print("usage: shelf-tool verify-edits <library> <count>")
+            exit(2)
+        }
+        let (_, index) = try openLibrary(arguments[0])
+        let books = try await firstBooks(count, in: index)
+
+        var missingTitle = 0
+        var missingTag = 0
+        var missingDescription = 0
+        for entry in books {
+            if !entry.book.title.hasSuffix(proofTitleSuffix) { missingTitle += 1 }
+            if !entry.book.tags.contains(proofTag) { missingTag += 1 }
+            if entry.book.description != proofDescription(for: entry.number) { missingDescription += 1 }
+        }
+
+        // And the search index, which is rebuilt with the rest: a tag that
+        // cannot be found is a tag the FTS row lost.
+        let found = try await index.search(proofTag)
+
+        print("checked \(books.count) books")
+        print("  titles without the suffix:      \(missingTitle)")
+        print("  books without the tag:          \(missingTag)")
+        print("  descriptions that do not match: \(missingDescription)")
+        print("  found by searching for the tag: \(found.count)")
+        let whole = missingTitle == 0 && missingTag == 0 && missingDescription == 0 && found.count >= books.count
+        print(whole ? "  every change survived ✓" : "  CHANGES WERE LOST")
+        if !whole { exit(1) }
     }
 
     // MARK: digest
