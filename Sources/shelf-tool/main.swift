@@ -160,7 +160,8 @@ enum Commands {
             digests: try await index.allFormatDigests(),
             isbns: try await index.allISBNs(),
             titleKeys: try await index.allTitleKeys(),
-            formatsByBook: try await formatsByBook(index))
+            formatsByBook: try await formatsByBook(index),
+            foldersByBook: try await foldersByBook(index))
         let plan = ImportPlanner.plan(
             candidates: candidates, knowledge: knowledge, startingNumber: descriptor.nextBookNumber,
             existingFolders: existingFolders(library))
@@ -785,6 +786,17 @@ enum Commands {
         var result: [UUID: Set<BookFileFormat>] = [:]
         for entry in try await index.allEntries() {
             result[entry.id] = Set(entry.formats.map(\.format))
+        }
+        return result
+    }
+
+    /// Where every book the library already holds lives, so a second import
+    /// puts a new format in the folder the book already has rather than being
+    /// handed an empty path (ADR 0002, decision 8).
+    static func foldersByBook(_ index: LibraryIndex) async throws -> [UUID: String] {
+        var result: [UUID: String] = [:]
+        for entry in try await index.allEntries() {
+            result[entry.id] = entry.folder
         }
         return result
     }

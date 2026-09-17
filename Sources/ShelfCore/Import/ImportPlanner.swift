@@ -61,17 +61,37 @@ public struct ImportKnowledge: Equatable, Sendable {
     /// Which formats each book already has, so a second EPUB of the same book
     /// is a duplicate but its AZW3 is a new format.
     public var formatsByBook: [UUID: Set<BookFileFormat>]
+    /// Where each book already lives, relative to the library root.
+    ///
+    /// Two jobs, and both of them only became necessary with Sprint 3.
+    ///
+    /// **A format added to a book that is already in the library needs its
+    /// folder.** ADR 0002 decision 8 says a new format joins the book it
+    /// belongs to *in the folder it already has*, and until this existed the
+    /// planner had no way to say where that was: it handed the runner an empty
+    /// folder, which the runner rightly refuses rather than writing into the
+    /// library root. The case never came up because nothing had yet imported
+    /// twice into the same library. A Calibre import does, every time it is
+    /// resumed.
+    ///
+    /// **Its keys are also the books the library knows by identity**, which is
+    /// how a resumed Calibre import recognises a book whose bytes have changed:
+    /// Calibre's UUID is the book's identity (CONCEPT §5.3), and a folder
+    /// import never matches here because its candidates carry fresh ones.
+    public var foldersByBook: [UUID: String]
 
     public init(
         digests: [String: UUID] = [:],
         isbns: [String: UUID] = [:],
         titleKeys: [String: [UUID]] = [:],
-        formatsByBook: [UUID: Set<BookFileFormat>] = [:]
+        formatsByBook: [UUID: Set<BookFileFormat>] = [:],
+        foldersByBook: [UUID: String] = [:]
     ) {
         self.digests = digests
         self.isbns = isbns
         self.titleKeys = titleKeys
         self.formatsByBook = formatsByBook
+        self.foldersByBook = foldersByBook
     }
 }
 
@@ -140,6 +160,10 @@ public struct SkippedImport: Equatable, Sendable {
         case sameTitleAndAuthor
         /// Two files in this very import are the same book and format.
         case duplicateWithinImport
+        /// The library already holds this exact book, by its UUID, in this
+        /// format. Only a Calibre import can see this: its candidates carry
+        /// Calibre's own UUIDs, where a folder import mints fresh ones.
+        case sameBook
         /// Not a book format Shelf imports.
         case notABook
 
@@ -149,6 +173,7 @@ public struct SkippedImport: Equatable, Sendable {
             case .sameISBN: return "already in the library (same ISBN)"
             case .sameTitleAndAuthor: return "already in the library (same title and author)"
             case .duplicateWithinImport: return "the same book twice in this import"
+            case .sameBook: return "already in the library (the same book)"
             case .notABook: return "not a book format Shelf reads"
             }
         }
@@ -344,12 +369,19 @@ public enum ImportPlanner {
         knowledge: ImportKnowledge,
         planned: [String: (id: UUID, folder: String, title: String)]
     ) -> (id: UUID, folder: String, title: String?, reason: SkippedImport.Reason)? {
+        // The UUID first, and only here: it is an identity, not a guess. An
+        // ISBN names an *edition* and a title names a work, but a UUID names
+        // the very book record — which is what makes a resumed Calibre import
+        // rejoin its own books rather than making second copies of them.
+        if let folder = knowledge.foldersByBook[candidate.book.id] {
+            return (candidate.book.id, folder, title(of: candidate.book.id, in: knowledge), .sameBook)
+        }
         if let isbn = candidate.book.isbn {
             if let planned = planned["isbn:\(isbn)"] {
                 return (planned.id, planned.folder, planned.title, .duplicateWithinImport)
             }
             if let id = knowledge.isbns[isbn] {
-                return (id, "", title(of: id, in: knowledge), .sameISBN)
+                return (id, knowledge.foldersByBook[id] ?? "", title(of: id, in: knowledge), .sameISBN)
             }
         }
         if let planned = planned[key] {
@@ -360,7 +392,7 @@ public enum ImportPlanner {
         // picking one of them; the new file becomes its own book, and the
         // "Duplicates" smart collection is where that gets sorted out.
         if let ids = knowledge.titleKeys[key], ids.count == 1, let id = ids.first {
-            return (id, "", title(of: id, in: knowledge), .sameTitleAndAuthor)
+            return (id, knowledge.foldersByBook[id] ?? "", title(of: id, in: knowledge), .sameTitleAndAuthor)
         }
         return nil
     }

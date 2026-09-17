@@ -696,3 +696,86 @@ struct ImportReportTests {
         #expect(ByteCount.format(512) == "512 B")
     }
 }
+
+/// A second import into the same library, which is what a resumed Calibre
+/// import is. Nothing had ever imported twice into one library before Sprint 3,
+/// and it turned out the planner could not say where a book it already knew
+/// about lived.
+@Suite("Importing into a library that already holds books")
+struct SecondImportTests {
+    private func candidate(
+        id: UUID = UUID(), title: String, author: String = "Ursula K. Le Guin",
+        format: BookFileFormat = .epub, isbn: String? = nil, digest: String = UUID().uuidString
+    ) -> ImportCandidate {
+        var identifiers: [String: String] = [:]
+        if let isbn { identifiers["isbn"] = isbn }
+        return ImportCandidate(
+            source: URL(fileURLWithPath: "/source/\(title).\(format.rawValue)"),
+            byteSize: 1_000, format: format, sha256: digest,
+            book: Book(id: id, title: title, authors: [author], identifiers: identifiers))
+    }
+
+    /// ADR 0002 decision 8: a new format joins the book it belongs to, **in the
+    /// folder it already has**. Before `foldersByBook` the planner handed the
+    /// runner an empty folder here and the runner refused, which is the right
+    /// refusal for the wrong reason: it would otherwise have written into the
+    /// library's root.
+    @Test("a new format for a book the library has goes into that book's folder")
+    func addsFormatIntoTheExistingFolder() {
+        let existing = UUID()
+        let plan = ImportPlanner.plan(
+            candidates: [candidate(title: "The Dispossessed", format: .azw3, isbn: "9780061054884")],
+            knowledge: ImportKnowledge(
+                isbns: ["9780061054884": existing],
+                formatsByBook: [existing: [.epub]],
+                foldersByBook: [existing: "Le Guin, Ursula K./The Dispossessed (12)"]))
+        guard case .addFormat(let add) = plan.operations.first else {
+            Issue.record("expected one addFormat, got \(plan.operations)")
+            return
+        }
+        #expect(add.bookID == existing)
+        #expect(add.folder == "Le Guin, Ursula K./The Dispossessed (12)")
+    }
+
+    /// Calibre's UUID is the book's identity (CONCEPT §5.3), so a resumed
+    /// import rejoins its own books instead of making second copies of them.
+    @Test("a book the library knows by its UUID is the same book, not a new one")
+    func uuidIsIdentity() {
+        let id = UUID()
+        let plan = ImportPlanner.plan(
+            candidates: [candidate(id: id, title: "A Wizard of Earthsea", format: .azw3)],
+            knowledge: ImportKnowledge(
+                formatsByBook: [id: [.epub]], foldersByBook: [id: "Le Guin, Ursula K./Earthsea (3)"]))
+        guard case .addFormat(let add) = plan.operations.first else {
+            Issue.record("expected one addFormat, got \(plan.operations)")
+            return
+        }
+        #expect(add.bookID == id)
+        #expect(add.folder == "Le Guin, Ursula K./Earthsea (3)")
+        #expect(plan.newBookCount == 0)
+    }
+
+    @Test("the same book in the same format is skipped, and the reason says so")
+    func sameBookSameFormat() {
+        let id = UUID()
+        let plan = ImportPlanner.plan(
+            candidates: [candidate(id: id, title: "A Wizard of Earthsea")],
+            knowledge: ImportKnowledge(
+                formatsByBook: [id: [.epub]], foldersByBook: [id: "Le Guin, Ursula K./Earthsea (3)"]))
+        #expect(plan.operations.isEmpty)
+        #expect(plan.skipped.map(\.reason) == [.sameBook])
+    }
+
+    /// The UUID is a match a *folder* import can never make, and must not: two
+    /// unrelated files must not become one book because a UUID was minted twice.
+    /// A minted one is new every time, so this case simply never fires there.
+    @Test("a freshly minted UUID matches nothing")
+    func mintedUUIDsDoNotMatch() {
+        let inTheLibrary = UUID()
+        let plan = ImportPlanner.plan(
+            candidates: [candidate(title: "Something Else")],
+            knowledge: ImportKnowledge(
+                formatsByBook: [inTheLibrary: [.epub]], foldersByBook: [inTheLibrary: "Somewhere/Else (1)"]))
+        #expect(plan.newBookCount == 1)
+    }
+}

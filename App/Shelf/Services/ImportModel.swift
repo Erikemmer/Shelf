@@ -93,7 +93,8 @@ final class ImportModel {
                 digests: try await index.allFormatDigests(),
                 isbns: try await index.allISBNs(),
                 titleKeys: try await index.allTitleKeys(),
-                formatsByBook: try await formatsByBook())
+                formatsByBook: try await formatsByBook(),
+                foldersByBook: try await foldersByBook())
             let descriptor = try library.readDescriptor()
             nextBookNumber = descriptor.nextBookNumber
             plan = ImportPlanner.plan(
@@ -112,6 +113,18 @@ final class ImportModel {
         var result: [UUID: Set<BookFileFormat>] = [:]
         for entry in try await index.allEntries() {
             result[entry.id] = Set(entry.formats.map(\.format))
+        }
+        return result
+    }
+
+    /// Where every book already lives. Without it the planner hands the runner
+    /// an empty folder for a format added to a book the library already has,
+    /// and the runner refuses rather than writing into the library root
+    /// (ADR 0002, decision 8).
+    private func foldersByBook() async throws -> [UUID: String] {
+        var result: [UUID: String] = [:]
+        for entry in try await index.allEntries() {
+            result[entry.id] = entry.folder
         }
         return result
     }
