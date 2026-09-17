@@ -543,12 +543,20 @@ final class LibraryModel {
         guard library != nil else { return "" }
         var parts: [String] = []
         if filter.isNarrowed || visible.count != entries.count {
-            parts.append("\(visible.count) of \(entries.count) books")
+            parts.append("\(grouped(visible.count)) of \(grouped(entries.count)) books")
         } else {
-            parts.append("\(entries.count) book\(entries.count == 1 ? "" : "s")")
+            parts.append("\(grouped(entries.count)) book\(entries.count == 1 ? "" : "s")")
         }
-        if !authorFacets.isEmpty { parts.append("\(authorFacets.count) authors") }
-        if !seriesFacets.isEmpty { parts.append("\(seriesFacets.count) series") }
+        if !authorFacets.isEmpty { parts.append("\(grouped(authorFacets.count)) authors") }
+        if !seriesFacets.isEmpty { parts.append("\(grouped(seriesFacets.count)) series") }
         return parts.joined(separator: " · ")
+    }
+
+    /// The same grouping SwiftUI gives `Text("\(count)")`, which is what the
+    /// sidebar's counts go through. Without it the accessibility tree showed
+    /// "4.996" in the sidebar and "4996 books" in the status bar one line
+    /// below – two number formats in one window.
+    private func grouped(_ count: Int) -> String {
+        count.formatted(.number)
     }
 }
