@@ -95,6 +95,22 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
     /// tree stays compatible in both directions.
     public static let unknownAuthor = "Unknown"
 
+    /// The rating as the five stars the inspector shows and the keys 1–5 set.
+    ///
+    /// `rating` itself is Calibre's scale, 0…10, because that is what
+    /// `calibre:rating` holds and a library that goes back to Calibre must not
+    /// lose half stars somebody set there. Five stars are 10, so the conversion
+    /// is ×2 one way and ÷2 rounded up the other: a book Calibre rated 7 shows
+    /// four stars rather than three and a half, and setting four stars writes 8.
+    ///
+    /// Both directions live here so no view can invent a third answer – the
+    /// inspector handed `rating` straight to a five-star control in Sprint 1,
+    /// which drew five full stars for everything rated 5 or more.
+    public var stars: Int {
+        get { (rating + 1) / 2 }
+        set { rating = max(0, min(5, newValue)) * 2 }
+    }
+
     /// ISBN in whatever form the file gave it, digits and X only, upper-cased.
     /// The importer compares these, so normalising here is what makes two
     /// spellings of one ISBN the same book.

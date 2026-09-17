@@ -300,6 +300,12 @@ public enum OPFDocument {
             lines.append("    <meta name=\"calibre:rating\" content=\"\(book.rating)\"/>")
         }
         lines.append("    <meta name=\"calibre:timestamp\" content=\"\(OPFDate.render(book.addedAt))\"/>")
+        // Read since Sprint 1 and, until Sprint 2, never written – so a rebuilt
+        // index dated every book to the moment it was rebuilt. EPUB 3's own
+        // property rather than a `calibre:` meta, because that is where the
+        // reader already looks for it.
+        lines.append(
+            "    <meta property=\"dcterms:modified\">\(OPFDate.render(book.modifiedAt))</meta>")
 
         // Shelf's own fields. Calibre ignores metas it does not know, which is
         // what makes this safe to write into a library Calibre also reads.

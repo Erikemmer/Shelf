@@ -328,6 +328,7 @@ public final class LibraryIndex: Sendable {
         let authors = try authorNames(for: bookIDs, in: database)
         let tags = try tagNames(for: bookIDs, in: database)
         let formats = try formatRows(for: bookIDs, in: database)
+        let identifiers = try identifierRows(for: bookIDs, in: database)
 
         return rows.map { row in
             let id: String = row["id"]
@@ -346,7 +347,7 @@ public final class LibraryIndex: Sendable {
                 language: row["language"],
                 description: row["description"],
                 tags: tags[id] ?? [],
-                identifiers: [:],
+                identifiers: identifiers[id] ?? [:],
                 addedAt: row["added_at"],
                 modifiedAt: row["modified_at"])
             return LibraryEntry(
@@ -380,6 +381,35 @@ public final class LibraryIndex: Sendable {
             arguments: StatementArguments(bookIDs))
         return Dictionary(grouping: rows) { $0["book_id"] as String }
             .mapValues { $0.map { $0["name"] as String } }
+    }
+
+    /// The identifiers of each book: ISBN, ASIN, Goodreads…
+    ///
+    /// Left out until Sprint 2, which cost twice. The inspector has a row per
+    /// identifier and never drew one, because the dictionary it read was always
+    /// empty; and re-saving an entry that came from the index deleted the
+    /// identifier rows and wrote none back, which would have taken the ISBN off
+    /// every edited book and with it the duplicate check.
+    ///
+    /// `isbn_normalised` is skipped: it is the duplicate check's own derived
+    /// row, not something a book claims about itself, and letting it back into
+    /// the model would write `<dc:identifier opf:scheme="ISBN_NORMALISED">` into
+    /// every OPF.
+    private static func identifierRows(
+        for bookIDs: [String], in database: Database
+    ) throws -> [String: [String: String]] {
+        let rows = try Row.fetchAll(
+            database,
+            sql: """
+                SELECT book_id, scheme, value FROM identifiers
+                WHERE book_id IN (\(databaseQuestionMarks(count: bookIDs.count)))
+                  AND scheme <> 'isbn_normalised'
+                """,
+            arguments: StatementArguments(bookIDs))
+        return Dictionary(grouping: rows) { $0["book_id"] as String }
+            .mapValues { group in
+                Dictionary(group.map { ($0["scheme"] as String, $0["value"] as String) }) { _, last in last }
+            }
     }
 
     private static func formatRows(for bookIDs: [String], in database: Database) throws -> [String: [BookFormat]] {
