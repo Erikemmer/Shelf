@@ -172,6 +172,14 @@ final class LibraryModel {
     var isImportSheetPresented = false
     private(set) var importModel: ImportModel?
 
+    // MARK: Orphaned folders
+
+    /// `Library ▸ Find Orphaned Folders…`. The list is what the sheet shows and
+    /// what a confirmation names; it is never acted on by itself.
+    var isOrphanSheetPresented = false
+    private(set) var orphanedFolders: [OrphanedFolder] = []
+    private(set) var isScanningForOrphans = false
+
     // MARK: Services
 
     let recents = RecentLibrariesStore()
@@ -1171,6 +1179,57 @@ final class LibraryModel {
         coversOnDisk = []
         coverCacheBytes = 0
         warmer.reset()
+        await reload()
+    }
+
+    // MARK: Orphaned folders
+
+    /// Opens the sheet and walks the library for folders nothing points at.
+    ///
+    /// A folder is an orphan when the index holds no book that lives in it —
+    /// what an import killed between two index writes leaves behind. The walk
+    /// only *reads*: names, sizes and each folder's `metadata.opf`. Nothing is
+    /// moved, and the sheet shows every file by name before anything can be.
+    func findOrphanedFolders() async {
+        guard let library, let index else { return }
+        isOrphanSheetPresented = true
+        isScanningForOrphans = true
+        defer { isScanningForOrphans = false }
+        do {
+            let known = Set(try await index.allEntries().map(\.folder))
+            orphanedFolders = await Task.detached(priority: .userInitiated) {
+                OrphanedFolders.find(in: library, knownFolders: known)
+            }.value
+        } catch {
+            orphanedFolders = []
+            show(error, doing: "look for orphaned folders")
+        }
+    }
+
+    /// Moves the listed folders to the Trash, after the user confirmed a list
+    /// that named every file in them.
+    ///
+    /// The Trash and never a delete: Shelf's judgement that a folder is debris
+    /// is a judgement, and the difference between a mistake and a disaster is
+    /// whether the folder can be dragged back out. The library's own books are
+    /// never in this list — it is built from what the index does *not* hold.
+    func trashOrphanedFolders(_ folders: [OrphanedFolder]) async {
+        guard let library, !folders.isEmpty else { return }
+        let failures = await Task.detached(priority: .userInitiated) {
+            OrphanedFolders.moveToTrash(folders, in: library)
+        }.value
+
+        let moved = folders.count - failures.count
+        orphanedFolders.removeAll { folder in
+            failures.allSatisfy { $0.path != folder.path } && folders.contains { $0.path == folder.path }
+        }
+        if failures.isEmpty {
+            errorMessage = nil
+        } else {
+            errorMessage =
+                "\(moved) folder(s) moved to the Trash, \(failures.count) could not be: "
+                + failures.map { "\($0.path) – \($0.message)" }.joined(separator: "; ")
+        }
         await reload()
     }
 

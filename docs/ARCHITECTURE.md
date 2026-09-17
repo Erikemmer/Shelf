@@ -33,7 +33,8 @@
 │             LibraryFilter/DuplicateReason · BookFolderName ·  │
 │             TitleSort/AuthorSort · ISBN · ShortcutReference   │
 │  Library:   Library + LibraryDescriptor + LibraryViewSettings │
-│             IndexRebuilder · MetadataChange + MetadataEditor ·│
+│             IndexRebuilder · OrphanedFolder/OrphanedFolders · │
+│             MetadataChange + MetadataEditor ·                 │
 │             BookField/IdentifierEdit/TagEdit (what a typed    │
 │             string does to a book) · AcrossBooks (what a      │
 │             handful of books have in common)                  │
@@ -223,6 +224,35 @@ Two orderings matter, and both were learned the hard way:
   run that is killed leaves an index that matches the folder and the next run
   resumes. Writing it only at the end meant a killed import of 2 000 books left
   an index holding none, and the next run copied all 2 000 again.
+
+## Data flow: resuming an import that was killed
+
+`ImportRunner` writes a book's folder, file, cover and OPF *before* the book
+reaches `saveBatch`, and `saveBatch` runs every 200 books. A run that dies
+untidily therefore leaves finished folders the index never heard of. Cancelling
+does not: the tidy path still writes its short last batch.
+
+```
+an import, about to plan
+  → OrphanedFolders.find(in:knownFolders:)                     (ShelfCore)
+      two levels deep, case-insensitively: the book folders on disk that no
+      entry in the index lives in. Reads names, sizes and each metadata.opf
+  → OrphanedFolders.claimable(_:importing:)
+      the ones whose OPF names a book *this run is importing* — by UUID and
+      never by title, because a title match would sooner or later pour one
+      book's files into another book's folder
+  → OrphanedFolders.adopt → IndexRebuilder.readFolder → LibraryIndex.save
+      the same entry a rebuild would make of that folder, so the index and a
+      later `Rebuild Index from Folders` cannot disagree about it
+  → ImportPlanner                                    ← now sees them as present
+      the same file is `.sameContent` and skipped; a second format is
+      `.addFormat` into the folder that is already there
+  → what nothing claimed → the report, and Library ▸ Find Orphaned Folders…
+```
+
+Nothing is copied, nothing is written into the folder, and nothing is removed.
+The menu item is two steps — a list, then a confirmation that names every file —
+and what it moves goes to the Trash.
 
 ## Data flow: rebuilding the index
 

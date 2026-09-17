@@ -203,6 +203,18 @@ struct ImportSheet: View {
             if !report.failures.isEmpty {
                 SlateValueRow(name: "Not verified", value: "\(report.failures.count)")
             }
+            // What a previous, killed run left and this one took back — the
+            // difference between a resume and a second copy of everything.
+            if !report.reclaimedFolders.isEmpty {
+                SlateValueRow(
+                    name: "Re-used from an interrupted run", value: "\(report.reclaimedFolders.count)")
+            }
+            if !report.orphanedFolders.isEmpty {
+                SlateValueRow(name: "Orphaned folders", value: "\(report.orphanedFolders.count)")
+                Text("Nothing was removed. Library ▸ Find Orphaned Folders… shows them.")
+                    .font(.caption2)
+                    .foregroundStyle(Slate.textSecondary)
+            }
             Text("The full report is in \(Library.privateFolderName)/\(ImportReport.fileName).")
                 .font(.caption2)
                 .foregroundStyle(Slate.textSecondary)

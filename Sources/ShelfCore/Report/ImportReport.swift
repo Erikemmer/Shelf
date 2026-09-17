@@ -47,6 +47,14 @@ public struct ImportReport: Equatable, Sendable {
     public var skipped: [SkippedImport]
     public var warnings: [Warning]
     public var failures: [Failure]
+    /// Folders the previous run left in the library that this one could take
+    /// back, because their `metadata.opf` named a book this run was importing.
+    /// No second folder was made for them and nothing was copied into them.
+    public var reclaimedFolders: [String]
+    /// Folders nothing points at and nothing could claim. Reported, never
+    /// touched: `Library ▸ Find Orphaned Folders…` is where they are dealt
+    /// with, and only on a confirmation that names every file.
+    public var orphanedFolders: [String]
 
     public init(
         libraryName: String,
@@ -59,7 +67,9 @@ public struct ImportReport: Equatable, Sendable {
         copiedBytes: Int64 = 0,
         skipped: [SkippedImport] = [],
         warnings: [Warning] = [],
-        failures: [Failure] = []
+        failures: [Failure] = [],
+        reclaimedFolders: [String] = [],
+        orphanedFolders: [String] = []
     ) {
         self.libraryName = libraryName
         self.sourceDescription = sourceDescription
@@ -72,6 +82,8 @@ public struct ImportReport: Equatable, Sendable {
         self.skipped = skipped
         self.warnings = warnings
         self.failures = failures
+        self.reclaimedFolders = reclaimedFolders
+        self.orphanedFolders = orphanedFolders
     }
 
     public var copiedCount: Int { copiedByFormat.values.reduce(0, +) }
@@ -88,6 +100,11 @@ public struct ImportReport: Equatable, Sendable {
         if newBooks > 0 { parts.append("\(newBooks) new book\(newBooks == 1 ? "" : "s")") }
         if addedFormats > 0 { parts.append("\(addedFormats) new format\(addedFormats == 1 ? "" : "s")") }
         if !skipped.isEmpty { parts.append("\(skipped.count) skipped") }
+        // Counted in the one line too, because a number nobody sees is a number
+        // nobody acts on, and this one costs disk space until somebody does.
+        if !orphanedFolders.isEmpty {
+            parts.append("\(orphanedFolders.count) orphaned folder\(orphanedFolders.count == 1 ? "" : "s")")
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -129,6 +146,24 @@ public struct ImportReport: Equatable, Sendable {
             lines.append("")
             lines.append("Imported with something missing: \(warnings.count)")
             lines.append(contentsOf: warnings.map { "  \($0.path): \($0.message)" })
+        }
+
+        if !reclaimedFolders.isEmpty {
+            lines.append("")
+            lines.append(
+                "Taken back from an interrupted run: \(reclaimedFolders.count) folder"
+                    + "\(reclaimedFolders.count == 1 ? "" : "s")")
+            lines.append("  (already on disk from a previous attempt – re-used, not copied again)")
+            lines.append(contentsOf: reclaimedFolders.map { "    \($0)" })
+        }
+
+        if !orphanedFolders.isEmpty {
+            lines.append("")
+            lines.append(
+                "\(orphanedFolders.count) orphaned folder\(orphanedFolders.count == 1 ? "" : "s") – "
+                    + "no book in the library points at these:")
+            lines.append(contentsOf: orphanedFolders.map { "  \($0)" })
+            lines.append("  Nothing was removed. Library ▸ Find Orphaned Folders… shows them.")
         }
 
         if !failures.isEmpty {

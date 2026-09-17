@@ -226,6 +226,13 @@ change of controls, not of layout.
 
 ## Sprint 4 – The other formats
 
+- [x] The app icon: Erik's package in `docs/icon/`, its macOS variant the app's
+      `AppIcon` asset, all ten sizes checked with `sips`, `iconutil` as the
+      cross-check
+- [x] A killed import no longer doubles its own books: the resume adopts the
+      folders it left (`OrphanedFolders`), and what nothing can claim is
+      reported — `Library ▸ Find Orphaned Folders…`, two steps, every file
+      named, and the Trash rather than a delete
 - [ ] MOBI/AZW3: PalmDB + EXTH (100 author, 503 title, 104 ISBN, 106 date,
       201 cover offset) in `ShelfCore/Formats/Mobi`
 - [ ] PDF: PDFKit `documentAttributes`, page 1 rendered — app layer, PDFKit is

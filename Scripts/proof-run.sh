@@ -13,6 +13,9 @@
 # the new tag is searched for across the whole library, the index is thrown
 # away, and every one of the 200 changes has to come back out of the folders.
 #
+# Section 9 is Sprint 4's: an import is killed in the middle, resumed, and the
+# library has to end with one folder per book and nothing nobody points at.
+#
 # Section 8 is Sprint 2c's: twenty shelves in three levels, a thousand books
 # distributed over them one assignment at a time, the sidebar's counts checked
 # against SQL rather than against themselves, fifty books tagged and undone with
@@ -294,6 +297,61 @@ if [ "$SHELVED_BACK" = "$TOTAL_SHELVED" ] && [ "$SHELVES_BACK" = "$SHELF_COUNT" 
     echo "  every shelving came back out of the folders, and the empty shelf out of library.json ✓"
 else
     echo "  THE REBUILD LOST SHELVES" >&2
+    exit 1
+fi
+
+# ── 9. An interrupted import, and the folders it must not leave behind ───────
+# Sprint 4's. A killed import leaves book folders the index never heard of, and
+# before this section existed the next run planned those books again and gave
+# them *second* folders — 23 of them in the Sprint 3 measuring run. Nothing was
+# lost, which is exactly why nobody noticed.
+#
+# The kill is real: SHELF_EXIT_AFTER makes the process leave in the middle of
+# the run, without unwinding and without writing its short last batch. Cancelling
+# would be the tidy path, which leaves no orphans and would prove nothing.
+say "an import killed in the middle, then resumed"
+RESUME_SOURCE="$ROOT/resume-source"
+RESUME_LIBRARY="$ROOT/resume-library"
+RESUME_COUNT="${RESUME_COUNT:-400}"
+rm -rf "$RESUME_SOURCE" "$RESUME_LIBRARY"
+"$TOOL" synthesise "$RESUME_SOURCE" "$RESUME_COUNT" | tail -1
+
+echo "  run 1, killed after 250 files:"
+SHELF_EXIT_AFTER=250 "$TOOL" import "$RESUME_SOURCE" "$RESUME_LIBRARY" >/dev/null 2>&1
+KILLED_STATUS=$?
+echo "    the process left with status $KILLED_STATUS"
+
+# What the kill left: folders on disk, fewer books in the index.
+FOLDERS_AFTER_KILL=$(find "$RESUME_LIBRARY" -mindepth 2 -maxdepth 2 -type d -not -path "*/.shelf/*" | wc -l | tr -d ' ')
+INDEXED_AFTER_KILL=$(sqlite3 "$RESUME_LIBRARY/.shelf/library.sqlite" "SELECT COUNT(*) FROM books")
+ORPHANS_AFTER_KILL=$("$TOOL" orphans "$RESUME_LIBRARY" | grep "^orphaned folders:" | awk '{print $3}')
+echo "    folders on disk: $FOLDERS_AFTER_KILL"
+echo "    books in the index: $INDEXED_AFTER_KILL"
+echo "    folders no book points at: $ORPHANS_AFTER_KILL"
+if [ "${ORPHANS_AFTER_KILL:-0}" -lt 1 ]; then
+    echo "  the kill left nothing behind – this section proves nothing as it stands" >&2
+    exit 1
+fi
+
+echo "  run 2, the resume:"
+"$TOOL" import "$RESUME_SOURCE" "$RESUME_LIBRARY" 2>&1 | grep -E "orphaned folders found|plan:|Verified|new book" | sed "s/^/    /"
+
+FOLDERS_AFTER=$(find "$RESUME_LIBRARY" -mindepth 2 -maxdepth 2 -type d -not -path "*/.shelf/*" | wc -l | tr -d ' ')
+INDEXED_AFTER=$(sqlite3 "$RESUME_LIBRARY/.shelf/library.sqlite" "SELECT COUNT(*) FROM books")
+ORPHANS_AFTER=$("$TOOL" orphans "$RESUME_LIBRARY" | grep "^orphaned folders:" | awk '{print $3}')
+# A doubled book would show up as two rows with the same title and author.
+DOUBLED=$(sqlite3 "$RESUME_LIBRARY/.shelf/library.sqlite" \
+    "SELECT COUNT(*) FROM (SELECT title FROM books GROUP BY title HAVING COUNT(*) > 1)")
+echo "    folders on disk: $FOLDERS_AFTER (expected $RESUME_COUNT)"
+echo "    books in the index: $INDEXED_AFTER (expected $RESUME_COUNT)"
+echo "    folders no book points at: $ORPHANS_AFTER (expected 0)"
+echo "    titles appearing twice: $DOUBLED (expected 0)"
+
+if [ "$FOLDERS_AFTER" = "$RESUME_COUNT" ] && [ "$INDEXED_AFTER" = "$RESUME_COUNT" ] \
+    && [ "${ORPHANS_AFTER:-1}" = "0" ] && [ "$DOUBLED" = "0" ]; then
+    echo "  one folder per book, nothing doubled, nothing orphaned ✓"
+else
+    echo "  THE RESUME LEFT DEBRIS BEHIND" >&2
     exit 1
 fi
 

@@ -3,6 +3,69 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 4 – what an interrupted import leaves behind · 17 September 2026
+
+### Fixed — a killed import no longer doubles its own books
+
+`ImportRunner` writes a book's folder, file, cover and `metadata.opf` before the
+book reaches `saveBatch`, and `saveBatch` runs every 200 books. A run that is
+**killed** — a crash, a SIGKILL, the power going — therefore leaves up to 200
+finished folders the index never heard of, and the next run over the same source
+planned those books again and copied them into *second* folders. In the Sprint 3
+measuring run that was 23 folders. Nothing was lost and nothing was overwritten,
+which is exactly why it went unnoticed: the library simply grew a pile nobody
+could see.
+
+Note that **cancelling** was never the problem. The tidy path still writes its
+short last batch (`ImportRunner.run`), so it leaves nothing behind. It is the
+untidy death that does, and that is the one this fixes.
+
+**The resume takes its own back.** Before it plans anything, an import now lists
+the book folders the index does not hold (`OrphanedFolders.find`), and for each
+one whose `metadata.opf` names a book *this very run is importing*
+(`OrphanedFolders.claimable` — by UUID, never by title) it reads the folder into
+the index exactly as a rebuild would (`OrphanedFolders.adopt` →
+`IndexRebuilder.readFolder`). The planner then sees a library that already holds
+those books and the ordinary duplicate rules do the rest: the same file is
+recognised as already there, and a second format joins the book in the folder it
+is already in. Nothing is copied and nothing is written into the folder.
+
+Measured, on the 400-book synthetic library
+(`~/Library/Caches/Shelf/measure-library-4/`, M-series Mac, macOS 15.6):
+
+| | after the kill | after the resume |
+|---|---|---|
+| book folders on disk | 250 | 400 |
+| books in the index | 200 | 400 |
+| folders no book points at | 50 | **0** |
+| titles appearing twice | 0 | **0** |
+
+The kill is a real one: `SHELF_EXIT_AFTER=250 shelf-tool import` leaves the
+process mid-run without unwinding and without writing its last batch. It is
+section 9 of `Scripts/proof-run.sh`, so it runs with every proof from now on.
+The control — what the same resume does *without* adoption — is a unit test
+rather than a second measuring run: six books become ten folders
+(`OrphanedFoldersTests.withoutAdoptionItDuplicates`).
+
+### Added — `Library ▸ Find Orphaned Folders…`
+
+What no run can claim is reported and shown, never tidied away. The import
+report gained two blocks — `n` folders taken back from an interrupted run, and
+`n orphaned folders` with their paths and the sentence "Nothing was removed" —
+and the new menu item lists them with their titles, their paths, their size and
+whether they still hold a book file.
+
+**It takes two steps, on purpose.** The first lists what was found, with a
+tick-box each. The second names **every file** that would move, and only there
+is there a button that moves anything. That is the rule deleting on a device
+follows (CONCEPT §8.3) applied to the library: Shelf's belief that a folder is
+debris is a belief, and the person whose books these are gets to check it. What
+moves goes to the **Trash**, never to `unlink` — the difference between a
+mistake and a disaster is whether the folder can be dragged back out.
+
+`shelf-tool orphans <library>` is the command-line half, and it stops at
+listing.
+
 ## The app icon · 17 September 2026
 
 ### Added

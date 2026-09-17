@@ -145,6 +145,13 @@ struct ShelfApp: App {
                 Task { await model.rebuildIndex() }
             }
             .disabled(model.library == nil || model.isLoading)
+            // What an interrupted import leaves behind. It only looks; the
+            // sheet names every file before anything can move, and what moves
+            // moves to the Trash.
+            Button("Find Orphaned Folders…") {
+                Task { await model.findOrphanedFolders() }
+            }
+            .disabled(model.library == nil || model.isLoading)
             Button("Close Library") { model.closeLibrary() }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
                 .disabled(model.library == nil)

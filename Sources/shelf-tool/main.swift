@@ -27,6 +27,8 @@ let usage = """
       calibre-import <calibre folder> <library>
                                     import a Calibre library, verified. The
                                     Calibre folder is only ever read
+      orphans <library>             list the folders no book points at – what a
+                                    killed import leaves behind. Reads only
       rebuild <library>             erase the index and rebuild it from the folders
       shelve <library> <path> <count> [offset]
                                     put <count> books on the shelf at <path>,
@@ -61,6 +63,9 @@ let usage = """
                                     whether every one of those changes is still
                                     there – run it after a rebuild
 
+    SHELF_EXIT_AFTER=<n> makes `import` leave the process after n files, the way
+    a crash does – it is how the proof run produces an interrupted import.
+
     Test material belongs under ~/Library/Caches/Shelf, never under ~/Documents.
     """
 
@@ -72,6 +77,7 @@ case "import": try await Commands.importFolder(Array(arguments.dropFirst()))
 case "calibre-synthesise": try Commands.calibreSynthesise(Array(arguments.dropFirst()))
 case "calibre-dry": try Commands.calibreDry(Array(arguments.dropFirst()))
 case "calibre-import": try await Commands.calibreImport(Array(arguments.dropFirst()))
+case "orphans": try await Commands.orphans(Array(arguments.dropFirst()))
 case "rebuild": try await Commands.rebuild(Array(arguments.dropFirst()))
 case "unshelve": try await Commands.unshelve(Array(arguments.dropFirst()))
 case "shelve": try await Commands.shelve(Array(arguments.dropFirst()))
@@ -167,6 +173,28 @@ enum Commands {
         }
         print("read in \(ImportReport.duration(Date().timeIntervalSince(readStarted)))")
 
+        // MARK: Take back what a killed run left
+        //
+        // The same step `ImportModel.reclaimOrphans` does, and here for the
+        // same reason: without it a run that died between two index writes
+        // leaves folders nothing points at, and this run plans those books
+        // again and copies them into second folders.
+        let known = Set(try await index.allEntries().map(\.folder))
+        let orphans = OrphanedFolders.find(in: library, knownFolders: known)
+        var reclaimed: [String] = []
+        var leftOver: [OrphanedFolder] = []
+        if !orphans.isEmpty {
+            let claimed = OrphanedFolders.claimable(orphans, importing: Set(candidates.map(\.book.id)))
+            let adopted = OrphanedFolders.adopt(claimed, in: library, makeHasher: PortableSHA256Hasher.factory)
+            try await index.save(adopted)
+            let taken = Set(adopted.map(\.folder))
+            reclaimed = adopted.map(\.folder).sorted()
+            leftOver = orphans.filter { !taken.contains($0.path) }
+            print(
+                "orphaned folders found: \(orphans.count) – "
+                    + "\(reclaimed.count) taken back, \(leftOver.count) left for the user")
+        }
+
         // MARK: Plan
         let knowledge = ImportKnowledge(
             digests: try await index.allFormatDigests(),
@@ -196,18 +224,59 @@ enum Commands {
                 if progress.filesDone > 0, progress.filesDone % 1_000 == 0 {
                     print("  copied \(progress.filesDone) / \(progress.filesTotal)")
                 }
+                // For the proof run: die in the middle, the way a crash or a
+                // SIGKILL does. `exit` and not `cancel`, on purpose —
+                // cancelling is the *tidy* path and still writes the short last
+                // batch, so it leaves no orphans and would prove nothing. This
+                // is the untidy one, which is the case that produced 23 folders
+                // nothing pointed at.
+                if let after = ProcessInfo.processInfo.environment["SHELF_EXIT_AFTER"].flatMap(Int.init),
+                    progress.filesDone >= after
+                {
+                    print("SHELF_EXIT_AFTER=\(after) – leaving the process now, mid-run")
+                    exit(9)
+                }
             },
             saveBatch: { try await index.save($0) })
         print("copied, verified and indexed in \(ImportReport.duration(Date().timeIntervalSince(copyStarted)))")
 
         descriptor.nextBookNumber = outcome.nextBookNumber
         try library.write(descriptor)
-        try outcome.report.append(to: library)
+        var report = outcome.report
+        report.reclaimedFolders = reclaimed
+        report.orphanedFolders = leftOver.map(\.path)
+        try report.append(to: library)
 
         print("")
-        print(outcome.report.rendered())
+        print(report.rendered())
         print("index holds \(try await index.count()) books")
         if !outcome.report.everythingVerified { exit(1) }
+    }
+
+    /// Lists the folders in a library that no book points at. Reads only.
+    ///
+    /// The command line half of `Library ▸ Find Orphaned Folders…`, and it
+    /// stops at listing: moving anything to the Trash needs a person looking at
+    /// a list of file names, which is a window's job.
+    static func orphans(_ arguments: [String]) async throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool orphans <library folder>")
+            exit(2)
+        }
+        let libraryURL = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        let (library, _) = try Library.open(libraryURL)
+        let index = try LibraryIndex(library: library)
+        let known = Set(try await index.allEntries().map(\.folder))
+        let found = OrphanedFolders.find(in: library, knownFolders: known)
+
+        print("books in the index: \(known.count)")
+        print("orphaned folders: \(found.count)")
+        for folder in found {
+            print("  \(folder.path)")
+            print("    \(folder.summary)")
+            for file in folder.files { print("      \(file)") }
+        }
+        if found.isEmpty { print("  (every folder in the library belongs to a book)") }
     }
 
     // MARK: calibre

@@ -160,8 +160,23 @@ final class ImportModel {
         await buildPlan()
     }
 
+    /// Folders the last, killed run left behind that this one took back, and
+    /// the ones it could not — both go into the report.
+    @ObservationIgnored private var reclaimedFolders: [String] = []
+    @ObservationIgnored private(set) var orphanedFolders: [OrphanedFolder] = []
+
     private func buildPlan() async {
         do {
+            // Before anything is planned: the folders on disk that the index
+            // does not know. A run killed between two `saveBatch` calls leaves
+            // up to 200 of them, and without this step the next run plans those
+            // books again and copies them into *second* folders — measured at
+            // 23 in the Sprint 3 run. The ones whose OPF names a book this very
+            // import carries are read into the index here, so the planner then
+            // sees a library that already holds them and the ordinary duplicate
+            // rules do the rest.
+            try await reclaimOrphans()
+
             let knowledge = ImportKnowledge(
                 digests: try await index.allFormatDigests(),
                 isbns: try await index.allISBNs(),
@@ -193,6 +208,41 @@ final class ImportModel {
             errorMessage = "Could not read the library index: \((error as NSError).localizedDescription)"
             phase = .idle
         }
+    }
+
+    /// Takes back what an interrupted run left, and remembers the rest.
+    ///
+    /// Reading and hashing a few hundred folders is not main-actor work, so the
+    /// walk runs detached; only the entries come back. Nothing is copied,
+    /// nothing is written into the folders, and nothing is removed — an orphan
+    /// this run cannot attribute stays exactly where it is and is named in the
+    /// report and in `Library ▸ Find Orphaned Folders…`.
+    private func reclaimOrphans() async throws {
+        reclaimedFolders = []
+        orphanedFolders = []
+        guard !candidates.isEmpty else { return }
+
+        let known = Set(try await index.allEntries().map(\.folder))
+        let wanted = Set(candidates.map(\.book.id))
+        let library = self.library
+
+        let (adopted, claimedPaths, leftOver) = await Task.detached(priority: .userInitiated) {
+            () -> ([LibraryEntry], [String], [OrphanedFolder]) in
+            let orphans = OrphanedFolders.find(in: library, knownFolders: known)
+            guard !orphans.isEmpty else { return ([], [], []) }
+            let claimed = OrphanedFolders.claimable(orphans, importing: wanted)
+            let entries = OrphanedFolders.adopt(claimed, in: library, makeHasher: SHA256Hasher.factory)
+            // Only a folder that actually read back as a book counts as taken:
+            // one that did not is still an orphan, and saying otherwise in the
+            // report would be the kind of quiet lie this whole feature is about.
+            let taken = Set(entries.map(\.folder))
+            return (entries, entries.map(\.folder).sorted(), orphans.filter { !taken.contains($0.path) })
+        }.value
+
+        guard !adopted.isEmpty || !leftOver.isEmpty else { return }
+        try await index.save(adopted)
+        reclaimedFolders = claimedPaths
+        orphanedFolders = leftOver
     }
 
     private func formatsByBook() async throws -> [UUID: Set<BookFileFormat>] {
@@ -247,8 +297,11 @@ final class ImportModel {
                 saveBatch: { try await index.save($0) })
             imported = outcome.entries
             nextBookNumber = outcome.nextBookNumber
-            try? outcome.report.append(to: library)
-            phase = .finished(outcome.report)
+            var report = outcome.report
+            report.reclaimedFolders = reclaimedFolders
+            report.orphanedFolders = orphanedFolders.map(\.path)
+            try? report.append(to: library)
+            phase = .finished(report)
         } catch {
             errorMessage = Self.describe(error)
             phase = .ready
@@ -268,6 +321,8 @@ final class ImportModel {
         errorMessage = nil
         calibreCensus = nil
         calibreColumns = []
+        reclaimedFolders = []
+        orphanedFolders = []
     }
 
     // MARK: Reading files

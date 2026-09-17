@@ -40,6 +40,13 @@ struct ContentView: View {
         ) {
             ImportSheet().environment(model)
         }
+        .sheet(
+            isPresented: Binding(
+                get: { model.isOrphanSheetPresented },
+                set: { model.isOrphanSheetPresented = $0 })
+        ) {
+            OrphanSheet().environment(model)
+        }
         .onAppear {
             editingKeys.start(handleEditingKey)
             focus = model.focusTarget

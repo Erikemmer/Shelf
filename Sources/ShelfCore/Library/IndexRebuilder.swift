@@ -90,7 +90,7 @@ public struct IndexRebuilder: Sendable {
                 scanned += 1
                 progress(scanned, relative)
 
-                guard let found = try read(bookFolder, relative: relative, knownDigests: knownDigests) else {
+                guard let found = try readFolder(bookFolder, relative: relative, knownDigests: knownDigests) else {
                     result.unreadableFolders.append(relative)
                     continue
                 }
@@ -103,9 +103,14 @@ public struct IndexRebuilder: Sendable {
         return result
     }
 
-    /// One book's folder.
-    private func read(
-        _ folder: URL, relative: String, knownDigests: [String: String]
+    /// One book's folder, read exactly as a full rebuild reads it.
+    ///
+    /// Public because a resumed import adopts a leftover folder through it
+    /// (`OrphanedFolders.adopt`): the entry that goes into the index for a
+    /// folder the last run left behind has to be the same entry a rebuild would
+    /// make of it, or the two would disagree about the same folder.
+    public func readFolder(
+        _ folder: URL, relative: String, knownDigests: [String: String] = [:]
     ) throws -> (entry: LibraryEntry, hadOPF: Bool)? {
         let manager = FileManager.default
         let names = (try? manager.contentsOfDirectory(atPath: folder.path)) ?? []
