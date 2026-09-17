@@ -6,7 +6,14 @@
 // exists but is not on screen. Counting only the visible ones once reported "no
 // window" for a perfectly healthy app.
 //
-// Usage: swift Scripts/window-count.swift <pid>   →  "1 0"
+// **The first number is not a window count.** Measured on macOS 26.6: every app
+// carries four extra layer-0 windows of 1512 × 33 at (0, 0) that belong to the
+// system's menu bar and are never on screen. Selector reports exactly the same
+// four, which is how they were identified. So a healthy one-window app reads
+// "5 1": four artefacts plus its window, one of them on screen. The *second*
+// number is the one that counts windows.
+//
+// Usage: swift Scripts/window-count.swift <pid>   →  "5 1"
 import CoreGraphics
 import Foundation
 

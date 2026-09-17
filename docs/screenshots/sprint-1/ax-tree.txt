@@ -1,0 +1,143 @@
+Accessibility tree of Shelf, sidebar and inspector — Sprint 1 evidence
+=====================================================================
+
+Taken from the running Release build with the 5 000-book measuring library
+open, window 1440 x 881, one book selected. Read with the AX API (the same
+tree VoiceOver walks), not from a screenshot. Abridged: the tag, author and
+series lists are cut after a few rows, and the cover grid is left out.
+
+What it shows, and what it shows is missing:
+
+* Every sidebar section is present and filled, and the empty ones say why
+  ("Shelves arrive in Sprint 2", "Devices arrive in Sprint 5").
+* A sidebar row is an AXImage plus two AXStaticText elements, with the help
+  text repeated on each. It has no AXButton role and no action, so a
+  VoiceOver or keyboard-only user cannot activate it. Sprint 7 (accessibility)
+  has to give these rows a role.
+* The counts read "4.996" — grouped in the user's locale — while the status
+  bar one line below reads "4996 books". Two number formats in one window.
+* The rating control comes out as AXUnknown with a description and *no*
+  value: the star count is not readable by assistive technology.
+
+--- SIDEBAR ---
+    AXScrollArea
+      AXStaticText value="LIBRARY"
+      AXImage desc="books.vertical" help="Show all books"
+      AXStaticText value="All Books" help="Show all books"
+      AXStaticText value="4.996" help="Show all books"
+      AXImage desc="book.closed" help="Show unread"
+      AXStaticText value="Unread" help="Show unread"
+      AXStaticText value="4.996" help="Show unread"
+      AXImage desc="Clock" help="Show recently added"
+      AXStaticText value="Recently Added" help="Show recently added"
+      AXStaticText value="4.996" help="Show recently added"
+      AXImage desc="Inbox" help="Not on any Shelf needs the metadata editor – Sprint 2"
+      AXStaticText value="Not on any Shelf" help="Not on any Shelf needs the metadata editor – Sprint 2"
+      AXStaticText value="4.996" help="Not on any Shelf needs the metadata editor – Sprint 2"
+      AXImage desc="photo.badge.exclamationmark" help="Show missing cover"
+      AXStaticText value="Missing Cover" help="Show missing cover"
+      AXStaticText value="96" help="Show missing cover"
+      AXImage desc="Copy" help="Duplicates needs the metadata editor – Sprint 2"
+      AXStaticText value="Duplicates" help="Duplicates needs the metadata editor – Sprint 2"
+      AXStaticText value="SHELVES"
+      AXStaticText value="Shelves arrive in Sprint 2"
+      AXStaticText value="TAGS"
+      AXImage desc="number" help="Show only award winner"
+      AXStaticText value="award winner" help="Show only award winner"
+      AXStaticText value="753" help="Show only award winner"
+      AXImage desc="number" help="Show only book club"
+      AXStaticText value="book club" help="Show only book club"
+      AXStaticText value="759" help="Show only book club"
+      AXImage desc="number" help="Show only classics"
+      AXStaticText value="classics" help="Show only classics"
+      … tags continue …
+      AXStaticText value="AUTHORS"
+      AXImage desc="person" help="Show only Adrian Atwood"
+      AXStaticText value="Adrian Atwood" help="Show only Adrian Atwood"
+      AXStaticText value="14" help="Show only Adrian Atwood"
+      AXImage desc="person" help="Show only Ann Atwood"
+      AXStaticText value="Ann Atwood" help="Show only Ann Atwood"
+      … authors continue (400 of them) …
+      AXStaticText value="SERIES"
+      AXImage desc="Numbered List" help="Show only Broken Earth"
+      AXStaticText value="Broken Earth" help="Show only Broken Earth"
+      AXStaticText value="147" help="Show only Broken Earth"
+      AXImage desc="Numbered List" help="Show only Children of Time"
+      AXStaticText value="Children of Time" help="Show only Children of Time"
+      AXStaticText value="132" help="Show only Children of Time"
+      AXImage desc="Numbered List" help="Show only Culture"
+      AXStaticText value="Culture" help="Show only Culture"
+      AXStaticText value="129" help="Show only Culture"
+      AXImage desc="Numbered List" help="Show only Discworld"
+      AXStaticText value="Discworld" help="Show only Discworld"
+      AXStaticText value="116" help="Show only Discworld"
+      AXImage desc="Numbered List" help="Show only Hainish Cycle"
+      AXStaticText value="Hainish Cycle" help="Show only Hainish Cycle"
+      AXStaticText value="144" help="Show only Hainish Cycle"
+      AXImage desc="Numbered List" help="Show only Imperial Radch"
+      AXStaticText value="Imperial Radch" help="Show only Imperial Radch"
+      AXStaticText value="108" help="Show only Imperial Radch"
+      AXImage desc="Numbered List" help="Show only Locked Tomb"
+      AXStaticText value="Locked Tomb" help="Show only Locked Tomb"
+      AXStaticText value="118" help="Show only Locked Tomb"
+      AXImage desc="Numbered List" help="Show only Mars Trilogy"
+      AXStaticText value="Mars Trilogy" help="Show only Mars Trilogy"
+      AXStaticText value="103" help="Show only Mars Trilogy"
+      AXImage desc="Numbered List" help="Show only Teixcalaan"
+      AXStaticText value="Teixcalaan" help="Show only Teixcalaan"
+      AXStaticText value="139" help="Show only Teixcalaan"
+      AXImage desc="Numbered List" help="Show only Wayfarers"
+      AXStaticText value="Wayfarers" help="Show only Wayfarers"
+      AXStaticText value="110" help="Show only Wayfarers"
+      AXStaticText value="FORMATS"
+      AXImage desc="Document" help="Show only epub"
+      AXStaticText value="epub" help="Show only epub"
+      AXStaticText value="4.996" help="Show only epub"
+      AXStaticText value="DEVICES"
+      AXStaticText value="Devices arrive in Sprint 5"
+      AXScrollBar value="0"
+        AXValueIndicator value="0"
+        AXButton [AXIncrementArrow]
+        AXButton [AXDecrementArrow]
+        AXButton [AXIncrementPage]
+        AXButton [AXDecrementPage]
+    AXStaticText value="4996 books · 400 authors · 10 series"
+
+--- STATUS BAR ---
+    AXStaticText value="4996 books · 400 authors · 10 series"
+
+--- INSPECTOR (one selected book) ---
+    AXScrollArea
+      AXImage
+      AXStaticText value="Children of Darkness #2794"
+      AXStaticText value="Martha Pratchett"
+      AXStaticText value="RATING"
+      AXUnknown desc="Rating"
+      AXStaticText value="Read"
+      AXStaticText value="No"
+      AXStaticText value="DETAILS"
+      AXStaticText value="Publisher"
+      AXStaticText value="Orbit"
+      AXStaticText value="Language"
+      AXStaticText value="en"
+      AXStaticText value="Added"
+      AXStaticText value="17. Sep 2026"
+      AXStaticText value="Size"
+      AXStaticText value="134.4 KB"
+      AXStaticText value="TAGS"
+      AXStaticText value="to read"
+      AXStaticText value="DESCRIPTION"
+      AXStaticText value="Synthetic book number 2794, for measuring how Shelf behaves with many of them."
+      AXStaticText value="FORMATS"
+      AXStaticText value="EPUB"
+      AXStaticText value="134.4 KB"
+      AXButton desc="Open in Default App" help="Hands the file to Books, Preview or whatever reads it (↩)"
+      AXButton desc="Show in Finder" help="Reveals Pratchett, Martha/Children of Darkness #2794 (1191) (⇧⌘R)"
+      AXStaticText value="Editing metadata arrives in Sprint 2. Nothing here writes to a book file."
+      AXScrollBar value="0"
+        AXValueIndicator value="0"
+        AXButton [AXIncrementArrow]
+        AXButton [AXDecrementArrow]
+        AXButton [AXIncrementPage]
+        AXButton [AXDecrementPage]
+  AXToolbar

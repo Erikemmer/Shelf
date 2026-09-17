@@ -175,11 +175,11 @@ echo "smoke: front window title: ${TITLE:-unavailable}"
 # another app's full-screen window covers is not "on screen" while the app is
 # perfectly fine. Both numbers are reported and only "at least one" is asserted.
 #
-# Note, honestly: this count has been seen to grow by one per launch for Shelf,
-# with a single process and a single visible window. Whether that is a SwiftUI
-# artefact (several layer-0 backing windows for one window) or a real extra
-# window has not been established – it needs somebody looking at the screen.
-# See docs/BACKLOG.md, "Measurements still to take by hand".
+# The first number is not a window count: four of those layer-0 windows are the
+# system's menu bar (1512 x 33 at 0,0, never on screen), and Selector reports the
+# same four. A healthy Shelf reads "5 1". Established by launching Selector's
+# window list beside Shelf's and by three quit-and-relaunch rounds that stayed at
+# one; see CHANGELOG, Sprint 1 follow-up.
 echo "smoke: windows: $WINDOWS (of those on screen: $ONSCREEN)"
 if [ "$WINDOWS" -lt 1 ]; then
     # Second opinion before failing: the two ways of asking disagree now and then.
