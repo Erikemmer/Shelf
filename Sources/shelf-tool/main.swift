@@ -19,6 +19,10 @@ let usage = """
       synthesise <folder> [count]   write <count> synthetic EPUBs with real covers
       import <source> <library>     import a folder into a library, verified
       rebuild <library>             erase the index and rebuild it from the folders
+      shelve <library> <path> <count> [offset]
+                                    put <count> books on the shelf at <path>,
+                                    making the shelf if it is not there, and
+                                    print how long one assignment takes
       unshelve <library>            remove every shelf and take every book off
                                     it – writes each metadata.opf, never a book
       edit <library> <title> <stars> <read>
@@ -58,6 +62,7 @@ case "synthesise": try Commands.synthesise(Array(arguments.dropFirst()))
 case "import": try await Commands.importFolder(Array(arguments.dropFirst()))
 case "rebuild": try await Commands.rebuild(Array(arguments.dropFirst()))
 case "unshelve": try await Commands.unshelve(Array(arguments.dropFirst()))
+case "shelve": try await Commands.shelve(Array(arguments.dropFirst()))
 case "edit": try await Commands.edit(Array(arguments.dropFirst()))
 case "show": try await Commands.show(Array(arguments.dropFirst()))
 case "digest": try Commands.digest(Array(arguments.dropFirst()))
@@ -224,6 +229,54 @@ enum Commands {
         try library.write(descriptor)
         try await index.saveShelves([])
         print("took \(shelved.count) book(s) off their shelves and removed every shelf")
+    }
+
+    /// Puts books on a shelf from the command line, making the shelf if need be.
+    ///
+    /// What the proof run distributes a thousand books with, and what a
+    /// screenshot uses to arrange a library before it is photographed. It goes
+    /// through the same path the window does — `MetadataChange` into
+    /// `MetadataEditor` — so what it measures is what a drop on a shelf costs,
+    /// not what a direct write to the index would cost.
+    static func shelve(_ arguments: [String]) async throws {
+        guard arguments.count >= 3, let count = Int(arguments[2]) else {
+            print("usage: shelf-tool shelve <library> <shelf path> <count> [offset]")
+            exit(2)
+        }
+        let path = arguments[1]
+        let offset = arguments.count > 3 ? Int(arguments[3]) ?? 0 : 0
+        let (library, index) = try openLibrary(arguments[0])
+        var descriptor = try library.readDescriptor()
+        let editor = MetadataEditor(library: library)
+
+        // The tree first and the books after: the index resolves a book's paths
+        // against the shelves it holds and skips what it cannot find.
+        var tree = ShelfTree(descriptor.shelves)
+        guard tree.ensure(path: path) != nil else {
+            print("“\(path)” is not a shelf path")
+            exit(2)
+        }
+        descriptor.shelves = tree.shelves
+        try library.write(descriptor)
+        try await index.saveShelves(tree.shelves)
+
+        let books = Array(try await firstBooks(offset + count, in: index).dropFirst(offset))
+        var milliseconds: [Double] = []
+        for entry in books {
+            let change = MetadataChange.make(from: entry.book) { book in
+                guard !book.shelves.contains(path) else { return }
+                book.shelves = (book.shelves + [path]).sorted()
+            }
+            guard !change.isEmpty else { continue }
+            let started = ContinuousClock.now
+            _ = try await editor.apply(change, to: entry, in: index)
+            let took = ContinuousClock.now - started
+            milliseconds.append(
+                Double(took.components.attoseconds) / 1e15 + Double(took.components.seconds) * 1_000)
+        }
+        print("put \(milliseconds.count) book(s) on \(path)")
+        // CONCEPT §11 asks under 20 ms for one assignment; the proof run checks it.
+        printTimings(milliseconds, target: 20)
     }
 
     static func rebuild(_ arguments: [String]) async throws {
