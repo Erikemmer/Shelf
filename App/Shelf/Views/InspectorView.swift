@@ -3,19 +3,34 @@ import ShelfCore
 import SlateKit
 import SwiftUI
 
-/// The right column: everything about the selected book.
+/// The right column: everything about the selected book, and since Sprint 2b
+/// every metadata field of it is editable.
 ///
-/// Sprint 2a made the first two fields editable – the rating and the read
-/// status – and it was the change of controls Sprint 1 laid out for, not a
-/// change of layout. Every edit goes through `LibraryModel.apply`, so it lands
-/// on the window's undo stack before it reaches the disk, and it writes
+/// The layout is Sprint 1's, unchanged: the same column in the same order, with
+/// values that happen to have become fields (`SlateEditableRow` is sized like
+/// the `SlateValueRow` it replaces). That is deliberate — an inspector whose
+/// shape changes between versions is harder to learn than one that grows
+/// controls where it already had values.
+///
+/// What this file does *not* decide: what an empty field means, how several
+/// authors are separated, whether "2,5" is a number, whether an ISBN can be
+/// that number. Those are rules, they can be wrong, and they live in the core
+/// (`BookField`, `IdentifierEdit`, `TagEdit`, `ISBN`) where a test can reach
+/// them. Every edit goes through `LibraryModel.commit`, which puts the previous
+/// value on the window's undo stack before anything is written, and writes
 /// `metadata.opf` and nothing else: a book file is never written (CONCEPT §4).
-/// The remaining fields are still read-only and become editable in 2b.
 struct InspectorView: View {
     @Environment(LibraryModel.self) private var model
     /// The window's undo manager, not one of the inspector's own: ⌘Z has to
     /// undo the change in the window it was made in.
     @Environment(\.undoManager) private var undoManager
+
+    /// The scheme of the identifier being added. Local because a half-typed
+    /// "goodr" is not something the library needs to know about.
+    @State private var newIdentifierScheme = ""
+    /// Raised after each identifier added, to give the value field a fresh
+    /// draft. See where it is used.
+    @State private var identifierAdds = 0
 
     var body: some View {
         ScrollView {
@@ -25,6 +40,7 @@ struct InspectorView: View {
                     title(for: entry)
                     rating(for: entry)
                     facts(for: entry)
+                    identifiers(for: entry)
                     tags(for: entry)
                     description(for: entry)
                     formats(for: entry)
@@ -32,6 +48,9 @@ struct InspectorView: View {
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // A different book means different values in every field, and
+                // the half-typed scheme of an identifier is not one of them.
+                .onChange(of: entry.id) { _, _ in newIdentifierScheme = "" }
             } else {
                 Text("No book selected.")
                     .foregroundStyle(Slate.textSecondary)
@@ -49,25 +68,64 @@ struct InspectorView: View {
             .frame(maxWidth: .infinity)
     }
 
-    // MARK: Fields
+    // MARK: Title, authors, series
 
     private func title(for entry: LibraryEntry) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(entry.book.title)
-                .font(.headline)
-                .foregroundStyle(Slate.textPrimary)
-                .textSelection(.enabled)
-            Text(entry.book.authorLine)
-                .font(.callout)
-                .foregroundStyle(Slate.textSecondary)
-                .textSelection(.enabled)
-            if let series = entry.book.series {
-                Text(series.display)
-                    .font(.caption)
-                    .foregroundStyle(Slate.textSecondary)
-            }
+        VStack(alignment: .leading, spacing: 6) {
+            field(.title, of: entry, font: .headline, placeholder: "Title")
+            field(.authors, of: entry, font: .callout, placeholder: "Author & Second Author")
+            series(for: entry)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The series name, its index beside it, and where the book sits in it.
+    ///
+    /// "Book 3 of 7" is counted from the index's own facets, which the sidebar
+    /// has already loaded — so it is the number of books *in this library*, and
+    /// says so in the help rather than pretending to know how long the series
+    /// really is.
+    private func series(for entry: LibraryEntry) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                SlateEditableBlock(
+                    value: BookField.seriesName.text(of: entry.book), placeholder: "Series",
+                    font: .caption
+                ) { model.commit(.seriesName, $0, undoManager: undoManager) }
+                // Named for the accessibility tree as well as for the
+                // pointer: a field whose only label is its placeholder has
+                // no label at all once something is typed into it, and the
+                // tree showed exactly that — a bare `AXTextField`.
+                .accessibilityLabel("Series")
+                .help("Series — empty removes the book from its series")
+                if entry.book.series != nil {
+                    SlateEditableBlock(
+                        value: BookField.seriesIndex.text(of: entry.book), placeholder: "#",
+                        font: .caption
+                    ) { model.commit(.seriesIndex, $0, undoManager: undoManager) }
+                    .frame(width: 44)
+                    .accessibilityLabel("Series index")
+                    .help("Which book of the series – 3, or 2.5 for a novella")
+                }
+            }
+            if let position = seriesPosition(for: entry) {
+                Text(position)
+                    .font(.caption2)
+                    .foregroundStyle(Slate.textSecondary)
+                    .help("Counted from the books in this library, not from the series itself")
+            }
+            note(for: BookField.seriesName.rawValue)
+            note(for: BookField.seriesIndex.rawValue)
+        }
+    }
+
+    private func seriesPosition(for entry: LibraryEntry) -> String? {
+        guard let series = entry.book.series, series.index != nil,
+            let total = model.seriesCount(named: series.name)
+        else { return nil }
+        // The index as the file spells it, so a novella reads "Book 3.5 of 7"
+        // rather than "Book 3 of 7" or "Book 3.5000 of 7".
+        return "Book \(BookField.seriesIndex.text(of: entry.book)) of \(total)"
     }
 
     private func rating(for entry: LibraryEntry) -> some View {
@@ -97,47 +155,102 @@ struct InspectorView: View {
         }
     }
 
+    // MARK: Details
+
     private func facts(for entry: LibraryEntry) -> some View {
         SlateInspectorSection("Details") {
             VStack(alignment: .leading, spacing: 4) {
-                if let publisher = entry.book.publisher {
-                    SlateValueRow(name: "Publisher", value: publisher)
-                }
-                if let published = entry.book.published {
-                    SlateValueRow(name: "Published", value: Self.year(published))
-                }
-                if let language = entry.book.language {
-                    SlateValueRow(name: "Language", value: language)
-                }
+                row(.publisher, of: entry)
+                row(.published, of: entry, placeholder: "yyyy-mm-dd")
+                row(.language, of: entry, placeholder: "en")
+                // Not editable, and not a field: both are facts about the disk
+                // rather than claims about the book.
                 SlateValueRow(name: "Added", value: Self.day(entry.book.addedAt))
                 SlateValueRow(name: "Size", value: ByteCount.format(entry.totalBytes))
+            }
+        }
+    }
+
+    /// The identifiers, and one empty pair for adding another.
+    ///
+    /// An ISBN is checked against its check digit here and nowhere else: a
+    /// wrong one is a duplicate key that matches the wrong book, and two
+    /// digits swapped while typing thirteen of them is the usual mistake.
+    private func identifiers(for entry: LibraryEntry) -> some View {
+        SlateInspectorSection("Identifiers") {
+            VStack(alignment: .leading, spacing: 4) {
                 ForEach(entry.book.identifiers.sorted(by: { $0.key < $1.key }), id: \.key) { scheme, value in
-                    SlateValueRow(name: scheme.uppercased(), value: value)
+                    SlateEditableRow(
+                        name: scheme.uppercased(), value: value,
+                        help: "Empty removes the \(scheme.uppercased())"
+                    ) {
+                        model.commitIdentifier(scheme: scheme, value: $0, undoManager: undoManager)
+                    }
+                    note(for: "identifier:\(scheme.lowercased())")
                 }
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    SlateEditableBlock(value: newIdentifierScheme, placeholder: "ISBN") {
+                        newIdentifierScheme = $0
+                    }
+                    .frame(width: 70)
+                    .accessibilityLabel("New identifier name")
+                    .help("The name of the identifier – ISBN, ASIN, DOI, Goodreads")
+                    SlateEditableBlock(value: "", placeholder: "new value") { typed in
+                        guard !typed.isEmpty else { return }
+                        model.commitIdentifier(
+                            scheme: newIdentifierScheme, value: typed, undoManager: undoManager)
+                        newIdentifierScheme = ""
+                        identifierAdds += 1
+                    }
+                    // Rebuilt after each add, which is how the field comes back
+                    // empty: its draft is its own `@State` and the value it is
+                    // handed is always "".
+                    .id(identifierAdds)
+                    .accessibilityLabel("New identifier value")
+                    .help("An ISBN is checked against its check digit; the others are not")
+                }
+                .font(.callout)
+                note(for: "identifier:\(newIdentifierScheme.lowercased())")
+                note(for: "identifier:")
             }
         }
     }
 
-    @ViewBuilder
+    // MARK: Tags
+
+    /// The tag field, in Selector's shape: a line to type in, what the text
+    /// could mean under it, the tags themselves as chips below that.
+    ///
+    /// The placeholder names the key that focuses it, because a control whose
+    /// key is written on it is a control people find (CONCEPT §3.3).
     private func tags(for entry: LibraryEntry) -> some View {
-        if !entry.book.tags.isEmpty {
-            SlateInspectorSection("Tags") {
-                SlateWrappingChips(items: entry.book.tags) { tag in
-                    SlateChip(tag)
-                }
-            }
+        SlateInspectorSection("Tags") {
+            SlateTokenField(
+                tokens: entry.book.tags,
+                placeholder: "Add tag… (T)",
+                completions: model.tagCompletions,
+                focusRequest: model.focusTagFieldRequest,
+                onDraftChange: { model.updateTagDraft($0) },
+                onAdd: { model.addTag($0, undoManager: undoManager) },
+                onRemove: { model.removeTag($0, undoManager: undoManager) }
+            )
+            .help("⏎ adds, ⌫ removes the last one, click the ✕ to remove one")
         }
     }
 
-    @ViewBuilder
     private func description(for entry: LibraryEntry) -> some View {
-        if let text = entry.book.description, !text.isEmpty {
-            SlateInspectorSection("Description") {
-                Text(text)
-                    .font(.caption)
-                    .foregroundStyle(Slate.textSecondary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        SlateInspectorSection("Description") {
+            VStack(alignment: .leading, spacing: 4) {
+                SlateEditableBlock(
+                    value: BookField.description.text(of: entry.book),
+                    placeholder: "Add a description…", isMultiline: true, lineLimit: 10, font: .caption
+                ) { model.commit(.description, $0, undoManager: undoManager) }
+                .accessibilityLabel("Description")
+                // ⏎ is a line break in here, so losing focus is what
+                // finishes the field. Said out loud, because the other
+                // fields behave differently.
+                .help("Several lines. Finished when the field loses focus; Escape discards")
+                note(for: BookField.description.rawValue)
             }
         }
     }
@@ -169,14 +282,49 @@ struct InspectorView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: Formatting
+    // MARK: One field
 
-    private static func year(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy"
-        return formatter.string(from: date)
+    /// A field with no name beside it, for the title block.
+    private func field(
+        _ which: BookField, of entry: LibraryEntry, font: Font, placeholder: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            SlateEditableBlock(
+                value: which.text(of: entry.book), placeholder: placeholder,
+                isMultiline: which.isMultiline, font: font
+            ) { model.commit(which, $0, undoManager: undoManager) }
+            // Named for the accessibility tree as well as for the pointer. A
+            // field whose only label is its placeholder has no label at all
+            // once something is typed into it, and the tree showed exactly
+            // that: a bare `AXTextField` with a value and nothing else.
+            .accessibilityLabel(which.label)
+            .help("\(which.label) — ⏎ or clicking away saves, Escape discards")
+            note(for: which.rawValue)
+        }
     }
+
+    /// A named row in the Details block.
+    private func row(
+        _ which: BookField, of entry: LibraryEntry, placeholder: String = ""
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            SlateEditableRow(
+                name: which.label, value: which.text(of: entry.book), placeholder: placeholder,
+                help: "\(which.label) — empty removes it from metadata.opf"
+            ) { model.commit(which, $0, undoManager: undoManager) }
+            note(for: which.rawValue)
+        }
+    }
+
+    /// The line under a field that says why the last value was refused.
+    @ViewBuilder
+    private func note(for key: String) -> some View {
+        if let message = model.rejection(for: key) {
+            SlateFieldNote(message)
+        }
+    }
+
+    // MARK: Formatting
 
     private static func day(_ date: Date) -> String {
         let formatter = DateFormatter()

@@ -242,6 +242,21 @@ final class LibraryModel {
             if let ids, !ids.contains(entry.id) { return false }
             return filter.matches(entry, coversOnDisk: coversOnDisk, shelvedBooks: shelved)
         }
+        // Narrowed to one series, the grid is in series order, whatever the
+        // sort menu says. A series has exactly one order that means anything,
+        // and "Mistborn 3.5 between 3 and 4" is the reason the index is a
+        // `Double`. Sorted in memory rather than by asking the index again:
+        // a few thousand rows sort in well under a millisecond, where a query
+        // per sidebar click is a round trip.
+        if filter.series != nil {
+            visible.sort { left, right in
+                let ours = left.book.series?.index ?? .greatestFiniteMagnitude
+                let theirs = right.book.series?.index ?? .greatestFiniteMagnitude
+                if ours != theirs { return ours < theirs }
+                return left.book.titleSort.localizedCaseInsensitiveCompare(right.book.titleSort)
+                    == .orderedAscending
+            }
+        }
         // A selection the filter just hid is not kept: the inspector would show
         // a book that is not on screen.
         if let selected = selectedBookID, !visible.contains(where: { $0.id == selected }) {
@@ -477,6 +492,116 @@ final class LibraryModel {
         apply(
             MetadataChange.make(from: entry.book) { $0.isRead.toggle() }, to: entry,
             undoManager: undoManager)
+    }
+
+    // MARK: Editing the text fields
+
+    /// Why the last edit was refused, and which field refused it.
+    ///
+    /// Held here rather than in the view so the message survives the field
+    /// losing focus — which is exactly when it appears.
+    struct FieldRejection: Equatable {
+        /// `BookField.rawValue`, or `identifier:<scheme>`.
+        var key: String
+        var message: String
+    }
+
+    private(set) var fieldRejection: FieldRejection?
+
+    /// A finished field: ⏎ or focus lost.
+    ///
+    /// One write per completion, which is the whole of the debouncing this
+    /// sprint needs. Sprint 2a measured 5–8 ms for a write and decided a rating
+    /// did not need debouncing; a text field would have written a file per
+    /// keystroke, and the answer is not a timer but the right event. A timer
+    /// would still write a file in the middle of a word, and it would have to
+    /// be flushed before the window closed.
+    ///
+    /// The rules are the core's (`BookField.apply`), so nothing about what an
+    /// empty value means or how authors are separated is decided here.
+    func commit(_ field: BookField, _ typed: String, undoManager: UndoManager?) {
+        guard let entry = selectedEntry else { return }
+        handle(field.apply(typed, to: entry.book), key: field.rawValue, entry: entry, undoManager: undoManager)
+    }
+
+    func commitIdentifier(scheme: String, value: String, undoManager: UndoManager?) {
+        guard let entry = selectedEntry else { return }
+        handle(
+            IdentifierEdit.set(scheme: scheme, value: value, in: entry.book),
+            key: "identifier:\(scheme.lowercased())", entry: entry, undoManager: undoManager)
+    }
+
+    func addTag(_ name: String, undoManager: UndoManager?) {
+        guard let entry = selectedEntry else { return }
+        handle(
+            TagEdit.add(name, to: entry.book, knownTags: knownTags), key: "tags", entry: entry,
+            undoManager: undoManager)
+        tagDraft = ""
+    }
+
+    func removeTag(_ name: String, undoManager: UndoManager?) {
+        guard let entry = selectedEntry else { return }
+        handle(TagEdit.remove(name, from: entry.book), key: "tags", entry: entry, undoManager: undoManager)
+    }
+
+    /// Turns one outcome into a change, a message, or nothing at all.
+    private func handle(
+        _ outcome: BookFieldOutcome, key: String, entry: LibraryEntry, undoManager: UndoManager?
+    ) {
+        switch outcome {
+        case .unchanged:
+            // Not an error and not a write. Clearing the note is right: the
+            // field now holds something acceptable.
+            if fieldRejection?.key == key { fieldRejection = nil }
+        case .rejected(let why):
+            fieldRejection = FieldRejection(key: key, message: why.message)
+        case .changed(let edited):
+            fieldRejection = nil
+            apply(
+                MetadataChange.make(from: entry.book) { $0 = edited }, to: entry,
+                undoManager: undoManager)
+        }
+    }
+
+    /// Whether a field should show a note, and what it says.
+    func rejection(for key: String) -> String? {
+        fieldRejection?.key == key ? fieldRejection?.message : nil
+    }
+
+    // MARK: The tag field
+
+    /// Every tag in the library, which is what completion is drawn from. The
+    /// sidebar's facets already hold them, so this is not a second query.
+    var knownTags: [String] { tagFacets.map(\.name) }
+
+    /// What is being typed in the tag field. Held here because the completions
+    /// are computed from it and the view should not own two copies.
+    private(set) var tagDraft = ""
+
+    func updateTagDraft(_ text: String) {
+        tagDraft = text
+    }
+
+    var tagCompletions: [String] {
+        TagEdit.completions(
+            for: tagDraft, among: knownTags, excluding: selectedEntry?.book.tags ?? [])
+    }
+
+    /// Bumped by T. A counter, so pressing T twice focuses twice (the same
+    /// reason `focusSearchRequest` is one).
+    private(set) var focusTagFieldRequest = 0
+
+    func focusTagField() {
+        // The inspector has to be open for its tag field to take focus, and T
+        // is a reasonable way to ask for both at once.
+        isInspectorShown = true
+        focusTagFieldRequest += 1
+    }
+
+    /// How many books the selected book's series holds – the "of 7" in
+    /// "Book 3 of 7". Read off the sidebar's facets, which are already loaded.
+    func seriesCount(named name: String) -> Int? {
+        seriesFacets.first { $0.name == name }?.count
     }
 
     // MARK: Actions on the selection

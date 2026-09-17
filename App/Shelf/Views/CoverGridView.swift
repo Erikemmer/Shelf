@@ -81,7 +81,8 @@ struct CoverGridView: View {
         }
     }
 
-    /// The editing keys: 1–5 rate, 0 clears, R marks read or unread.
+    /// The editing keys: 1–5 rate, 0 clears, R marks read or unread, T puts the
+    /// keyboard in the inspector's tag field (CONCEPT §3.3).
     ///
     /// Handled here and *not* as menu key equivalents, which is how the arrow
     /// keys are done. A menu key equivalent goes through
@@ -101,6 +102,11 @@ struct CoverGridView: View {
             model.setStars(Int(digit) ?? 0, undoManager: undoManager)
         case "r":
             model.toggleRead(undoManager: undoManager)
+        case "t":
+            // Focus, not a write: T opens the tag field and the person types.
+            // It also shows the inspector if it is hidden, because asking for a
+            // field in a hidden panel can only mean "show me the panel".
+            model.focusTagField()
         default:
             return .ignored
         }
