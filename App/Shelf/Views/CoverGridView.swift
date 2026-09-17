@@ -253,6 +253,11 @@ struct BookCell: View {
     }
 
     private func loadCover() async {
+        TimingLog.shared.cellAppeared(entry.id)
+        // Whatever happens below, this cell is finished when it returns: a book
+        // with no cover shows its placeholder and the user is not waiting for
+        // anything more.
+        defer { TimingLog.shared.coverSettled(entry.id) }
         guard let loader = model.loader else { return }
         // Whatever is in memory first, so a scrolled-to cell is not blank while
         // it waits for its own request.

@@ -14,6 +14,12 @@ struct ShelfApp: App {
     /// three windows behind, which the smoke test's window count noticed.
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
+    init() {
+        // The clock for "how long until the window is usable" starts here, not
+        // at the first cell. Silent unless SHELF_TIMING=1.
+        TimingLog.shared.noteLaunch()
+    }
+
     var body: some Scene {
         WindowGroup("Shelf") {
             ContentView()

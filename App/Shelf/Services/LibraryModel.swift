@@ -146,6 +146,7 @@ final class LibraryModel {
     private func load(_ url: URL) async {
         isLoading = true
         defer { isLoading = false }
+        TimingLog.shared.libraryOpenBegan(url.lastPathComponent)
         do {
             let (library, descriptor) = try Library.open(url)
             let index = try LibraryIndex(library: library)
@@ -162,6 +163,7 @@ final class LibraryModel {
 
             coversOnDisk = await loader.cachedBookIDs()
             await reload()
+            TimingLog.shared.entriesReady(entries.count)
             recents.record(library, bookCount: entries.count)
 
             // Once per open, in the background: a cache over its limit is
