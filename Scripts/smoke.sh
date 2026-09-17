@@ -164,6 +164,8 @@ fi
 COUNTS=$(swift "$HERE/window-count.swift" "$PID" 2>/dev/null)
 WINDOWS=$(echo "$COUNTS" | awk '{print $1}')
 ONSCREEN=$(echo "$COUNTS" | awk '{print $2}')
+# The third number: on screen and not a menu-bar strip. See window-count.swift.
+REAL=$(echo "$COUNTS" | awk '{print $3}')
 if ! [[ "$WINDOWS" =~ ^[0-9]+$ ]]; then
     cleanup
     fail "could not count windows for pid $PID (window-count.swift gave '${COUNTS:-no answer}')"
@@ -176,7 +178,7 @@ echo "smoke: front window title: ${TITLE:-unavailable}"
 # same four. A healthy Shelf reads "5 1". Established by launching Selector's
 # window list beside Shelf's and by three quit-and-relaunch rounds that stayed at
 # one; see CHANGELOG, Sprint 1 follow-up.
-echo "smoke: windows: $WINDOWS (of those on screen: $ONSCREEN)"
+echo "smoke: windows: $WINDOWS (of those on screen: $ONSCREEN, real: $REAL)"
 if [ "$WINDOWS" -lt 1 ]; then
     # Second opinion before failing: the two ways of asking disagree now and then.
     VIA_EVENTS=$(osascript -e 'tell application "System Events" to tell process "Shelf" to count windows' 2>&1)
@@ -184,29 +186,43 @@ if [ "$WINDOWS" -lt 1 ]; then
     cleanup
     fail "measured $WINDOWS windows for pid $PID"
 fi
-# Nothing on screen is a failure, and it was not until Sprint 2b.
+# No real window on screen is a failure, and it was not until Sprint 2b.
 #
 # The old rule asserted only "at least one window exists", on the argument that
 # a minimised window, one on another Space, or one behind another app's
 # full-screen window is not "on screen" while the app is perfectly fine. That
 # argument does not apply to *this* script: it launches the app itself, on the
 # current Space, and never minimises it. It was left as a reported number, and
-# a launch that spawned no window duly reported "windows: 1 (of those on screen:
-# 0)", "front window title: unavailable" — and then "ok". That is the one thing
-# the smoke test exists to catch, and it waved it through.
+# a launch that produced no window duly reported "windows: 1 (of those on
+# screen: 0)", "front window title: unavailable" — and then "ok". That is the
+# one thing the smoke test exists to catch, and it waved it through. It happened
+# here, once, while Sprint 2b's numbers were being taken.
 #
-# Occlusion is not a false negative here: a window another window covers is
-# still on screen to the window server. `SMOKE_ALLOW_OFFSCREEN=1` is the way
-# out for a machine where this turns out to be flaky.
-if [ "$ONSCREEN" -lt 1 ] && [ "${SMOKE_ALLOW_OFFSCREEN:-0}" != "1" ]; then
+# Two things had to change for the assertion to be worth making:
+#
+# 1. **The third number**, not the second. In the run that went wrong the app
+#    reported "1 1", and that "1 on screen" was a *menu-bar strip* — a window
+#    that is not a window. `window-count.swift` now excludes them.
+# 2. **A retry.** The on-screen reading is a momentary one and it flickers: a
+#    healthy Shelf measured "5 0 0" and, two seconds later, "5 1 1". Failing on
+#    the first zero would make the smoke test unreliable, which is worse than
+#    the hole it is closing. A zero that survives five looks is the real thing.
+if [ "${REAL:-0}" -lt 1 ] && [ "${SMOKE_ALLOW_OFFSCREEN:-0}" != "1" ]; then
+    for _ in 1 2 3 4 5; do
+        sleep 1
+        REAL=$(swift "$HERE/window-count.swift" "$PID" 2>/dev/null | awk '{print $3}')
+        [ "${REAL:-0}" -ge 1 ] && break
+    done
+    echo "smoke: windows on screen after looking again: ${REAL:-0}"
+fi
+if [ "${REAL:-0}" -lt 1 ] && [ "${SMOKE_ALLOW_OFFSCREEN:-0}" != "1" ]; then
     VIA_EVENTS=$(osascript -e 'tell application "System Events" to tell process "Shelf" to count windows' 2>&1)
     echo "smoke: System Events counts: $VIA_EVENTS"
     cleanup
-    fail "the app is running but has no window on screen (of $WINDOWS layer-0 windows, a
-       healthy Shelf shows 1 of 5). Either the launch produced no window, or the
-       window opened somewhere this Space cannot see. Run it again; if it keeps
-       happening with a window plainly visible, set SMOKE_ALLOW_OFFSCREEN=1 and
-       say so in the report."
+    fail "the app is running but has no real window on screen, five looks apart.
+       Either the launch produced no window at all, or the window opened
+       somewhere this Space cannot see. If it keeps happening with a window
+       plainly visible, set SMOKE_ALLOW_OFFSCREEN=1 and say so in the report."
 fi
 
 # ── CPU and memory ────────────────────────────────────────────────────────────
