@@ -128,6 +128,99 @@ struct IndexRebuilderTests {
         #expect(result.shelfPathsSeen == ["Fiction/Science Fiction"])
     }
 
+    /// The whole claim of ADR 0008, end to end: throw the index away, walk the
+    /// folders, and every book is back on its shelf — including a shelf
+    /// `library.json` had never heard of, and an *empty* shelf, which no book
+    /// can remember and only the file can.
+    @Test("erasing the index and rebuilding puts every book back on its shelf")
+    func shelvesSurviveARebuild() async throws {
+        let folder = try TemporaryFolder()
+        let (library, entries) = try await importedLibrary(
+            folder,
+            books: [
+                Book(title: "One", authors: ["A"]),
+                Book(title: "Two", authors: ["B"]),
+                Book(title: "Three", authors: ["C"]),
+            ])
+        #expect(entries.count == 3)
+
+        // The tree, as the sidebar would build it.
+        var tree = ShelfTree()
+        guard case .success(let fiction) = ShelfEdit.add(name: "Fiction", to: tree),
+            case .success(let scifi) = ShelfEdit.add(name: "Sci-Fi", under: fiction.id, to: fiction.tree),
+            case .success(let empty) = ShelfEdit.add(name: "Someday", to: scifi.tree)
+        else {
+            Issue.record("a shelf was refused")
+            return
+        }
+        tree = empty.tree
+
+        // Two books on shelves, one on none. Written into each book's own OPF,
+        // which is the only place a rebuild can read them from.
+        for (position, entry) in entries.sorted(by: { $0.number < $1.number }).enumerated() {
+            var book = entry.book
+            switch position {
+            case 0: book.shelves = ["Fiction"]
+            case 1: book.shelves = ["Fiction/Sci-Fi"]
+            default: break
+            }
+            try OPFDocument.write(book, to: library.root.appendingPathComponent(entry.folder))
+        }
+
+        // `library.json` keeps the shape – including the shelf nobody is on.
+        var descriptor = try library.readDescriptor()
+        descriptor.shelves = tree.shelves
+        try library.write(descriptor)
+
+        // Now the part that is being proved: nothing but the folders and
+        // `library.json` survives.
+        let index = try LibraryIndex(inMemory: "rebuild-shelves")
+        let result = try rebuilder().rebuild(library)
+        var rebuilt = ShelfTree(try library.readDescriptor().shelves)
+        for path in result.shelfPathsSeen.sorted() { _ = rebuilt.ensure(path: path) }
+        try await index.saveShelves(rebuilt.shelves)
+        try await index.save(result.entries)
+
+        let back = try await index.allEntries().sorted { $0.number < $1.number }
+        #expect(back.map(\.book.shelves) == [["Fiction"], ["Fiction/Sci-Fi"], []])
+        // The empty shelf is still there: no book remembers it, `library.json`
+        // does, and that is exactly why the shape is kept in the file.
+        #expect(rebuilt.shelf(atPath: "Someday") != nil)
+        #expect(try await index.totals().notOnAnyShelf == 1)
+    }
+
+    /// A library restored from a backup without its `.shelf` folder: the books
+    /// remember their shelves and nothing else does. Inventing the shelf is
+    /// right — the book said where it stands, and the folder is the truth.
+    @Test("a shelf only the books remember is created rather than dropped")
+    func shelfLostFromLibraryJSON() async throws {
+        let folder = try TemporaryFolder()
+        let (library, entries) = try await importedLibrary(
+            folder, books: [Book(title: "Orphan", authors: ["A"])])
+        guard let entry = entries.first else {
+            Issue.record("nothing imported")
+            return
+        }
+        var book = entry.book
+        book.shelves = ["Fiction/Sci-Fi"]
+        try OPFDocument.write(book, to: library.root.appendingPathComponent(entry.folder))
+        // `library.json` says there are no shelves at all.
+        var descriptor = try library.readDescriptor()
+        descriptor.shelves = []
+        try library.write(descriptor)
+
+        let result = try rebuilder().rebuild(library)
+        var tree = ShelfTree()
+        for path in result.shelfPathsSeen.sorted() { _ = tree.ensure(path: path) }
+        #expect(tree.shelves.count == 2)
+        #expect(tree.shelf(atPath: "Fiction/Sci-Fi") != nil)
+
+        let index = try LibraryIndex(inMemory: "rebuild-orphan-shelf")
+        try await index.saveShelves(tree.shelves)
+        try await index.save(result.entries)
+        #expect(try await index.allEntries().first?.book.shelves == ["Fiction/Sci-Fi"])
+    }
+
     // MARK: When the folder is not as expected
 
     /// Deleting is never the rebuilder's job. A folder it cannot make sense of

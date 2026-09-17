@@ -43,6 +43,7 @@ struct InspectorView: View {
                         facts(for: entry)
                         identifiers(for: entry)
                         tags(for: entry).id(Self.tagsAnchor)
+                        shelves(for: entry)
                         description(for: entry)
                         formats(for: entry)
                         actions(for: entry)
@@ -259,6 +260,60 @@ struct InspectorView: View {
                 onAdd: { model.addTag($0, undoManager: undoManager) },
                 onRemove: { model.removeTag($0, undoManager: undoManager) }
             )
+        }
+    }
+
+    // MARK: Shelves
+
+    /// Where the book stands, and the two ways to change it.
+    ///
+    /// Chips rather than a list, and the same chips the tags use, because they
+    /// are the same kind of thing: a handful of short names, each removable on
+    /// its own. The full path is shown — `Fiction/Sci-Fi`, not `Sci-Fi` — since
+    /// two shelves may share a name under different parents and a chip reading
+    /// only "Sci-Fi" would not say which one.
+    private func shelves(for entry: LibraryEntry) -> some View {
+        SlateInspectorSection("Shelves") {
+            VStack(alignment: .leading, spacing: 6) {
+                if entry.book.shelves.isEmpty {
+                    Text("Not on any shelf")
+                        .font(.caption)
+                        .foregroundStyle(Slate.textSecondary)
+                } else {
+                    SlateWrappingChips(items: entry.book.shelves) { path in
+                        SlateChip(path) {
+                            model.removeFromShelf(path, books: [entry], undoManager: undoManager)
+                        }
+                        .help("Remove this book from \(path)")
+                    }
+                }
+                addToShelfMenu(for: entry)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func addToShelfMenu(for entry: LibraryEntry) -> some View {
+        let available = model.shelfTree.inDrawnOrder().filter {
+            guard let path = model.shelfTree.storedPath(of: $0.shelf.id) else { return false }
+            return !entry.book.shelves.contains(path)
+        }
+        if available.isEmpty {
+            Text(model.shelfTree.isEmpty ? "Make one with + in the sidebar" : "On every shelf there is")
+                .font(.caption2)
+                .foregroundStyle(Slate.textSecondary)
+        } else {
+            Menu("Add to Shelf…") {
+                ForEach(available, id: \.shelf.id) { row in
+                    Button(String(repeating: "    ", count: row.depth) + row.shelf.name) {
+                        model.addToShelf(row.shelf.id, books: [entry], undoManager: undoManager)
+                    }
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .font(.caption)
+            .frame(maxWidth: 140, alignment: .leading)
+            .help("Put this book on a shelf — or drag it onto one in the sidebar")
         }
     }
 

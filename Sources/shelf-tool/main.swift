@@ -209,6 +209,17 @@ enum Commands {
         }
 
         try await index.eraseAll()
+        // The tree before the books, and every path any book named made sure
+        // of. The index resolves a book's shelf paths against the shelves it
+        // holds and skips what it cannot find, so saving the books first files
+        // every one of them nowhere. A path `library.json` has lost — a backup
+        // restored without the `.shelf` folder — is created rather than
+        // dropped: the book said where it stands, and the folder is the truth.
+        var tree = ShelfTree(descriptor.shelves)
+        for path in result.shelfPathsSeen.sorted() { _ = tree.ensure(path: path) }
+        try await index.saveShelves(tree.shelves)
+        descriptor.shelves = tree.shelves
+
         for batch in result.entries.chunked(into: 500) {
             try await index.save(batch)
         }
@@ -216,8 +227,10 @@ enum Commands {
         try library.write(descriptor)
 
         let after = try await index.count()
+        let shelved = try await index.totals().notOnAnyShelf
         print("")
         print("rebuilt in \(ImportReport.duration(Date().timeIntervalSince(started)))")
+        print("  shelves: \(tree.shelves.count); books on one: \(after - shelved)")
         print("  before: \(before) books")
         print("  after:  \(after) books")
         print("  folders with no readable book: \(result.unreadableFolders.count)")

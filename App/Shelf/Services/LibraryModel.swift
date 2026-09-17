@@ -739,6 +739,245 @@ final class LibraryModel {
         focusTagFieldRequest += 1
     }
 
+    // MARK: Shelves
+
+    /// The shelves, as `library.json` holds them.
+    ///
+    /// Derived from the descriptor rather than kept beside it: two copies of a
+    /// tree are two trees that will differ, and the descriptor is the one that
+    /// gets written to disk.
+    var shelfTree: ShelfTree { ShelfTree(descriptor?.shelves ?? []) }
+
+    /// Shelves whose children are folded away. Collapsed rather than expanded
+    /// so a new shelf's children are visible the moment it has any.
+    var collapsedShelves: Set<UUID> = []
+
+    func toggleCollapsed(_ id: UUID) {
+        if collapsedShelves.contains(id) {
+            collapsedShelves.remove(id)
+        } else {
+            collapsedShelves.insert(id)
+        }
+    }
+
+    /// The rows the sidebar draws: every shelf whose parents are all open.
+    var visibleShelfRows: [(shelf: Shelf, depth: Int, hasChildren: Bool)] {
+        let tree = shelfTree
+        var hidden: Set<UUID> = []
+        return tree.inDrawnOrder().compactMap { row in
+            if let parent = row.shelf.parentID, hidden.contains(parent) {
+                hidden.insert(row.shelf.id)
+                return nil
+            }
+            if collapsedShelves.contains(row.shelf.id) { hidden.insert(row.shelf.id) }
+            return (row.shelf, row.depth, !tree.children(of: row.shelf.id).isEmpty)
+        }
+    }
+
+    /// How many books stand on a shelf, counting the shelves inside it.
+    ///
+    /// Counted over the entries in memory rather than asked of the index. Every
+    /// book already carries its shelves, so this is one pass over a few
+    /// thousand values — measured well under a millisecond at 5 000 books — and
+    /// it cannot lag behind an edit the way a cached count can. The sidebar's
+    /// number is therefore right the moment a book is dropped on a shelf, which
+    /// is the whole point of drawing it.
+    func shelfCount(_ path: String) -> Int {
+        entries.count { LibraryFilter.stands($0.book, on: path) }
+    }
+
+    func shelfCount(_ shelf: Shelf) -> Int {
+        shelfTree.storedPath(of: shelf.id).map(shelfCount) ?? 0
+    }
+
+    /// Adds a shelf and answers its id, so the sidebar can put the new row
+    /// straight into its rename field — the Finder's "untitled folder" gesture,
+    /// and the reason there is no dialog to fill in first.
+    ///
+    /// `nil` when the name was refused; the reason is in `errorMessage`.
+    @discardableResult
+    func addShelf(named name: String, under parent: UUID? = nil) -> UUID? {
+        switch ShelfEdit.add(name: name, under: parent, to: shelfTree) {
+        case .failure(let why):
+            errorMessage = why.message
+            return nil
+        case .success(let made):
+            // A new shelf inside a folded one would be invisible, which reads
+            // as "nothing happened".
+            if let parent { collapsedShelves.remove(parent) }
+            write(made.tree)
+            errorMessage = nil
+            return made.id
+        }
+    }
+
+    /// "New Shelf", "New Shelf 2", … – the first name that is free among the
+    /// shelf's sisters, so adding two in a row is not a refusal.
+    func freeShelfName(under parent: UUID?) -> String {
+        let base = "New Shelf"
+        let tree = shelfTree
+        if ShelfEdit.check(name: base, under: parent, in: tree) == nil { return base }
+        for number in 2...99 where ShelfEdit.check(name: "\(base) \(number)", under: parent, in: tree) == nil {
+            return "\(base) \(number)"
+        }
+        return base
+    }
+
+    /// Renames a shelf, and rewrites every book that stands on it or on one of
+    /// its children.
+    ///
+    /// The books have to be rewritten because a stored path is only a name:
+    /// nothing in `Fiction/Sci-Fi` says *which* shelf it is, so a rename that
+    /// only changed `library.json` would leave every book pointing at a shelf
+    /// that no longer exists — and the next rebuild would put them all back on
+    /// the old one.
+    func renameShelf(_ id: UUID, to name: String, undoManager: UndoManager?) {
+        let before = shelfTree
+        switch ShelfEdit.rename(id, to: name, in: before) {
+        case .failure(let why):
+            errorMessage = why.message
+        case .success(let after):
+            apply(before, after, moving: id, actionName: "Rename Shelf", undoManager: undoManager)
+        }
+    }
+
+    func moveShelf(_ id: UUID, under parent: UUID?, undoManager: UndoManager?) {
+        let before = shelfTree
+        switch ShelfEdit.move(id, under: parent, in: before) {
+        case .failure(let why):
+            errorMessage = why.message
+        case .success(let after):
+            apply(before, after, moving: id, actionName: "Move Shelf", undoManager: undoManager)
+        }
+    }
+
+    /// What a confirmation has to say before a shelf is removed: its name and
+    /// how many books would come off it. **No book is deleted** — a shelf is a
+    /// grouping, and removing one removes the grouping.
+    func removalWarning(for id: UUID) -> (name: String, path: String, books: Int)? {
+        let tree = shelfTree
+        guard let shelf = tree.shelf(id), let path = tree.storedPath(of: id) else { return nil }
+        return (shelf.name, path, shelfCount(path))
+    }
+
+    func removeShelf(_ id: UUID, undoManager: UndoManager?) {
+        let before = shelfTree
+        let after = ShelfEdit.remove(id, from: before)
+        let affected = entries.filter { entry in
+            ShelfEdit.pathsAfterRemoving(id, from: entry.book.shelves, in: before) != entry.book.shelves
+        }
+        let changes = affected.map { entry in
+            (
+                entry,
+                MetadataChange.make(from: entry.book) {
+                    $0.shelves = ShelfEdit.pathsAfterRemoving(id, from: $0.shelves, in: before)
+                }
+            )
+        }
+        commitShelfChange(
+            tree: after, previousTree: before, changes: changes, actionName: "Delete Shelf",
+            undoManager: undoManager)
+    }
+
+    /// A rename or a move: the tree changes, and every book whose path changed
+    /// is rewritten with it.
+    private func apply(
+        _ before: ShelfTree, _ after: ShelfTree, moving id: UUID, actionName: String,
+        undoManager: UndoManager?
+    ) {
+        let changes =
+            entries
+            .compactMap { entry -> (LibraryEntry, MetadataChange)? in
+                let moved = ShelfEdit.pathsAfterMoving(
+                    id, from: entry.book.shelves, before: before, after: after)
+                guard moved != entry.book.shelves else { return nil }
+                return (entry, MetadataChange.make(from: entry.book) { $0.shelves = moved })
+            }
+        commitShelfChange(
+            tree: after, previousTree: before, changes: changes, actionName: actionName,
+            undoManager: undoManager)
+    }
+
+    /// The tree and the books it moved, as one thing on the undo stack.
+    ///
+    /// One ⌘Z has to put both back. Undoing the tree without the books would
+    /// leave the books on a shelf that is there again under a different name;
+    /// undoing the books without the tree would leave them pointing at a shelf
+    /// that is not.
+    private func commitShelfChange(
+        tree: ShelfTree, previousTree: ShelfTree, changes: [(LibraryEntry, MetadataChange)],
+        actionName: String, undoManager: UndoManager?
+    ) {
+        undoManager?.beginUndoGrouping()
+        undoManager?.registerUndo(withTarget: self) { model in
+            MainActor.assumeIsolated { model.write(previousTree) }
+        }
+        write(tree)
+        for (entry, change) in changes {
+            apply(change, to: entry, undoManager: undoManager)
+        }
+        undoManager?.setActionName(
+            changes.count > 1 ? "\(actionName) (\(changes.count) books)" : actionName)
+        undoManager?.endUndoGrouping()
+        errorMessage = nil
+    }
+
+    /// `library.json` first, then the index — the same order as everything
+    /// else, because the file is the truth and the index is a cache of it.
+    private func write(_ tree: ShelfTree) {
+        guard var descriptor, let library else { return }
+        descriptor.shelves = tree.shelves
+        do {
+            try library.write(descriptor)
+        } catch {
+            show(error, doing: "save the shelves")
+            return
+        }
+        self.descriptor = descriptor
+        Task { [index] in
+            try? await index?.saveShelves(tree.shelves)
+        }
+    }
+
+    // MARK: Putting books on shelves
+
+    /// Adds books to a shelf. One undo step for however many books it is.
+    func addToShelf(_ shelfID: UUID, books: [LibraryEntry], undoManager: UndoManager?) {
+        guard let path = shelfTree.storedPath(of: shelfID) else { return }
+        edit(books, actionName: "Add to Shelf", undoManager: undoManager) { book in
+            guard !book.shelves.contains(path) else { return }
+            book.shelves = (book.shelves + [path]).sorted()
+        }
+    }
+
+    func removeFromShelf(_ path: String, books: [LibraryEntry], undoManager: UndoManager?) {
+        edit(books, actionName: "Remove from Shelf", undoManager: undoManager) { book in
+            book.shelves.removeAll { $0 == path }
+        }
+    }
+
+    /// One edit across any number of books, as one thing on the undo stack.
+    ///
+    /// The shape every multiple-selection action uses: build a change per book,
+    /// skip the ones it changes nothing for, and wrap the lot in an undo group
+    /// named for how many books it touched — "Add to Shelf (12 books)" says
+    /// what ⌘Z is about to undo.
+    func edit(
+        _ books: [LibraryEntry], actionName: String, undoManager: UndoManager?,
+        _ change: (inout Book) -> Void
+    ) {
+        let changes = books.compactMap { entry -> (LibraryEntry, MetadataChange)? in
+            let made = MetadataChange.make(from: entry.book, change)
+            return made.isEmpty ? nil : (entry, made)
+        }
+        guard !changes.isEmpty else { return }
+        undoManager?.beginUndoGrouping()
+        for (entry, made) in changes { apply(made, to: entry, undoManager: undoManager) }
+        undoManager?.setActionName(
+            changes.count > 1 ? "\(actionName) (\(changes.count) books)" : actionName)
+        undoManager?.endUndoGrouping()
+    }
+
     /// How many books the selected book's series holds – the "of 7" in
     /// "Book 3 of 7". Read off the sidebar's facets, which are already loaded.
     func seriesCount(named name: String) -> Int? {
@@ -812,8 +1051,21 @@ final class LibraryModel {
             }.value
 
             try await index.eraseAll()
+            // The tree first, and every path any book named made sure of.
+            //
+            // This is what makes a shelf survive a lost index (ADR 0008). The
+            // shape comes from `library.json`; a path a book claims that the
+            // file has lost — a backup restored without its `.shelf` folder, a
+            // library copied by hand — is created rather than dropped, because
+            // the book said where it stands and the folder is the truth. The
+            // books are saved *after*, so the index has a shelf to file each
+            // one under; the other order silently loses every membership.
+            var tree = ShelfTree(descriptor?.shelves ?? [])
+            for path in result.shelfPathsSeen.sorted() { _ = tree.ensure(path: path) }
+            try await index.saveShelves(tree.shelves)
             try await index.save(result.entries)
             if var descriptor {
+                descriptor.shelves = tree.shelves
                 descriptor.nextBookNumber = max(descriptor.nextBookNumber, result.highestNumber + 1)
                 try? library.write(descriptor)
                 self.descriptor = descriptor

@@ -222,13 +222,27 @@ struct BookCell: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            model.select(entry)
+            // ⇧ extends, ⌘ adds or removes, neither replaces. Read off
+            // `NSEvent` rather than through a gesture modifier because
+            // SwiftUI's `.modifiers(_:)` on macOS swallows the plain click
+            // when a modified variant is also attached.
+            let flags = NSEvent.modifierFlags
+            model.select(entry, extending: flags.contains(.shift), toggling: flags.contains(.command))
             // A click on a book is a statement about where the keyboard belongs.
             // Without this the search field keeps it and pressing 3 types a "3"
             // into the box instead of rating the book — measured in Sprint 2b,
             // where the library filtered to "anc1".
             model.focusGrid()
         }
+        // A dragged book is its id, plain. A dragged *shelf* carries a prefix
+        // (`ShelvesSection.shelfDragPrefix`), which is how one drop target on a
+        // shelf row can tell "put this book here" from "put this shelf inside".
+        .draggable(entry.id.uuidString) {
+            // What the pointer carries. The title, because a dragged rectangle
+            // with nothing in it says nothing about what is being moved.
+            Text(entry.book.title).font(.caption).padding(6).background(Slate.panelBackground)
+        }
+        .contextMenu { BookMenu(entry: entry) }
         .help(help)
         .task(id: TaskKey(book: entry.id, size: size)) {
             await loadCover()

@@ -20,8 +20,15 @@ struct SidebarView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     collections
                     ForEach(SidebarSection.allCases) { section in
-                        SlateSidebarSection(section.rawValue)
-                        rows(for: section)
+                        // Shelves are the one section that can be changed from
+                        // here – made, renamed, dropped on – so they have their
+                        // own view rather than a fifth case in `rows(for:)`.
+                        if section == .shelves {
+                            ShelvesSection()
+                        } else {
+                            SlateSidebarSection(section.rawValue)
+                            rows(for: section)
+                        }
                     }
                 }
                 .padding(.bottom, 8)
@@ -143,6 +150,8 @@ struct SidebarView: View {
         case .authors: return model.authorFacets
         case .series: return model.seriesFacets
         case .formats: return model.formatFacets
+        // Drawn by `ShelvesSection`, which reads the tree rather than a facet
+        // list: a shelf exists whether or not a book stands on it.
         case .shelves, .devices: return []
         }
     }
