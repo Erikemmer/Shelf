@@ -22,13 +22,15 @@
 │            CoverWarmer (rings around the selection)           │
 │            RecentLibrariesStore (security-scoped bookmarks)   │
 │            SHA256Hasher (CryptoKit, the fast path)            │
+│            TimingLog (SHELF_TIMING=1; silent otherwise)       │
 ├───────────────────────────────────────────────────────────────┤
 │  ShelfCore (Swift package, no UI, runs on Linux too)          │
 │  Model:     Book · SeriesRef · BookFormat · BookFileFormat ·  │
 │             Shelf/ShelfTree · SmartCollection/LibraryFilter · │
 │             BookFolderName · TitleSort/AuthorSort ·           │
 │             ShortcutReference                                 │
-│  Library:   Library + LibraryDescriptor · IndexRebuilder      │
+│  Library:   Library + LibraryDescriptor · IndexRebuilder ·    │
+│             MetadataChange + MetadataEditor                   │
 │  Index:     IndexSchema (migrations) · LibraryIndex (GRDB)    │
 │  Formats:   ZipReader · Inflate · XMLTree · OPFDocument ·     │
 │             EPUBMetadata · FileNameMetadata · CoverFile ·     │
@@ -139,6 +141,38 @@ What the sheet shows is that `ImportPlan`, and "Import" hands the very same
 value to `ImportRunner`. Afterwards the index is written in batches of 500, the
 report is appended to `.shelf/Import-Report.txt`, and the library's book-number
 counter is stored. See [ADR 0002](adr/0002-copy-verify-then-trust.md).
+
+## Data flow: editing metadata
+
+The chain Sprint 2a built, and the order matters at every step:
+
+```
+a key press or a click in the inspector
+  → LibraryModel.setStars / toggleRead
+      builds a MetadataChange from the *old* book: (before, after)
+  → LibraryModel.apply
+      1. registers change.inverse with the window's UndoManager   ← before any write
+      2. names the action ("Rating"), so the menu reads "Undo Rating"
+  → MetadataEditor.apply                                          (ShelfCore, off the main actor)
+      3. reads the metadata.opf that is there
+      4. lays only the changed fields over it
+         — Calibre's custom columns, the shelves and the identifiers
+           stay exactly as the file has them
+      5. writes metadata.opf atomically                           ← the folder first
+      6. LibraryIndex.save                                        ← the cache second
+  → LibraryModel
+      7. replaces the one entry in memory (not a reload: 5 000 entries is 350 ms)
+      8. refreshes the totals, so "Unread" is right at once
+      9. re-applies the filter, so a book just marked read leaves "Unread"
+```
+
+Undo is registered *before* the write because once the file is written nobody
+can ask it what it used to say. Registering the inverse from inside the undo
+block is what gives redo for nothing: `UndoManager` records whatever is
+registered while undoing as the redo action. Measured from the key press to the
+written file: 8 ms for a rating, 5 ms for a read status.
+
+No book file is opened for writing anywhere in that chain.
 
 ## Data flow: rebuilding the index
 

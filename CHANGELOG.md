@@ -3,6 +3,189 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 2a – Editing, one field all the way through · 17 September 2026
+
+Undo first, then one field through every layer: the rating, and with it the read
+status. `metadata.opf` is written on every change and the index follows; no book
+file is opened for writing anywhere in the chain.
+
+### Added
+
+- **`MetadataChange` and `MetadataEditor` in `ShelfCore`.** A change is the pair
+  it really is — the book before and the book after — because undo needs the
+  *previous value* and the file cannot be asked for it once it has been written.
+  `fields` is what actually differs, which is both the guard against writing a
+  file for nothing and the name in the Edit menu ("Undo Rating").
+  `MetadataEditor` lays the delta over **what the file already says**, not over
+  what the index believes, and writes the OPF atomically before touching the
+  index: the folder is the truth, the index is the cache (ADR 0001).
+- **The rating is editable** from the inspector's stars and from 1–5, with 0 and
+  a second click on the current rating to clear it. **The read status** from a
+  checkbox and from R. Both with ⌘Z / ⇧⌘Z through the window's `UndoManager`.
+  "Unread" in the sidebar reacts the moment R is pressed.
+- **`Book.stars`**, the one place Shelf's five stars and Calibre's ten meet.
+  `calibre:rating` keeps the ten-point value so a library that goes back to
+  Calibre does not lose half stars somebody set there.
+- **`shelf-tool edit` and `shelf-tool show`**: the same core from the command
+  line, which is what lets `Scripts/proof-run.sh` prove the edit without a
+  window.
+- **[ADR 0006](docs/adr/0006-editing-keys-are-not-menu-shortcuts.md)** – editing
+  keys are handled in the grid, not by the menu bar, with the measurement that
+  decided it.
+
+### Fixed
+
+1. **`dcterms:modified` was read and never written.** Since the first version.
+   Every rebuild therefore dated every book to the moment of the rebuild. The
+   round-trip test now walks every field of `MetadataChange.Field` rather than
+   the four somebody thought of, and it fails without the fix.
+2. **The index never read identifiers back.** `LibraryEntry.book.identifiers`
+   was always empty, which cost twice: the inspector has a row per identifier
+   and never drew one, and re-saving an entry that came from the index deletes
+   the identifier rows and would have written none back — taking the ISBN off
+   every edited book and the duplicate check with it. Proved by a test that
+   fails without the fix (`bookIDs(isbn:)` returns nothing after a re-save).
+3. **The inspector handed `rating` to a five-star control unconverted**, so
+   anything Calibre rated 5 or more drew five full stars.
+4. **The status bar and the sidebar wrote the same number two ways** — "4996
+   books" under "4.996". Found by reading the accessibility tree, which is the
+   only way anybody was going to notice two formats a few pixels apart.
+
+### Measured
+
+MacBook Pro, Apple silicon, macOS 26.6.2, Release build, five-book synthetic
+library, `SHELF_TIMING=1`.
+
+| | |
+|---|---|
+| key press → written `metadata.opf`, rating | **8 ms** |
+| key press → written `metadata.opf`, read status | **5 ms** |
+| target in the sprint brief | 50 ms |
+
+The evidence is in `docs/screenshots/sprint-2a/`:
+
+- `opf-diff.txt` — `git diff --no-index` of one book's `metadata.opf` before and
+  after pressing 4 and R. **Three lines change**: `calibre:rating` 8 arrives,
+  `shelf:read` flips, `dcterms:modified` follows. The title, the author, the
+  identifier, the subjects and the timestamp are byte-for-byte what they were.
+  The EPUB's SHA-256 is identical before and after.
+  ⌘Z twice put the file back **byte-identical**, modification date included.
+- `ax-tree.txt` — the star control publishes `valueDescription="3 of 5"` while
+  the OPF says `calibre:rating` 6, and the read status is now an `AXCheckBox`
+  where Sprint 1 had a static "Read: No".
+
+`Scripts/proof-run.sh` gained the Sprint 2 form of "the folder is the truth",
+run against a 20-book library:
+
+```
+══ ten metadata changes, and what they did and did not touch
+  epub before: 3768cd9a3df77b0d6fa714110611f371e11d74b99d42250bf5c961aa447e103c
+  epub after:  3768cd9a3df77b0d6fa714110611f371e11d74b99d42250bf5c961aa447e103c
+  the book file is untouched after ten metadata changes ✓
+  metadata.opf changed, as it must ✓
+══ throwing the index away and asking the folders again
+  the rebuilt index found the same rating and read status ✓
+```
+
+**264 core tests**, 14 of them new. Two of the new ones were checked by removing
+the fix and watching them fail.
+
+### Not verified
+
+- **Nobody has still seen the window.** `screencapture` needs Screen Recording
+  permission for the terminal that runs it and this terminal has none, so the
+  four screenshots and the pixel-for-pixel comparison with Selector could not be
+  taken. `Scripts/screenshots.sh` does the whole job the moment the permission
+  exists; `docs/BACKLOG.md` says which settings pane grants it. What could be
+  read instead is the accessibility tree, and it found two of the four defects
+  above.
+- **Debouncing is not implemented.** At 5–8 ms a write it earns nothing for a
+  rating; it becomes necessary in 2b, where a text field would otherwise write a
+  file per keystroke. Written down rather than quietly skipped.
+- The edit path was exercised by hand against libraries of five and twenty
+  books, and by tests. It has **not** been exercised against the 5 000-book
+  library, so nothing is known about what an edit costs when the grid is full.
+
+## Sprint 1 follow-up – the measurements that needed a window · 17 September 2026
+
+Everything `docs/BACKLOG.md` listed under "Measurements still to take by hand",
+except the screenshots.
+
+### The window question, settled
+
+`Scripts/window-count.swift` reported **six** layer-0 windows in Sprint 1 and
+nobody knew whether that was a SwiftUI artefact or a real extra window. It is
+neither, quite:
+
+| | layer-0 windows | windows the accessibility API reports |
+|---|---|---|
+| Shelf, library open | 5 (one on screen) | **1** |
+| Selector, running, read and not touched | 5 (none on screen) | 0 — it had none open |
+
+Four of those five are **1512 × 33 at (0, 0)** and never on screen, and Selector
+reports exactly the same four: they are the system's menu bar, not the app's.
+Three quit-and-relaunch rounds and three kill-and-relaunch rounds stayed at one
+window; the "six, growing by one per launch" was restored window state from a
+saved-state folder that no longer exists and did not come back. The script and
+the smoke test say so now, so the next reader does not have to find it again.
+
+### The numbers, with the window in the foreground
+
+5 000 synthetic books, 4 996 in the index, Release build, `SHELF_TIMING=1`.
+The Sprint 1 figures were taken with the window **occluded** by another app and
+are kept below for comparison.
+
+| | this run (foreground) | Sprint 1 (occluded) |
+|---|---|---|
+| index read, 4 996 books | 488 ms cold · 353 ms warm | not measured |
+| **every visible cover on screen** (12 cells) | **852 ms cold · 768 ms warm** | not measured — "the process settles", 3–6 s |
+| against CONCEPT §11's target | 2 s, warm | — |
+| peak memory, cold open | **301 MB** | 312 MB |
+| peak memory, warm open | **206 MB** | — |
+| peak memory, arrow key held | **218 MB** | — |
+| against CONCEPT §11's limit | 1.5 GB | 1.5 GB |
+| cover cache | 4 901 covers, 96 MB | 4 901 covers, 96 MB |
+
+"Every visible cover on screen" is what `TimingLog` measures and what nothing
+before it could: it counts the cells the grid has actually laid out and stops
+when the last of them has its cover, 250 ms after the pending set empties so
+that a grid which lays out over several frames is not reported one row early.
+It is silent unless `SHELF_TIMING=1` is set.
+
+### A held arrow key for ten seconds
+
+`sample` over 626 right-arrow presses. The main thread was busy 89 % of the
+time, and almost none of it was Shelf's:
+
+| where the main thread was | share of the run |
+|---|---|
+| `-[NSMenu performKeyEquivalent:]`, all of it | 83 % |
+| of which `NSMENU_IS_THROTTLING_REPEATED_MENU_ITEM_INVOCATIONS` → `usleep` | **31 %** |
+| of which `_NSHighlightMenu` → unhighlight → CA commit → window layout | **27 %** |
+| `LibraryModel.move(by:)`, the actual work | 0.3 % |
+
+**No image decoding and no file I/O on the main thread**, which is what the
+sample was taken to check. What it found instead is that AppKit throttles a
+repeated menu-item invocation by sleeping on the main thread and flashes the
+menu title on every one. That decided where Sprint 2a's editing keys go
+(ADR 0006) and put the arrow keys in the backlog.
+
+macOS's own `key down` produces no auto-repeat — the first attempt measured a
+perfectly idle app for ten seconds — so the repeat had to be generated as 626
+separate presses.
+
+### Also
+
+- `grep -ri lithothek` is empty. CONCEPT's appendix A is gone: it listed
+  Selector's occurrences and belongs in Selector, where it is done.
+- CONCEPT catches up with two accepted deviations: the cover cache writes JPEG
+  (§13) and warming does not pause for trackpad scrolling until the deployment
+  target reaches macOS 15 (§10). §15's first open point is decided.
+- **CI: nothing to do.** `gh secret list -R Erikemmer/Shelf` is empty and
+  `Erikemmer/SlateKit` is still `PRIVATE`, so neither route to building the app
+  in CI is open and nothing was changed. The choice is still Erik's and
+  `docs/HANDOFF.md` sets out both.
+
 ## Sprint 1 – Scaffolding and EPUB · 17 September 2026
 
 The first working Shelf: it creates and opens a library, reads EPUBs, imports

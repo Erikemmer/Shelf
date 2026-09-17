@@ -54,43 +54,55 @@ die Entscheidungen in `docs/adr/`.
 
 ---
 
-## Nächster Schritt: Sprint 2 – Pflegen
+## Nächster Schritt: Sprint 2b – Tags, Regale, Serien, Suche, Tabelle
 
-Sprint 1 ist fertig und gemessen (Zahlen in `CHANGELOG.md`). Sprint 2 macht den
-Inspector editierbar. Das Layout steht schon; es ist ein Wechsel der Steuer-
-elemente, nicht des Aufbaus. Die Liste steht in `docs/BACKLOG.md` unter
-„Sprint 2"; die Reihenfolge, die ich vorschlage:
+**Sprint 2a ist fertig**: ein Feld ganz durch, mit Undo zuerst, wie es hier
+vorgeschlagen war. `MetadataChange` und `MetadataEditor` liegen im Kern und
+machen aus „altes Buch, neues Buch" ein OPF-Delta plus Index-Nachzug; die
+App-Schicht hängt nur die Registrierung beim `UndoManager` des Fensters und den
+Dateischreibvorgang an. Bewertung (Inspector, 1–5, 0) und Gelesen-Status
+(Inspector, R) sind editierbar, ⌘Z/⇧⌘Z funktionieren, die Zahlen stehen im
+`CHANGELOG.md`.
 
-1. **Undo zuerst, nicht zuletzt.** Der Weg, den Selector geht: Änderung →
-   Model → Registrierung beim `UndoManager` des Fensters mit dem *vorherigen*
-   Wert → Schreiben. Wer Undo nachrüstet, baut es zweimal.
-2. **Ein Feld ganz durch**, bevor es vierzehn werden: Bewertung (1–5, 0) vom
-   Inspector *und* von der Tastatur, mit Undo, mit atomarem OPF-Schreiben und
-   Index-Nachzug. Daran hängt die ganze Kette.
-3. Dann die übrigen Felder, Gelesen-Status (R) und Tags (T).
-4. **Regale.** Sie sind das Einzige, was der Index weiß und eine Buchdatei
-   nicht, also werden sie in jede OPF *und* in `library.json` gespiegelt
-   (`docs/adr/0001-folder-is-the-truth.md`, Entscheidung 3). `ShelfTree` und das
-   Schema sind fertig; es fehlen Anlegen, Umbenennen, Drag und die Sidebar-Zeilen.
-5. **Tabelle (⌘2) und Mehrfachauswahl**, danach die beiden Smart Collections,
-   die Sprint 1 bewusst deaktiviert gelassen hat: *Duplicates* braucht eine
-   Abfrage über `isbn_normalised` und den gefalteten Titel-Schlüssel, *Not on
-   any Shelf* braucht die Regale.
-6. **⌘-Klick zum Kombinieren** der Sidebar-Filter, wie in Selector.
+Was als Nächstes ansteht, in dieser Reihenfolge:
+
+1. **Die übrigen Felder im Inspector** – Titel, Autoren, Serie, Verlag, Datum,
+   Sprache, Beschreibung. Die Kette steht; das sind Textfelder gegen dieselbe
+   `MetadataChange`. **Hier wird Entprellen nötig**: bei 5–8 ms je Schreibvorgang
+   war es für Bewertung und Gelesen-Status keines wert, aber ein Textfeld
+   schreibt sonst pro Tastendruck eine Datei.
+2. **Tags (T)**, mit `SlateSuggestionChip` für die vorhandenen Tags.
+3. **Regale.** Das Einzige, was der Index weiß und eine Buchdatei nicht, also in
+   jede OPF *und* in `library.json` gespiegelt (ADR 0001, Entscheidung 3).
+   `ShelfTree`, das Schema und `shelf:shelves` sind fertig; es fehlen Anlegen,
+   Umbenennen, Drag und die Sidebar-Zeilen. Danach wird
+   `LibraryModel.applyFilter` die leeren Mengen los, die es heute übergibt, und
+   *Not on any Shelf* wird freigeschaltet.
+4. **Serienansicht**, **Tabelle (⌘2)**, **Mehrfachauswahl**, dann *Duplicates*
+   (Abfrage über `isbn_normalised` und den gefalteten Titel-Schlüssel).
+5. **⌘-Klick zum Kombinieren** der Sidebar-Filter.
 
 ### Was dabei zu beachten ist
 
-- `LibraryFilter.matches` nimmt `shelvedBooks` und `booksOnShelf` schon an;
-  `LibraryModel.applyFilter` übergibt derzeit leere Mengen. Das ist die Stelle,
-  an der die Regale ankommen.
-- `SmartCollection.availableInSprintOne` ist die Liste, die beim Freischalten
-  wächst. Sie steuert, welche Sidebar-Zeilen klickbar sind.
+- **Der Index liefert Identifier jetzt mit.** Bis Sprint 2a war
+  `entries.identifiers` immer leer: der Inspector hat die ISBN-Zeile nie
+  gezeichnet, und ein erneutes `save` einer aus dem Index gelesenen Zeile hätte
+  die Identifier-Zeilen gelöscht und keine zurückgeschrieben – also die ISBN
+  jedes bearbeiteten Buchs und damit die Duplikatsprüfung. Beides ist behoben
+  und getestet.
+- **`MetadataEditor` legt das Delta über die Datei, nicht über den Index.**
+  Calibres eigene Spalten stehen nur in der OPF; ein Schreiben aus der
+  Index-Sicht würde sie stillschweigend wegwerfen. Neue Felder gehören deshalb
+  in `MetadataChange.Field` – dort stehen „was hat sich geändert" und „kopiere
+  das Geänderte" nebeneinander.
+- **Tastenkürzel zum Bearbeiten gehören nicht in die Menüleiste**
+  (ADR 0006, mit Messung). Die Pfeiltasten sind noch dort; das steht im Backlog.
 - `OPFDocument.render` ist stabil (gleiches Buch → gleiche Bytes). Bitte so
   lassen: nur dann bedeutet ein Diff in einem Bibliotheksordner eine echte
-  Änderung.
-- Unbekannte Metas werden gelesen **und zurückgeschrieben**
-  (`Parsed.unmappedMetas`). Beim Schreiben eines editierten Buchs müssen sie
-  wieder mitgehen, sonst verliert ein Calibre-Import seine eigenen Spalten.
+  Änderung. `dcterms:modified` wird seit 2a mitgeschrieben.
+- **`SHELF_TIMING=1`** schaltet die Zeitmessungen im Fenster ein (Öffnen,
+  sichtbare Cover fertig, Tastendruck → OPF). Ohne die Variable ist es still.
+  Lesen mit `open --env SHELF_TIMING=1 --stdout <datei> -a <Shelf.app> <Bibliothek>`.
 
 ## Eine Entscheidung, die dir gehört: SlateKit und CI
 
@@ -112,11 +124,22 @@ wurde nicht gebaut. Lokal baut sie `make app`, und `make smoke` startet sie.
 
 ## Offene Punkte, die keiner Sitzung gehören
 
-- **Handprüfungen aus Sprint 1** stehen in `docs/BACKLOG.md` unter „Measurements
-  still to take by hand": Zeit bis alle sichtbaren Cover stehen (kalt/warm),
-  gehaltene Pfeiltaste 10 s mit `sample`, Speicher gegen die 1,5-GB-Grenze, und
-  `make smoke` mit Bibliothek (braucht die Automation-Erlaubnis für System
-  Events im Terminal).
+- **Bildschirmfotos brauchen eine Freigabe, die nur Erik geben kann.**
+  `screencapture` verlangt „Bildschirmaufnahme" für das Terminal, das es
+  startet; ohne sie verweigert es mit „could not create image from display" und
+  schreibt gar nichts. **Weg:** Systemeinstellungen ▸ Datenschutz & Sicherheit ▸
+  Bildschirmaufnahme, Terminal hinzufügen, Terminal beenden und neu öffnen, dann
+  `Scripts/screenshots.sh`. Das Skript fotografiert Shelf *und* Selector in
+  derselben Größe und liest mit `Scripts/pixel-probe.swift` dieselben vier Pixel
+  aus beiden – Sidebar-Hintergrund, Hauptfläche, Inspector-Hintergrund,
+  Sidebar-Zeile. „Sieht aus wie Selector" wird dadurch eine Zahl.
+  Die Bedienungshilfen-Freigabe ist vorhanden, deshalb liegt der
+  Barrierefreiheits-Baum in `docs/screenshots/` – er hat zwei Fehler gefunden,
+  die auf einem Bildschirmfoto niemandem aufgefallen wären.
+- **Die übrigen Handprüfungen aus Sprint 1 sind erledigt** und stehen mit Zahlen
+  im `CHANGELOG.md`: Fensterzahl (eines, nicht sechs), Zeit bis alle sichtbaren
+  Cover stehen (852 ms kalt, 768 ms warm), gehaltene Pfeiltaste mit `sample`,
+  Spitzenspeicher im Vordergrund (301 MB).
 - **App-Icon.** `App/Shelf/Resources/Assets.xcassets/AppIcon.appiconset` ist
   leer bis auf die `Contents.json`. Bis dort PNGs liegen, zeigt die App das
   Standardsymbol. Selector hat ein Skript dafür (`docs/icon/make_icons.py`).

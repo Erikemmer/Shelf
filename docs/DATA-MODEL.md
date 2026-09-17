@@ -123,6 +123,29 @@ Rules worth knowing:
   the year 101.
 * **`opf:role` other than `aut` is not an author.** A translator is filed
   separately, as Calibre does.
+* **`calibre:rating` is Calibre's ten-point scale**, not Shelf's five stars.
+  `Book.rating` holds 0…10 and `Book.stars` is the conversion: stars × 2 on the
+  way in, `(rating + 1) / 2` on the way out, so a book Calibre rated 7 shows
+  four stars rather than three and a half, and four stars are written back as 8.
+  The finer value is kept because a library that goes back to Calibre must not
+  lose half stars somebody set there. The conversion lives in one place, on
+  `Book`, so no view can invent a third answer.
+* **`shelf:` metas are Shelf's own**, and Calibre ignores metas it does not
+  know. Two so far: `shelf:read` (`true` / `false`) and `shelf:shelves` (the
+  JSON array above).
+* **`dcterms:modified` is written as well as read** since Sprint 2a. It was read
+  from the first version and never written, so a rebuilt index dated every book
+  to the moment of the rebuild. It is an EPUB 3 `<meta property=…>` rather than a
+  `calibre:` meta, because that is where the reader already looked for it.
+* **The modification date is stamped to whole seconds**, which is the precision
+  the file has. A `Date` with a fractional part would come back from the file
+  slightly different, and "undo restores exactly the previous state" would be
+  false by a few microseconds — true enough to pass a careless test and false
+  enough to make the folder and the index disagree.
+* **An edit is a delta, laid over the file.** `MetadataEditor` reads the OPF
+  that is there and copies across only the fields that actually changed, so
+  Calibre's custom columns, the shelves and the identifiers survive an edit made
+  from a window that never loaded them.
 
 ## 4. The index (`.shelf/library.sqlite`)
 
