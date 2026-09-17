@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 
 @testable import ShelfCore
@@ -226,6 +227,58 @@ struct LibraryIndexTests {
         #expect(try await index.search("changed") == [book.id])
     }
 
+    /// The sixth thing CONCEPT §4 asks search to cover, and the one that was
+    /// missing until Sprint 2b: an ISBN. Both spellings are indexed, because
+    /// `978-0-306-40615-7` tokenises into five short numbers and
+    /// `9780306406157` into one, and neither prefix-matches the other.
+    @Test("search finds a book by its ISBN, hyphens or no hyphens")
+    func searchByISBN() async throws {
+        let index = try LibraryIndex(inMemory: "search-isbn")
+        let hyphenated = entry(title: "One", isbn: "978-0-306-40615-7", number: 1)
+        let plain = entry(title: "Two", isbn: "9780061054884", number: 2)
+        try await index.save([hyphenated, plain])
+
+        #expect(try await index.search("9780306406157") == [hyphenated.id])
+        #expect(try await index.search("978-0-306-40615-7") == [hyphenated.id])
+        #expect(try await index.search("9780061054884") == [plain.id])
+        #expect(try await index.search("9780061054000").isEmpty)
+    }
+
+    /// The claim the sprint brief asks to be proved: an edit reaches the search
+    /// index in the *same* write, not on the next reload.
+    @Test("a changed description is findable at once, and an old one is not")
+    func searchAfterDescriptionChange() async throws {
+        let index = try LibraryIndex(inMemory: "search-description")
+        var book = entry(title: "Anything", description: "An ambassador arrives.", number: 1)
+        try await index.save(book)
+        #expect(try await index.search("ambassador") == [book.id])
+
+        book.book.description = "A librarian departs."
+        try await index.save(book)
+        #expect(try await index.search("ambassador").isEmpty)
+        #expect(try await index.search("librarian") == [book.id])
+    }
+
+    @Test("a removed tag stops being findable")
+    func searchAfterTagRemoval() async throws {
+        let index = try LibraryIndex(inMemory: "search-tags")
+        var book = entry(title: "Anything", tags: ["space opera", "classics"], number: 1)
+        try await index.save(book)
+        #expect(try await index.search("opera") == [book.id])
+
+        guard case .changed(let edited) = TagEdit.remove("Space Opera", from: book.book) else {
+            Issue.record("the tag was not removed")
+            return
+        }
+        book.book = edited
+        try await index.save(book)
+        #expect(try await index.search("opera").isEmpty)
+        // The tag that stayed is still found, so the row was rewritten and not
+        // merely emptied.
+        #expect(try await index.search("classics") == [book.id])
+        #expect(try await index.tagFacets() == [LibraryIndex.Facet(name: "classics", count: 1)])
+    }
+
     // MARK: Facets
 
     @Test("the sidebar's counts come from one query per kind")
@@ -391,5 +444,89 @@ struct LibraryIndexTests {
         } catch {
             Issue.record("unexpected error: \(error)")
         }
+    }
+}
+
+/// The migration that gives an existing library ISBN search.
+///
+/// Its own suite because it does not go through `LibraryIndex`: the point is a
+/// database that was written by the *previous* version of the schema, which is
+/// the only state in which migration 2 ever runs. An index is rebuildable, but
+/// "just rebuild it" is not an answer for somebody with a library open — and a
+/// migration that has never been run against a v1 database is a migration
+/// nobody has tested (Leitlinie: "Schema-Änderungen nur per versionierter
+/// Migration").
+@Suite("Migrating an index that already exists")
+struct IndexMigrationTests {
+
+    @Test("a library indexed before Sprint 2b becomes searchable by ISBN without a rebuild")
+    func searchTableIsRefilled() throws {
+        let queue = try DatabaseQueue()
+        try IndexSchema.migrator.migrate(queue, upTo: "v1-books")
+
+        // A book as the old schema held it, written by hand: this is what is on
+        // somebody's disk, not what the current code would produce.
+        let id = UUID().uuidString
+        let seriesID = UUID().uuidString
+        let tagID = UUID().uuidString
+        try queue.write { database in
+            try database.execute(
+                sql: "INSERT INTO series (id, name, name_sort) VALUES (?, ?, ?)",
+                arguments: [seriesID, "Hainish Cycle", "Hainish Cycle"])
+            try database.execute(
+                sql: """
+                    INSERT INTO books
+                        (id, number, folder, title, title_sort, series_id, series_index,
+                         description, added_at, modified_at)
+                    VALUES (?, 1, 'Le Guin, Ursula/The Dispossessed (1)', 'The Dispossessed',
+                            'Dispossessed, The', ?, 6, 'Two worlds, one wall.', ?, ?)
+                    """,
+                arguments: [id, seriesID, Date(), Date()])
+            try database.execute(sql: "INSERT INTO tags (id, name) VALUES (?, 'utopia')", arguments: [tagID])
+            try database.execute(
+                sql: "INSERT INTO book_tags (book_id, tag_id) VALUES (?, ?)", arguments: [id, tagID])
+            try database.execute(
+                sql: "INSERT INTO identifiers (book_id, scheme, value) VALUES (?, 'isbn', ?)",
+                arguments: [id, "978-0-06-105488-4"])
+            try database.execute(
+                sql: "INSERT INTO identifiers (book_id, scheme, value) VALUES (?, 'isbn_normalised', ?)",
+                arguments: [id, "9780061054884"])
+            // The old search row, without an isbn column.
+            try database.execute(
+                sql: """
+                    INSERT INTO search (title, authors, series, tags, description, book_id)
+                    VALUES ('The Dispossessed', '', 'Hainish Cycle', 'utopia',
+                            'Two worlds, one wall.', ?)
+                    """,
+                arguments: [id])
+        }
+
+        try IndexSchema.migrator.migrate(queue)
+
+        // Read out first, asserted after: `try` inside an `#expect` in a
+        // closure is not a context the macro can expand into.
+        let hits = try queue.read { database -> [String: [String]] in
+            var result: [String: [String]] = [:]
+            for term in ["9780061054884", "978-0-06-105488-4", "dispossessed", "hainish", "utopia", "wall"] {
+                result[term] = try String.fetchAll(
+                    database, sql: "SELECT book_id FROM search WHERE search MATCH ?",
+                    arguments: [LibraryIndex.ftsPattern(for: term)])
+            }
+            return result
+        }
+        let rows = try queue.read { database in
+            try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM search") ?? 0
+        }
+
+        // The new column answers.
+        #expect(hits["9780061054884"] == [id])
+        #expect(hits["978-0-06-105488-4"] == [id])
+        // And nothing the old row could already answer was lost.
+        #expect(hits["dispossessed"] == [id])
+        #expect(hits["hainish"] == [id])
+        #expect(hits["utopia"] == [id])
+        #expect(hits["wall"] == [id])
+        // One row per book, not two: the old table was dropped, not added to.
+        #expect(rows == 1)
     }
 }

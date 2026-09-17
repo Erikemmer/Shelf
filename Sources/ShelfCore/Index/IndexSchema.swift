@@ -26,6 +26,16 @@ enum IndexSchema {
         migrator.registerMigration("v1-books") { database in
             try create(in: database)
         }
+        // CONCEPT §4 asks for search over "title, author, series, tags,
+        // description, ISBN" and v1 had the first five. An FTS5 table has no
+        // `ALTER TABLE … ADD COLUMN`, so the table is rebuilt and refilled from
+        // the tables it summarises – which is also the proof that it *can* be
+        // refilled from them, since that is what a rebuild does.
+        migrator.registerMigration("v2-search-by-isbn") { database in
+            try database.execute(sql: "DROP TABLE IF EXISTS search")
+            try createSearchTable(in: database)
+            try refillSearchTable(in: database)
+        }
         return migrator
     }()
 
@@ -192,13 +202,20 @@ enum IndexSchema {
             table.primaryKey(["device_id", "path"])
         }
 
-        // MARK: Full-text search
-        //
-        // A plain FTS5 table rather than one contentful over `books`: the text
-        // that is searched spans five tables (title, authors, series, tags,
-        // description), and there is no single row to point an external-content
-        // table at. `LibraryIndex` writes this row whenever it writes a book,
-        // which keeps the two in step in one place instead of in five triggers.
+        try createSearchTable(in: database)
+    }
+
+    // MARK: Full-text search
+    //
+    // A plain FTS5 table rather than one contentful over `books`: the text that
+    // is searched spans six tables (title, authors, series, tags, description,
+    // identifiers), and there is no single row to point an external-content
+    // table at. `LibraryIndex` writes this row whenever it writes a book, which
+    // keeps the two in step in one place instead of in six triggers.
+    //
+    // Its own function because migration 2 has to build the same table again:
+    // two copies of a column list are two column lists that will differ.
+    private static func createSearchTable(in database: Database) throws {
         try database.create(virtualTable: "search", using: FTS5()) { table in
             table.tokenizer = .unicode61(diacritics: .removeLegacy)
             table.column("title")
@@ -206,9 +223,40 @@ enum IndexSchema {
             table.column("series")
             table.column("tags")
             table.column("description")
+            // Both spellings of the ISBN go in here – what the book claims and
+            // the normalised form – so `978-0-306-40615-7` and `9780306406157`
+            // are both found, whichever one is typed.
+            table.column("isbn")
             // Not searched, only carried, so a hit can be turned back into a
             // book without a join on a rowid nobody stored.
             table.column("book_id").notIndexed()
         }
+    }
+
+    /// Fills the search table from the tables it summarises.
+    ///
+    /// One statement rather than a loop in Swift: a library of 5 000 books
+    /// migrates in one pass instead of 5 000 round trips, and the row a book
+    /// gets here is the same row `LibraryIndex.writeSearchRow` would write.
+    private static func refillSearchTable(in database: Database) throws {
+        try database.execute(
+            sql: """
+                INSERT INTO search (title, authors, series, tags, description, isbn, book_id)
+                SELECT b.title,
+                       COALESCE((SELECT group_concat(a.name, ' ') FROM book_authors ba
+                                  JOIN authors a ON a.id = ba.author_id
+                                 WHERE ba.book_id = b.id), ''),
+                       COALESCE(s.name, ''),
+                       COALESCE((SELECT group_concat(t.name, ' ') FROM book_tags bt
+                                  JOIN tags t ON t.id = bt.tag_id
+                                 WHERE bt.book_id = b.id), ''),
+                       COALESCE(b.description, ''),
+                       COALESCE((SELECT group_concat(i.value, ' ') FROM identifiers i
+                                 WHERE i.book_id = b.id
+                                   AND i.scheme IN ('isbn', 'isbn_normalised')), ''),
+                       b.id
+                FROM books b
+                LEFT JOIN series s ON s.id = b.series_id
+                """)
     }
 }

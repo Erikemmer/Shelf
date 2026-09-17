@@ -221,8 +221,8 @@ public final class LibraryIndex: Sendable {
         try database.execute(sql: "DELETE FROM search WHERE book_id = ?", arguments: [id])
         try database.execute(
             sql: """
-                INSERT INTO search (title, authors, series, tags, description, book_id)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO search (title, authors, series, tags, description, isbn, book_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
             arguments: [
                 entry.book.title,
@@ -230,8 +230,20 @@ public final class LibraryIndex: Sendable {
                 entry.book.series?.name ?? "",
                 entry.book.tags.joined(separator: " "),
                 entry.book.description ?? "",
+                Self.searchableISBNs(of: entry.book),
                 id,
             ])
+    }
+
+    /// The ISBN as the file spells it *and* normalised, so a search finds the
+    /// book whichever way it is typed: `978-0-306-40615-7` tokenises into five
+    /// short numbers, `9780306406157` into one, and neither prefix-matches the
+    /// other.
+    private static func searchableISBNs(of book: Book) -> String {
+        var spellings: [String] = []
+        if let raw = book.identifiers["isbn"], !raw.isEmpty { spellings.append(raw) }
+        if let normalised = book.isbn, !spellings.contains(normalised) { spellings.append(normalised) }
+        return spellings.joined(separator: " ")
     }
 
     // MARK: Lookup tables
@@ -439,7 +451,8 @@ public final class LibraryIndex: Sendable {
 
     // MARK: Search
 
-    /// Full-text search over title, authors, series, tags and description.
+    /// Full-text search over title, authors, series, tags, description and
+    /// ISBN – the six CONCEPT §4 lists under "Must".
     ///
     /// The user's words are turned into a prefix query – "tolk" finds Tolkien –
     /// and quoted, so a search for `AND` or a stray `"` is looked for rather
