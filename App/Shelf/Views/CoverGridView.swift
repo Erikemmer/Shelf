@@ -76,66 +76,34 @@ struct CoverGridView: View {
                 .focusEffectDisabled()
                 .focused($isFocused)
                 .onAppear { isFocused = true }
-                .onKeyPress(phases: .down) { press in editingKey(press) }
             }
         }
     }
 
-    /// Brings the keyboard back to the grid after a click on a cover.
+    /// Takes the keyboard back after a click on a cover.
     ///
-    /// Not simply `isFocused = true`, and the difference is the whole point.
-    /// Once a text field in the inspector has been typed in and given focus up,
-    /// the accessibility tree reports the *window* as focused and no control at
-    /// all — but the grid's own `@FocusState` still says `true`. Assigning the
-    /// value it already holds is not a change, so nothing happens, and 1–5, 0,
-    /// R and T stay dead until the window is closed and opened again.
+    /// Two steps, because SwiftUI's focus and AppKit's first responder are two
+    /// things and only one of them decides where a key press goes.
     ///
-    /// Clearing it first is what makes the second assignment a change. The hop
-    /// through the main queue is needed too: both assignments in one turn of the
-    /// run loop collapse into "no change" again.
+    /// **`makeFirstResponder(nil)`** is the one that matters. Without it the
+    /// search field – or any inspector field – keeps the keyboard after a cover
+    /// is clicked, so pressing 3 types a "3" into the search box instead of
+    /// rating the book. Measured: click a cover, press 1, and the library
+    /// filters to "21". Handing the window itself the keyboard is what the
+    /// editing keys watch for (`EditingKeyMonitor` refuses to act while text is
+    /// being typed into, which is exactly right and exactly the problem when
+    /// the text field will not let go).
     ///
-    /// Sprint 2a had the same line for the same reason ("otherwise clicking a
-    /// book and pressing 3 does nothing") and it worked, because the only other
-    /// focusable thing was the search field and clicking a cover really did take
-    /// focus from it. Sprint 2b put nine text fields in the inspector and the
-    /// state got out of step; found by pressing 3 after typing a tag and
-    /// watching the rating stay at 0.
+    /// **The `@FocusState` dance** is for the arrow keys, which are SwiftUI's.
+    /// Assigning `true` to a state that already holds `true` is not a change,
+    /// and after a field has held focus the grid's state says `true` while the
+    /// keyboard is elsewhere; clearing it first, and setting it on the next turn
+    /// of the run loop, is what makes it a change.
     private func takeFocus() {
+        model.releaseSearchFocus()
+        NSApp.keyWindow?.makeFirstResponder(nil)
         isFocused = false
         DispatchQueue.main.async { isFocused = true }
-    }
-
-    /// The editing keys: 1–5 rate, 0 clears, R marks read or unread, T puts the
-    /// keyboard in the inspector's tag field (CONCEPT §3.3).
-    ///
-    /// Handled here and *not* as menu key equivalents, which is how the arrow
-    /// keys are done. A menu key equivalent goes through
-    /// `-[NSMenu performKeyEquivalent:]`, and a `sample` of a held arrow key
-    /// showed what that costs: 31 % of the run inside
-    /// `NSMENU_IS_THROTTLING_REPEATED_MENU_ITEM_INVOCATIONS` calling `usleep`
-    /// on the main thread, and another 27 % highlighting and unhighlighting the
-    /// menu bar, which drags a full window layout behind it each time. A plain
-    /// digit would also be swallowed before the search field ever saw it, so
-    /// "1984" could not be typed into it.
-    private func editingKey(_ press: KeyPress) -> KeyPress.Result {
-        guard model.selectedEntry != nil else { return .ignored }
-        switch press.characters.lowercased() {
-        case "0":
-            model.clearRating(undoManager: undoManager)
-        case let digit where ("1"..."5").contains(digit):
-            model.setStars(Int(digit) ?? 0, undoManager: undoManager)
-        case "r":
-            model.toggleRead(undoManager: undoManager)
-        case "t":
-            // Focus, not a write: T opens the tag field and the person types.
-            // It also shows the inspector if it is hidden, because asking for a
-            // field in a hidden panel can only mean "show me the panel".
-            model.focusTagField()
-        default:
-            return .ignored
-        }
-        model.noteInteraction()
-        return .handled
     }
 
     /// How many cells fit, at least one. The padding and spacing are the ones
@@ -222,6 +190,10 @@ struct SearchField: View {
             .textFieldStyle(.plain)
             .focused($isFocused)
             .onSubmit { isFocused = false }
+            // Escape gives the keyboard up as well as ⏎ does. Without it the
+            // search field keeps it, and the editing keys – which stay out of
+            // text on purpose – have nowhere to go.
+            .onExitCommand { isFocused = false }
             if !model.filter.searchText.isEmpty {
                 Button {
                     model.filter.searchText = ""
@@ -237,6 +209,15 @@ struct SearchField: View {
         .background(Slate.contentBackground, in: RoundedRectangle(cornerRadius: Slate.cornerRadius))
         .help("Search titles, authors, series, tags and descriptions (⌘F)")
         .onReceive(of: model.focusSearchRequest) { isFocused = true }
+        // Kept in step with the model in both directions. The model has to be
+        // able to *take* the keyboard away – clicking a cover does – and a
+        // one-way binding cannot do that: SwiftUI would put the focus straight
+        // back and the next digit would be typed into the search box instead
+        // of rating the book.
+        .onChange(of: isFocused) { _, focused in model.isSearchFocused = focused }
+        .onChange(of: model.isSearchFocused) { _, wanted in
+            if isFocused != wanted { isFocused = wanted }
+        }
     }
 }
 

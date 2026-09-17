@@ -33,33 +33,49 @@ struct InspectorView: View {
     @State private var identifierAdds = 0
 
     var body: some View {
-        ScrollView {
-            if let entry = model.selectedEntry {
-                VStack(alignment: .leading, spacing: 16) {
-                    cover(for: entry)
-                    title(for: entry)
-                    rating(for: entry)
-                    facts(for: entry)
-                    identifiers(for: entry)
-                    tags(for: entry)
-                    description(for: entry)
-                    formats(for: entry)
-                    actions(for: entry)
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                // A different book means different values in every field, and
-                // the half-typed scheme of an identifier is not one of them.
-                .onChange(of: entry.id) { _, _ in newIdentifierScheme = "" }
-            } else {
-                Text("No book selected.")
-                    .foregroundStyle(Slate.textSecondary)
+        ScrollViewReader { scroller in
+            ScrollView {
+                if let entry = model.selectedEntry {
+                    VStack(alignment: .leading, spacing: 16) {
+                        cover(for: entry)
+                        title(for: entry)
+                        rating(for: entry)
+                        facts(for: entry)
+                        identifiers(for: entry)
+                        tags(for: entry).id(Self.tagsAnchor)
+                        description(for: entry)
+                        formats(for: entry)
+                        actions(for: entry)
+                    }
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // A different book means different values in every field,
+                    // and the half-typed scheme of an identifier is not one of
+                    // them.
+                    .onChange(of: entry.id) { _, _ in newIdentifierScheme = "" }
+                } else {
+                    Text("No book selected.")
+                        .foregroundStyle(Slate.textSecondary)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            // T focuses the tag field, and the tag field is usually below the
+            // fold: in a 280-point column the cover, the title block, the
+            // rating, five details and the identifiers come first. A field that
+            // takes focus off screen is a field nobody can see they are typing
+            // into — the first screenshot taken after T showed the inspector
+            // exactly where it had been, with the keyboard somewhere below it.
+            .onChange(of: model.focusTagFieldRequest) { _, _ in
+                withAnimation(.easeOut(duration: 0.15)) {
+                    scroller.scrollTo(Self.tagsAnchor, anchor: .center)
+                }
             }
         }
         .background(Slate.panelBackground)
     }
+
+    private static let tagsAnchor = "tags"
 
     // MARK: Cover
 

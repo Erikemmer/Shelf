@@ -51,8 +51,24 @@ final class LibraryModel {
     /// row focuses the field twice instead of once.
     private(set) var focusSearchRequest = 0
 
+    /// Whether the search field holds the keyboard.
+    ///
+    /// The model owns it because something *else* has to be able to take it
+    /// away: clicking a cover. AppKit's `makeFirstResponder(nil)` is not enough
+    /// on its own — SwiftUI still believes the field is focused and puts the
+    /// keyboard straight back, so the next digit is typed into the search box
+    /// instead of rating the book. Measured: click a cover, press 1, and the
+    /// library filters to "anc1".
+    var isSearchFocused = false
+
     func focusSearch() {
         focusSearchRequest += 1
+        isSearchFocused = true
+    }
+
+    /// Called when the grid takes the keyboard back.
+    func releaseSearchFocus() {
+        isSearchFocused = false
     }
 
     // MARK: The sidebar's contents

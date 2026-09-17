@@ -8,6 +8,12 @@ import UniformTypeIdentifiers
 /// Sidebar (left) · Cover grid (centre) · Inspector (right).
 struct ContentView: View {
     @Environment(LibraryModel.self) private var model
+    /// The window's undo manager, so a key press lands on the same undo stack
+    /// as a click in the inspector.
+    @Environment(\.undoManager) private var undoManager
+    /// 1–5, 0, R and T, watched at the window. See `EditingKeyMonitor` for why
+    /// they are neither menu shortcuts nor a view's `.onKeyPress`.
+    @State private var editingKeys = EditingKeyMonitor()
 
     var body: some View {
         Group {
@@ -30,6 +36,35 @@ struct ContentView: View {
         ) {
             ImportSheet().environment(model)
         }
+        .onAppear { editingKeys.start(handleEditingKey) }
+        .onDisappear { editingKeys.stop() }
+    }
+
+    /// The editing keys. Returns true when the key was used, which is what
+    /// keeps it from travelling on to anything else.
+    ///
+    /// Nothing happens without a selected book, and nothing happens without a
+    /// library – so the keys are inert on the welcome screen rather than being
+    /// swallowed there.
+    private func handleEditingKey(_ characters: String) -> Bool {
+        guard model.library != nil, model.selectedEntry != nil else { return false }
+        switch characters {
+        case "0":
+            model.clearRating(undoManager: undoManager)
+        case let digit where ("1"..."5").contains(digit):
+            model.setStars(Int(digit) ?? 0, undoManager: undoManager)
+        case "r":
+            model.toggleRead(undoManager: undoManager)
+        case "t":
+            // Focus, not a write: T opens the tag field and the person types.
+            // It also shows the inspector if it is hidden, because asking for a
+            // field in a hidden panel can only mean "show me the panel".
+            model.focusTagField()
+        default:
+            return false
+        }
+        model.noteInteraction()
+        return true
     }
 
     private var workspace: some View {
