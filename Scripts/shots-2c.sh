@@ -136,6 +136,39 @@ shiftClick() {
 keys() { osascript -e "tell application \"System Events\" to keystroke \"$1\" using command down" >/dev/null 2>&1; }
 tree() { swift "$HERE/ax-dump.swift" "$PID" 14 2>/dev/null; }
 
+# `grep -c`, never `grep -q`, on the far side of a pipe from something that is
+# still writing — the same trap `screen-awake.sh` documents for `ioreg`, and it
+# was in four more places here.
+#
+# Every one of these scripts runs under `set -o pipefail`. `grep -q` stops at
+# the first match, so the accessibility dump on the other side of the pipe gets
+# SIGPIPE, the *pipeline* reports 141, and a successful match reads as a
+# failure. Measured in bash, three runs out of three, against a tree that
+# plainly contained the pattern:
+#
+#     tree | grep -q "AXOutlineRow"   ->  status 141
+#     tree | grep -c "AXOutlineRow"   ->  status 0, count 120
+#
+# It hid for a whole run of screenshots as "⌘2 did not show the table". The
+# table was there; the question could not be asked. It also hides depending on
+# how much the producer had written when grep quit, which is why the same
+# pattern of code passes in one place and fails in another.
+#
+# A first check of this ran in zsh, where it came back 0 and looked fine. The
+# scripts are bash.
+tree_has() {
+    local count
+    count=$(tree | grep -c "$1")
+    [ "${count:-0}" -gt 0 ]
+}
+
+# The same, for a string already in hand — no pipe, so no trap, but one way of
+# asking is better than two.
+text_has() {
+    case "$1" in (*"$2"*) return 0 ;; esac
+    return 1
+}
+
 # Wait for the window to show something, rather than asking once and believing
 # the answer. A fixed `sleep` is a guess about a machine's mood: the first run
 # of this script with the screen awake read the tree 2.5 s after ⌘2 and found no
@@ -149,7 +182,7 @@ tree() { swift "$HERE/ax-dump.swift" "$PID" 14 2>/dev/null; }
 await_tree() {
     local pattern="$1" seconds="$2" what="$3" waited=0
     while [ "$waited" -lt "$seconds" ]; do
-        tree | grep -q "$pattern" && return 0
+        tree_has "$pattern" && return 0
         sleep 1
         waited=$((waited + 1))
     done
@@ -210,10 +243,10 @@ say "window size: $SIZE"
 # nothing that follows means anything. The first run of this script found it in
 # a state where the application element contained only itself, and every lookup
 # quietly answered nothing.
-tree | grep -q "AXWindow" || fail "the accessibility tree has no window in it – nothing below could be checked"
+tree_has "AXWindow" || fail "the accessibility tree has no window in it – nothing below could be checked"
 
 # ── 1: the sidebar, with nested shelves and their counts ─────────────────────
-tree | grep -q 'value="Science Fiction, 14 books"' || fail "the sidebar does not show the shelves"
+tree_has 'value="Science Fiction, 14 books"' || fail "the sidebar does not show the shelves"
 shoot shelves
 
 # ── 2: the table, sorted by a column ─────────────────────────────────────────

@@ -93,6 +93,39 @@ type_text() { osascript -e "tell application \"System Events\" to keystroke \"$1
 enter() { osascript -e 'tell application "System Events" to key code 36' >/dev/null 2>&1; }
 tree() { swift "$HERE/ax-dump.swift" "$PID" 14 2>/dev/null; }
 
+# `grep -c`, never `grep -q`, on the far side of a pipe from something that is
+# still writing — the same trap `screen-awake.sh` documents for `ioreg`, and it
+# was in four more places here.
+#
+# Every one of these scripts runs under `set -o pipefail`. `grep -q` stops at
+# the first match, so the accessibility dump on the other side of the pipe gets
+# SIGPIPE, the *pipeline* reports 141, and a successful match reads as a
+# failure. Measured in bash, three runs out of three, against a tree that
+# plainly contained the pattern:
+#
+#     tree | grep -q "AXOutlineRow"   ->  status 141
+#     tree | grep -c "AXOutlineRow"   ->  status 0, count 120
+#
+# It hid for a whole run of screenshots as "⌘2 did not show the table". The
+# table was there; the question could not be asked. It also hides depending on
+# how much the producer had written when grep quit, which is why the same
+# pattern of code passes in one place and fails in another.
+#
+# A first check of this ran in zsh, where it came back 0 and looked fine. The
+# scripts are bash.
+tree_has() {
+    local count
+    count=$(tree | grep -c "$1")
+    [ "${count:-0}" -gt 0 ]
+}
+
+# The same, for a string already in hand — no pipe, so no trap, but one way of
+# asking is better than two.
+text_has() {
+    case "$1" in (*"$2"*) return 0 ;; esac
+    return 1
+}
+
 # Typed one character at a time. `keystroke "Fiction"` sends the whole word at
 # once and the first letters land before the new row's text field has taken
 # focus – the shelf came out called "Fictin". A person types slower than
@@ -120,7 +153,7 @@ make_shelf() {
     # it rather than being appended to it.
     select_all; sleep 0.3
     slow_type "$1"; enter; sleep 1.5
-    tree | grep -q "\"$1, [0-9]* book" || fail "the shelf was not named $1 – the sidebar says:
+    tree_has "\"$1, [0-9]* book" || fail "the shelf was not named $1 – the sidebar says:
        $(tree | grep -o 'value="[^"]*, [0-9]* books"' | tr '\n' ' ')"
     say "made a shelf: $1"
 }
@@ -134,7 +167,7 @@ make_shelf "Someday"
 front; sleep 0.4
 drag "desc=Show Sci-Fi —" "desc=Show Fiction —" || fail "could not drag Sci-Fi onto Fiction"
 sleep 1.5
-tree | grep -q 'help="Show Fiction/Sci-Fi' \
+tree_has 'help="Show Fiction/Sci-Fi' \
     || fail "Sci-Fi did not go inside Fiction (the tree still shows it at the top)"
 say "dragged Sci-Fi inside Fiction"
 
@@ -158,8 +191,8 @@ say "  ${OPF#"$LIBRARY"/}"
 # Matched without naming the attribute: a shelf with children comes out of the
 # accessibility tree as a button carrying its label in `desc`, and one without
 # as static text carrying it in `value`.
-tree | grep -q '"Sci-Fi, 1 book"' || fail "the sidebar does not count the book on Sci-Fi"
-tree | grep -q '"Fiction, 1 book"' \
+tree_has '"Sci-Fi, 1 book"' || fail "the sidebar does not count the book on Sci-Fi"
+tree_has '"Fiction, 1 book"' \
     || fail "Fiction does not count the book on the shelf inside it"
 say "the sidebar counts 1 on Sci-Fi and 1 on Fiction, which contains it"
 
@@ -172,8 +205,8 @@ click "text=Remove Shelf…" || fail "the menu has no Remove Shelf… item"
 sleep 1
 # The confirmation has to name the shelf and how many books come off it.
 QUESTION=$(tree | grep -o 'value="Remove “[^"]*"' | head -1)
-echo "$QUESTION" | grep -q 'Fiction' || fail "the confirmation does not name the shelf: $QUESTION"
-echo "$QUESTION" | grep -qE 'One book|[0-9]+ books' \
+text_has "$QUESTION" "Fiction" || fail "the confirmation does not name the shelf: $QUESTION"
+[ "$(printf '%s' "$QUESTION" | grep -cE 'One book|[0-9]+ books')" -gt 0 ] \
     || fail "the confirmation does not say how many books come off: $QUESTION"
 say "the confirmation says: $(echo "$QUESTION" | sed 's/^value="//; s/"$//')"
 click "desc=Remove Shelf" || fail "could not confirm the removal"
@@ -198,7 +231,7 @@ say "deleted the index ($((BEFORE_BYTES / 1024)) KB) – only the folders and li
 
 (cd "$ROOT" && swift run --scratch-path "$SCRATCH" shelf-tool rebuild "$LIBRARY" 2>&1) | sed 's/^/  /'
 
-sqlite3 "$INDEX" "SELECT COUNT(*) FROM shelves WHERE name = 'Someday'" | grep -qx "1" \
+[ "$(sqlite3 "$INDEX" "SELECT COUNT(*) FROM shelves WHERE name = 'Someday'")" = "1" ] \
     || fail "the empty shelf did not survive the rebuild"
 REBUILT_BOOKS=$(sqlite3 "$INDEX" "SELECT COUNT(*) FROM books")
 [ "$REBUILT_BOOKS" = "$BOOKS_AFTER" ] || fail "the rebuild found $REBUILT_BOOKS books, not $BOOKS_AFTER"
