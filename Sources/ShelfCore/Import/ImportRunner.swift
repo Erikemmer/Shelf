@@ -79,11 +79,35 @@ public struct ImportRunner: Sendable {
         public var nextBookNumber: Int
     }
 
+    /// How many books go into the index at a time while the run is going on.
+    ///
+    /// One transaction for 5 000 books holds a lot of memory and one per book
+    /// would be 5 000 fsyncs; 200 is the same order the callers already used
+    /// when they saved everything at the end.
+    public static let indexBatchSize = 200
+
     /// Runs the plan. Per-file problems end up in the report; only a problem
     /// that makes the whole run pointless is thrown.
+    ///
+    /// - Parameter saveBatch: called with each batch of finished books **while
+    ///   the run is going on**, and once more with whatever is left at the end.
+    ///
+    ///   It exists because an interrupted import used to leave files on the
+    ///   disk that nothing knew about. The index was written once, by the
+    ///   caller, after the last file — so killing a run of 2 000 books left
+    ///   1 394 books on disk and an index holding none, and the *next* run
+    ///   planned all 2 000 again and copied them into new folders. Measured:
+    ///   3 394 files where 2 000 belonged. Nothing was lost and nothing was
+    ///   overwritten, which is why it went unnoticed; it simply was not the
+    ///   resume ADR 0002 decision 6 claims.
+    ///
+    ///   A book reaches this closure only once its file, its cover and its
+    ///   `metadata.opf` are all on disk, so an index written from here never
+    ///   describes a book that is not there.
     public func run(
         _ options: Options,
-        progress: @Sendable @escaping (Progress) -> Void = { _ in }
+        progress: @Sendable @escaping (Progress) -> Void = { _ in },
+        saveBatch: @Sendable (_ entries: [LibraryEntry]) async throws -> Void = { _ in }
     ) async throws -> Outcome {
         let started = Date()
         try checkSpace(for: options)
@@ -97,6 +121,8 @@ public struct ImportRunner: Sendable {
         var newBookCount = 0
         var addedFormatCount = 0
         var highestNumber = 0
+        // Books finished since the last time the index was written.
+        var unsaved: [LibraryEntry] = []
 
         let total = options.plan.totalBytes
         var done: Int64 = 0
@@ -119,6 +145,7 @@ public struct ImportRunner: Sendable {
                 case .newBook(let new):
                     let entry = try writeNewBook(new, in: options.library)
                     entries[entry.book.id] = entry
+                    unsaved.append(entry)
                     order.append(entry.book.id)
                     highestNumber = max(highestNumber, new.number)
                     newBookCount += 1
@@ -129,6 +156,7 @@ public struct ImportRunner: Sendable {
                     let existing = entries[add.bookID]
                     let entry = try appendFormat(add, to: existing, in: options.library)
                     entries[entry.book.id] = entry
+                    unsaved.append(entry)
                     if !order.contains(entry.book.id) { order.append(entry.book.id) }
                     addedFormatCount += 1
                 }
@@ -138,6 +166,21 @@ public struct ImportRunner: Sendable {
                 failures.append(.init(path: candidate.source.path, message: message(for: error)))
             }
             done += candidate.byteSize
+
+            // Into the index as we go, so an interruption leaves an index that
+            // matches the folder rather than an empty one.
+            if unsaved.count >= Self.indexBatchSize {
+                try await saveBatch(unsaved)
+                unsaved.removeAll(keepingCapacity: true)
+            }
+        }
+
+        // The last, short batch. Before the cancellation bookkeeping below, so a
+        // run that was cut off still hands over everything it did finish — which
+        // is the whole of what makes the next run a resume rather than a repeat.
+        if !unsaved.isEmpty {
+            try? await saveBatch(unsaved)
+            unsaved.removeAll()
         }
 
         // Whatever happened – finished, cancelled or full of errors – nothing

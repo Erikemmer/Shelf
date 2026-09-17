@@ -97,10 +97,15 @@ final class ImportModel {
                 foldersByBook: try await foldersByBook())
             let descriptor = try library.readDescriptor()
             nextBookNumber = descriptor.nextBookNumber
+            // The stored counter, or the highest number already on the disk if a
+            // killed run got further than the descriptor did. It never goes
+            // backwards, so a deleted book's number is still not reused.
+            let startingNumber = max(
+                descriptor.nextBookNumber, try await index.highestBookNumber() + 1)
             plan = ImportPlanner.plan(
                 candidates: candidates,
                 knowledge: knowledge,
-                startingNumber: descriptor.nextBookNumber,
+                startingNumber: startingNumber,
                 existingFolders: Self.existingFolders(library))
             phase = .ready
         } catch {
@@ -145,17 +150,20 @@ final class ImportModel {
         do {
             // The handle is kept because cancellation does not otherwise reach
             // a detached task.
-            let outcome = try await runner.run(options) { progress in
-                Task { @MainActor [weak self] in
-                    guard let self, case .running = self.phase else { return }
-                    self.phase = .running(progress)
-                }
-            }
-            // The index is written in batches: one transaction for thousands of
-            // books holds a lot of memory, one per book would be as many fsyncs.
-            for batch in outcome.entries.chunked(into: 500) {
-                try await index.save(batch)
-            }
+            // The index is written in batches **while the run goes on**: one
+            // transaction for thousands of books holds a lot of memory, one per
+            // book would be as many fsyncs, and writing it only at the end
+            // meant an import stopped halfway left files on disk that nothing
+            // knew about — so the next run copied every one of them again.
+            let outcome = try await runner.run(
+                options,
+                progress: { progress in
+                    Task { @MainActor [weak self] in
+                        guard let self, case .running = self.phase else { return }
+                        self.phase = .running(progress)
+                    }
+                },
+                saveBatch: { try await index.save($0) })
             imported = outcome.entries
             nextBookNumber = outcome.nextBookNumber
             try? outcome.report.append(to: library)

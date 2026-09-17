@@ -174,30 +174,31 @@ enum Commands {
             titleKeys: try await index.allTitleKeys(),
             formatsByBook: try await formatsByBook(index),
             foldersByBook: try await foldersByBook(index))
+        // The stored counter, or the highest number already on the disk if a
+        // killed run got further than the descriptor did. It never goes
+        // backwards, so a deleted book's number is still not reused.
+        let plainStart = max(descriptor.nextBookNumber, try await index.highestBookNumber() + 1)
         let plan = ImportPlanner.plan(
-            candidates: candidates, knowledge: knowledge, startingNumber: descriptor.nextBookNumber,
+            candidates: candidates, knowledge: knowledge, startingNumber: plainStart,
             existingFolders: existingFolders(library))
         print("plan: \(plan.summary())")
 
         // MARK: Run
         let runner = ImportRunner(makeHasher: PortableSHA256Hasher.factory)
         let copyStarted = Date()
+        // In batches, and *while the run goes on*: one transaction for 5 000
+        // books holds a lot of memory, one per book would be 5 000 fsyncs, and
+        // an index written only at the end leaves an interrupted run's files
+        // invisible to the next one.
         let outcome = try await runner.run(
-            ImportRunner.Options(library: library, plan: plan, sourceDescription: source.path)
-        ) { progress in
-            if progress.filesDone > 0, progress.filesDone % 1_000 == 0 {
-                print("  copied \(progress.filesDone) / \(progress.filesTotal)")
-            }
-        }
-        print("copied and verified in \(ImportReport.duration(Date().timeIntervalSince(copyStarted)))")
-
-        let indexStarted = Date()
-        // In batches: one transaction for 5 000 books holds a lot of memory,
-        // and one per book would be 5 000 fsyncs.
-        for batch in outcome.entries.chunked(into: 500) {
-            try await index.save(batch)
-        }
-        print("indexed in \(ImportReport.duration(Date().timeIntervalSince(indexStarted)))")
+            ImportRunner.Options(library: library, plan: plan, sourceDescription: source.path),
+            progress: { progress in
+                if progress.filesDone > 0, progress.filesDone % 1_000 == 0 {
+                    print("  copied \(progress.filesDone) / \(progress.filesTotal)")
+                }
+            },
+            saveBatch: { try await index.save($0) })
+        print("copied, verified and indexed in \(ImportReport.duration(Date().timeIntervalSince(copyStarted)))")
 
         descriptor.nextBookNumber = outcome.nextBookNumber
         try library.write(descriptor)
@@ -345,24 +346,30 @@ enum Commands {
             titleKeys: try await index.allTitleKeys(),
             formatsByBook: try await formatsByBook(index),
             foldersByBook: try await foldersByBook(index))
+        // The stored counter, or the highest number already on the disk if a
+        // killed run got further than the descriptor did. It never goes
+        // backwards, so a deleted book's number is still not reused.
+        let startingNumber = max(descriptor.nextBookNumber, try await index.highestBookNumber() + 1)
         let plan = ImportPlanner.plan(
             candidates: read.candidates, knowledge: knowledge,
-            startingNumber: descriptor.nextBookNumber, existingFolders: existingFolders(library))
+            startingNumber: startingNumber, existingFolders: existingFolders(library))
         print("plan: \(plan.summary())")
 
         let runner = ImportRunner(makeHasher: PortableSHA256Hasher.factory)
         let copyStarted = Date()
+        // The index is written *while* the run goes on, so a run that is cut off
+        // leaves an index that matches the folder and the next run resumes
+        // instead of copying everything again.
         let outcome = try await runner.run(
             ImportRunner.Options(
-                library: library, plan: plan, sourceDescription: "Calibre library \(folder.path)")
-        ) { progress in
-            if progress.filesDone > 0, progress.filesDone % 500 == 0 {
-                print("  copied \(progress.filesDone) / \(progress.filesTotal)")
-            }
-        }
+                library: library, plan: plan, sourceDescription: "Calibre library \(folder.path)"),
+            progress: { progress in
+                if progress.filesDone > 0, progress.filesDone % 500 == 0 {
+                    print("  copied \(progress.filesDone) / \(progress.filesTotal)")
+                }
+            },
+            saveBatch: { try await index.save($0) })
         print("copied and verified in \(ImportReport.duration(Date().timeIntervalSince(copyStarted)))")
-
-        for batch in outcome.entries.chunked(into: 500) { try await index.save(batch) }
         descriptor.nextBookNumber = outcome.nextBookNumber
         try library.write(descriptor)
         try outcome.report.append(to: library)

@@ -231,6 +231,11 @@ public enum SyntheticCalibreLibrary {
         let bookFolder = folder.appending(path: relative)
         try manager.createDirectory(at: bookFolder, withIntermediateDirectories: true)
 
+        // `truncatingIfNeeded`, because `UInt8(number)` traps above 255 and a
+        // fixture is asked for two thousand books. It cost a proof run: the
+        // tool wrote 255 folders, crashed with SIGTRAP, and left a metadata.db
+        // of nought bytes behind a journal — which the census then read as a
+        // library with no tables, correctly and uselessly.
         let quirky = options.includeQuirks
         let fileIsMissing = quirky && number == 3
         let hasCover = !(quirky && number == 4)
@@ -242,7 +247,7 @@ public enum SyntheticCalibreLibrary {
         book.tags = [tagNames[(number - 1) % tagNames.count]]
         book.description = "Two worlds, one wall. Book \(number)."
         let fileName = "\(title) - \(author)"
-        let cover = hasCover ? MinimalPNG.cover(width: 60, height: 90, seed: UInt8(number)) : nil
+        let cover = hasCover ? MinimalPNG.cover(width: 60, height: 90, seed: UInt8(truncatingIfNeeded: number)) : nil
         let synthetic = SyntheticEPUB(book: book, cover: cover)
         let epub = synthetic.data()
 
