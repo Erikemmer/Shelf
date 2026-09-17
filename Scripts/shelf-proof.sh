@@ -9,6 +9,7 @@
 # What it checks, in order:
 #   1. a shelf can be made and named from the sidebar
 #   2. a shelf dragged onto another goes inside it
+#   2b. a shelf dragged onto the SHELVES heading comes back out of it
 #   3. a book dragged onto a shelf lands on it – and it is the *book's own file*
 #      that says so, read off the disk
 #   4. the sidebar's count agrees with the file
@@ -170,6 +171,24 @@ sleep 1.5
 tree_has 'help="Show Fiction/Sci-Fi' \
     || fail "Sci-Fi did not go inside Fiction (the tree still shows it at the top)"
 say "dragged Sci-Fi inside Fiction"
+
+# ── 2b: and back out again, onto the section heading ────────────────────
+# `ShelvesSection` has taken a drop on the heading since 2c — it is the only way
+# to get a shelf back out of another one, since there is nowhere else to drop it.
+# Nothing had ever run it. It is exercised here and then undone, because step 3
+# needs Sci-Fi back inside Fiction.
+front; sleep 0.4
+drag "desc=Show Fiction/Sci-Fi —" "text=SHELVES" || fail "could not drag Sci-Fi onto the Shelves heading"
+sleep 1.5
+tree_has 'help="Show Sci-Fi —' \
+    || fail "Sci-Fi did not come out of Fiction — the tree still shows it as Fiction/Sci-Fi"
+say "dragged Sci-Fi onto the SHELVES heading; it is back at the top level"
+
+front; sleep 0.4
+drag "desc=Show Sci-Fi —" "desc=Show Fiction —" || fail "could not put Sci-Fi back inside Fiction"
+sleep 1.5
+tree_has 'help="Show Fiction/Sci-Fi' || fail "Sci-Fi did not go back inside Fiction"
+say "and back inside Fiction, which is where the next step needs it"
 
 # ── 3: a book dragged onto a shelf ───────────────────────────────────────────
 front; sleep 0.4
