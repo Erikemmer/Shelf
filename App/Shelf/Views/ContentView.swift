@@ -89,13 +89,30 @@ struct ContentView: View {
             SidebarView()
                 .frame(width: Theme.sidebarWidth)
             Rectangle().fill(Slate.separator).frame(width: 1)
-            CoverGridView(focus: $focus)
+            content
             if model.isInspectorShown {
                 Rectangle().fill(Slate.separator).frame(width: 1)
                 InspectorView()
                     .frame(width: Theme.inspectorWidth)
             }
         }
+    }
+
+    /// The middle column: the strip, and under it whichever view is chosen.
+    ///
+    /// The switch is here rather than inside either view so that both of them
+    /// are only about drawing books — and so the strip above them is one strip
+    /// and not two that have to be kept alike.
+    private var content: some View {
+        VStack(spacing: 0) {
+            LibraryBar(focus: $focus)
+            Rectangle().fill(Slate.separator).frame(height: 1)
+            switch model.viewMode {
+            case .grid: CoverGridView(focus: $focus)
+            case .table: BookTableView(focus: $focus)
+            }
+        }
+        .background(Slate.contentBackground)
     }
 
     @ToolbarContentBuilder

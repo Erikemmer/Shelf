@@ -114,6 +114,14 @@ struct ShelfApp: App {
                 .keyboardShortcut("f", modifiers: .command)
                 .disabled(model.library == nil)
             Divider()
+            // In the Library menu rather than in Edit: SwiftUI's own Select All
+            // belongs to whatever text field has the keyboard, and putting this
+            // there would fight it. Here it means one thing — every book the
+            // filter is showing.
+            Button("Select All Books") { model.selectAll() }
+                .keyboardShortcut("a", modifiers: .command)
+                .disabled(model.library == nil)
+            Divider()
             Button("Previous Book") { model.selectPrevious() }
                 .keyboardShortcut(.leftArrow, modifiers: [])
                 .disabled(model.library == nil)

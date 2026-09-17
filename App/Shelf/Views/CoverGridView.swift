@@ -17,9 +17,7 @@ struct CoverGridView: View {
     @FocusState.Binding var focus: WindowFocus?
 
     var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            Rectangle().fill(Slate.separator).frame(height: 1)
+        Group {
             if model.visible.isEmpty {
                 emptyState
             } else {
@@ -85,36 +83,6 @@ struct CoverGridView: View {
         let usable = width - 40  // the grid's own padding
         guard usable > side else { return 1 }
         return max(1, Int((usable + 16) / (side + 16)))
-    }
-
-    // MARK: Toolbar
-
-    private var toolbar: some View {
-        HStack(spacing: 12) {
-            SortMenu()
-
-            Spacer(minLength: 8)
-
-            Text(model.filter.title)
-                .font(.callout)
-                .foregroundStyle(Slate.textSecondary)
-                .lineLimit(1)
-
-            Spacer(minLength: 8)
-
-            Slider(
-                value: Binding(get: { model.coverSide }, set: { model.coverSide = $0 }),
-                in: LibraryModel.coverSideRange
-            )
-            .frame(width: 110)
-            .help("Cover size (⌘+ / ⌘−)")
-
-            SearchField(focus: $focus)
-                .frame(width: 200)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Slate.panelBackground)
     }
 
     @ViewBuilder

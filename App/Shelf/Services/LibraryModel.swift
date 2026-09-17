@@ -447,6 +447,22 @@ final class LibraryModel {
         selectedBookID = entry.id
     }
 
+    /// The whole selection at once — what a table's own selection binding sets.
+    ///
+    /// The anchor is kept if it is still in there, and otherwise moved to
+    /// whichever of the selected books comes first on screen: the inspector has
+    /// to show one of the books that are selected, not one that is not.
+    func replaceSelection(_ ids: Set<UUID>) {
+        guard ids != selection else { return }
+        if let anchor = selectedBookID, ids.contains(anchor) {
+            selection = ids
+            return
+        }
+        let first = visible.first { ids.contains($0.id) }?.id ?? ids.first
+        selection = ids
+        setAnchorKeepingSelection(first)
+    }
+
     func selectAll() {
         guard !visible.isEmpty else { return }
         selection = Set(visible.map(\.id))
