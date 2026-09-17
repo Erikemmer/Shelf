@@ -3,6 +3,76 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 2b – All the fields, tags and series · 17 September 2026
+
+### Somebody has now seen the window
+
+The Screen Recording permission exists, so `Scripts/screenshots.sh` ran for the
+first time. Five shots in `docs/screenshots/sprint-1/`, Shelf and Selector at
+the same size (1440 × 877 points, 2880 × 1754 pixels), against a **120-book**
+library in `~/Library/Caches/Shelf/measure-library-2b`.
+
+**The four pixels, out of both files:**
+
+| point in the window | Shelf | Selector | |
+|---|---|---|---|
+| sidebar background | `#2B2B2B` | `#2B2B2B` | identical |
+| main area | `#161616` | `#293A41` | not comparable |
+| inspector background | `#2B2B2B` | `#2B2B2B` | identical |
+| selected sidebar row | `#52472F` | `#52472F` | identical |
+
+Three of the four are identical to the byte. The fourth is not a finding: the
+probe's second point sits in the middle of the content area, and Selector's is
+filled with a photograph while Shelf's is the empty ground behind a cover grid.
+A photograph cannot equal a background, so that point compares nothing. It is
+left in place and named here rather than quietly moved to a spot that would
+agree — the honest version of "looks like Selector" is *the chrome is the same
+colour, and the content is the content*.
+
+**What each shot shows, having looked at it:**
+
+- **`welcome.png`** — centred column, amber primary button, quiet dark ground:
+  Selector's welcome screen with Shelf's words in it. One real defect: the
+  shortcut line squeezes five hints into one row, so three of the five labels
+  wrap onto two and three lines ("Open / Library…", "Move / through the /
+  grid"). It is ragged and it is the first thing a new user reads. The line is
+  `SlateShortcutLine`, so the fix belongs in SlateKit. The app icon is still the
+  system placeholder (`AppIcon.appiconset` is empty — `docs/BACKLOG.md`). The
+  three greyed recent libraries with a "?" are correct: they no longer exist.
+- **`library.jpg`** — the three columns at Selector's proportions, five columns
+  of covers with captions, the selection in an amber ring. The inspector runs
+  cover → title → author → RATING → DETAILS → TAGS → DESCRIPTION → FORMATS,
+  which is the order CONCEPT §3.2 asks for. Nothing is cut off except the
+  caption row at the scroll edge, which is what a scroll edge does. Two defects,
+  both fixed in this sprint: the sidebar said "Shelves arrive in Sprint 2" while
+  Sprint 2 was running, and it wrote "epub" twelve centimetres from the
+  inspector's "EPUB".
+- **`sidebar.jpg`** — the sidebar scrolled down, which is the shot that shows
+  the defect the row cap fixes: AUTHORS now stops after twelve names with
+  "+ 85 more — use ⌘F", and SERIES (nine series with counts), FORMATS and
+  DEVICES are on screen behind it. Before the cap they were about a thousand
+  points below the fold. The library's own row stays pinned above the scroll
+  area with its amber tint, as Selector's collection header does.
+- **`import-sheet.jpg`** — the counting protocol before anything is copied:
+  "120 skipped · 0 B", the four counters at zero, the reason ("already in the
+  library (identical file)") and the sentence that the source is only read. The
+  primary button reads "Nothing to Import" and does nothing, which is the honest
+  label for that state. A centred overlay panel over a dimmed window — Selector's
+  idiom, not a system dialog.
+- **`selector-reference.jpg`** — Selector itself, and it answered two design
+  questions for this sprint rather than only confirming colours: its tag control
+  is a rounded field reading **"Add tag… (T)"** with the chips *beneath* it, and
+  its note control is the same shape reading **"Add a note… (N)"**. That is the
+  shape Shelf's tag and description fields take, so 2b copies a decision instead
+  of inventing one. It also settles a suspicion from the first Shelf shot: the
+  blue Inspector toggle in the toolbar is Selector's own look, not a Shelf
+  inconsistency.
+
+One observation that is data and not a defect: **"Unread" reads 120 of 120**,
+because a freshly imported EPUB carries no read status — `shelf:read` is Shelf's
+own field and the file has never had one. Correct, and it makes "Unread" useless
+as a subject for a screenshot until something has been marked read.
+
 ## Sprint 2a – Editing, one field all the way through · 17 September 2026
 
 Undo first, then one field through every layer: the rating, and with it the read
