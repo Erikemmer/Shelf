@@ -169,7 +169,13 @@ struct BookCell: View {
         SlateGridCell(
             side: side,
             title: entry.book.title,
-            isSelected: model.selectedBookID == entry.id
+            // `selection`, not `selectedBookID`. The latter is the *anchor* —
+            // where the arrow keys are and what the inspector leads with — and
+            // asking it meant a grid with eight books selected drew one border.
+            // The inspector said "8 books selected" the whole time, so the
+            // feature worked and only the picture of it was missing; found by
+            // looking at a screenshot, which no test would have done.
+            isSelected: model.selection.contains(entry.id)
         ) {
             coverImage
         } topLeading: {
