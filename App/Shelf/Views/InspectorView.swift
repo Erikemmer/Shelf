@@ -5,12 +5,17 @@ import SwiftUI
 
 /// The right column: everything about the selected book.
 ///
-/// **Reading only in Sprint 1.** Every field is shown the way it will be shown
-/// when it can be edited, so Sprint 2 is a change of controls and not a change
-/// of layout. Saying "read-only" once at the top is honest; greying out
-/// fourteen fields would only look broken.
+/// Sprint 2a made the first two fields editable – the rating and the read
+/// status – and it was the change of controls Sprint 1 laid out for, not a
+/// change of layout. Every edit goes through `LibraryModel.apply`, so it lands
+/// on the window's undo stack before it reaches the disk, and it writes
+/// `metadata.opf` and nothing else: a book file is never written (CONCEPT §4).
+/// The remaining fields are still read-only and become editable in 2b.
 struct InspectorView: View {
     @Environment(LibraryModel.self) private var model
+    /// The window's undo manager, not one of the inspector's own: ⌘Z has to
+    /// undo the change in the window it was made in.
+    @Environment(\.undoManager) private var undoManager
 
     var body: some View {
         ScrollView {
@@ -24,7 +29,6 @@ struct InspectorView: View {
                     description(for: entry)
                     formats(for: entry)
                     actions(for: entry)
-                    editingNote
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -68,11 +72,28 @@ struct InspectorView: View {
 
     private func rating(for entry: LibraryEntry) -> some View {
         SlateInspectorSection("Rating") {
-            // The control is the real one; the change it would make arrives in
-            // Sprint 2, so it reports nothing for now rather than pretending.
-            SlateStarRating(rating: entry.book.rating) { _ in }
-                .disabled(true)
-            SlateValueRow(name: "Read", value: entry.book.isRead ? "Yes" : "No")
+            // `stars`, not `rating`: the control counts to five and the model
+            // keeps Calibre's ten. Sprint 1 handed it `rating` unconverted, so
+            // anything rated 5 or more drew five full stars.
+            SlateStarRating(rating: entry.book.stars) { star in
+                model.setStars(star, undoManager: undoManager)
+            }
+            .help("1–5 sets the rating, 0 clears it; the same star again clears it")
+            // SlateKit labels the control but publishes no value, so the stars
+            // come out of the accessibility tree as an element with a name and
+            // nothing in it. Said here until SlateKit says it itself.
+            .accessibilityValue(Text("\(entry.book.stars) of 5"))
+
+            Toggle(
+                "Read",
+                isOn: Binding(
+                    get: { entry.book.isRead },
+                    set: { _ in model.toggleRead(undoManager: undoManager) })
+            )
+            .toggleStyle(.checkbox)
+            .foregroundStyle(Slate.textSecondary)
+            .font(.callout)
+            .help("Whether the book has been read (R)")
         }
     }
 
@@ -146,14 +167,6 @@ struct InspectorView: View {
                 .help("Reveals \(entry.folder) (⇧⌘R)")
         }
         .frame(maxWidth: .infinity)
-    }
-
-    /// Said once, plainly, rather than by greying out every field.
-    private var editingNote: some View {
-        Text("Editing metadata arrives in Sprint 2. Nothing here writes to a book file.")
-            .font(.caption2)
-            .foregroundStyle(Slate.textSecondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: Formatting

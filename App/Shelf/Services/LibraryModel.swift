@@ -390,6 +390,95 @@ final class LibraryModel {
         await reload()
     }
 
+    // MARK: Editing metadata
+
+    /// Applies a change: register the undo first, then write the file, then the
+    /// index.
+    ///
+    /// The order is Selector's, and the reason Sprint 2 starts here rather than
+    /// bolting undo on afterwards. The *previous value* goes on the undo stack
+    /// before anything is written, because once the file is written nobody can
+    /// ask it what it used to say. Registering the inverse from inside the undo
+    /// block is what gives redo for nothing: `UndoManager` records whatever is
+    /// registered while undoing as the redo action.
+    ///
+    /// `undoManager` is the window's, handed in by the view from
+    /// `@Environment(\.undoManager)` – so ⌘Z belongs to the window the change
+    /// was made in, the way every other document app behaves.
+    func apply(_ change: MetadataChange, to entry: LibraryEntry, undoManager: UndoManager?) {
+        guard !change.isEmpty else { return }
+        let startedAt = ContinuousClock.now
+
+        undoManager?.registerUndo(withTarget: self) { model in
+            // `UndoManager` calls this on the thread that registered it, which
+            // is the main thread; nothing here hops queues.
+            MainActor.assumeIsolated {
+                model.apply(change.inverse, to: entry, undoManager: undoManager)
+            }
+        }
+        undoManager?.setActionName(change.actionName)
+
+        Task { await write(change, to: entry, startedAt: startedAt) }
+    }
+
+    private func write(_ change: MetadataChange, to entry: LibraryEntry, startedAt: ContinuousClock.Instant) async {
+        guard let library, let index else { return }
+        let editor = MetadataEditor(library: library)
+        do {
+            let updated = try await editor.apply(change, to: entry, in: index)
+            TimingLog.shared.metadataWritten(change.actionName, since: startedAt)
+            replace(updated)
+            // The sidebar's "Unread" has to be right the moment R is pressed;
+            // it is one query, not a reload of 5 000 entries.
+            totals = try await index.totals(coversOnDisk: coversOnDisk)
+            if change.fields.contains(.tags) { tagFacets = try await index.tagFacets() }
+            if change.fields.contains(.authors) { authorFacets = try await index.authorFacets() }
+            if change.fields.contains(.series) { seriesFacets = try await index.seriesFacets() }
+            // So a book that has just been marked read leaves "Unread" at once.
+            refilter()
+            errorMessage = nil
+        } catch {
+            show(error, doing: "save the change to “\(entry.book.title)”")
+        }
+    }
+
+    /// Replaces one entry in place.
+    ///
+    /// Not a reload: reading 5 000 entries back takes about 350 ms, and a key
+    /// held down would queue one of those per press. The index is the authority
+    /// and it has just been written; the row in memory is brought level with it.
+    private func replace(_ updated: LibraryEntry) {
+        if let position = entries.firstIndex(where: { $0.id == updated.id }) {
+            entries[position] = updated
+        }
+        if let position = visible.firstIndex(where: { $0.id == updated.id }) {
+            visible[position] = updated
+        }
+    }
+
+    /// Stars from the inspector and from the keys 1–5. Clicking or pressing the
+    /// rating a book already has clears it, which is how every rating control
+    /// that is worth using behaves – otherwise there is no way back to unrated.
+    func setStars(_ stars: Int, undoManager: UndoManager?) {
+        guard let entry = selectedEntry else { return }
+        let wanted = entry.book.stars == stars ? 0 : stars
+        apply(MetadataChange.make(from: entry.book) { $0.stars = wanted }, to: entry, undoManager: undoManager)
+    }
+
+    /// The 0 key: unrated, whatever it was.
+    func clearRating(undoManager: UndoManager?) {
+        guard let entry = selectedEntry else { return }
+        apply(MetadataChange.make(from: entry.book) { $0.stars = 0 }, to: entry, undoManager: undoManager)
+    }
+
+    /// R, and the checkbox in the inspector.
+    func toggleRead(undoManager: UndoManager?) {
+        guard let entry = selectedEntry else { return }
+        apply(
+            MetadataChange.make(from: entry.book) { $0.isRead.toggle() }, to: entry,
+            undoManager: undoManager)
+    }
+
     // MARK: Actions on the selection
 
     func revealSelectedInFinder() {

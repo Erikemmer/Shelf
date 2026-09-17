@@ -117,6 +117,16 @@ final class TimingLog {
                 + "(\(libraryName))")
     }
 
+    /// How long a key press took to reach the disk.
+    ///
+    /// The target in the Sprint 2 brief is 50 ms from the key to the written
+    /// `metadata.opf`. It is the number that decides whether editing feels like
+    /// a control or like a save button.
+    func metadataWritten(_ what: String, since start: ContinuousClock.Instant) {
+        guard Self.isEnabled else { return }
+        emit("\(what) written: \(Self.milliseconds(since: start)) ms from the key press to the OPF")
+    }
+
     private static func milliseconds(since instant: ContinuousClock.Instant) -> Int {
         Int((ContinuousClock.now - instant) / .milliseconds(1))
     }

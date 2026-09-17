@@ -11,6 +11,10 @@ import SwiftUI
 /// pictures rather than placeholders.
 struct CoverGridView: View {
     @Environment(LibraryModel.self) private var model
+    @Environment(\.undoManager) private var undoManager
+    /// The grid has to hold focus to see key presses at all. It takes focus
+    /// when it appears and takes it back whenever a cell is clicked.
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,7 +42,7 @@ struct CoverGridView: View {
                         spacing: 20
                     ) {
                         ForEach(model.visible) { entry in
-                            BookCell(entry: entry, side: model.coverSide)
+                            BookCell(entry: entry, side: model.coverSide) { isFocused = true }
                                 .id(entry.id)
                         }
                     }
@@ -68,8 +72,40 @@ struct CoverGridView: View {
                 // search field. A cover decode is ~3 ms where Selector's RAW
                 // decode was 600 ms, so the gate's background limit (half the
                 // slots) is enough on its own here.
+                .focusable()
+                .focusEffectDisabled()
+                .focused($isFocused)
+                .onAppear { isFocused = true }
+                .onKeyPress(phases: .down) { press in editingKey(press) }
             }
         }
+    }
+
+    /// The editing keys: 1–5 rate, 0 clears, R marks read or unread.
+    ///
+    /// Handled here and *not* as menu key equivalents, which is how the arrow
+    /// keys are done. A menu key equivalent goes through
+    /// `-[NSMenu performKeyEquivalent:]`, and a `sample` of a held arrow key
+    /// showed what that costs: 31 % of the run inside
+    /// `NSMENU_IS_THROTTLING_REPEATED_MENU_ITEM_INVOCATIONS` calling `usleep`
+    /// on the main thread, and another 27 % highlighting and unhighlighting the
+    /// menu bar, which drags a full window layout behind it each time. A plain
+    /// digit would also be swallowed before the search field ever saw it, so
+    /// "1984" could not be typed into it.
+    private func editingKey(_ press: KeyPress) -> KeyPress.Result {
+        guard model.selectedEntry != nil else { return .ignored }
+        switch press.characters.lowercased() {
+        case "0":
+            model.clearRating(undoManager: undoManager)
+        case let digit where ("1"..."5").contains(digit):
+            model.setStars(Int(digit) ?? 0, undoManager: undoManager)
+        case "r":
+            model.toggleRead(undoManager: undoManager)
+        default:
+            return .ignored
+        }
+        model.noteInteraction()
+        return .handled
     }
 
     /// How many cells fit, at least one. The padding and spacing are the ones
@@ -182,6 +218,9 @@ struct BookCell: View {
     @Environment(LibraryModel.self) private var model
     let entry: LibraryEntry
     let side: CGFloat
+    /// Called after a click, so the grid can take focus back from the search
+    /// field – otherwise clicking a book and pressing 3 does nothing.
+    var onSelect: () -> Void = {}
 
     @State private var cover: NSImage?
 
@@ -204,7 +243,10 @@ struct BookCell: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { model.select(entry) }
+        .onTapGesture {
+            model.select(entry)
+            onSelect()
+        }
         .help(help)
         .task(id: TaskKey(book: entry.id, size: size)) {
             await loadCover()
