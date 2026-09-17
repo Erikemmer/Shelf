@@ -38,7 +38,7 @@ die Entscheidungen in `docs/adr/`.
 - **SlateKit-Änderungen laufen über Commit + Tag + Abhängigkeits-Update.** Das
   Paket liegt in einem eigenen Repo (`~/Documents/SlateKit`,
   https://github.com/Erikemmer/SlateKit). Shelf bindet es über einen **Tag** ein
-  (`project.yml`, derzeit `0.2.1`), nie über einen Pfad – sonst ändert ein
+  (`project.yml`, derzeit `0.3.0`), nie über einen Pfad – sonst ändert ein
   Nachmittag Arbeit an SlateKit still, was diese App baut und wogegen ihre Tests
   gelaufen sind. Der Weg: dort ändern, `make test && make lint`, committen, Tag
   setzen und pushen, dann hier `exactVersion` hochziehen, `make project &&
@@ -54,65 +54,83 @@ die Entscheidungen in `docs/adr/`.
 
 ---
 
-## Nächster Schritt: Sprint 2c – Regale, Tabelle, Sortierung, Mehrfachauswahl
+## Nächster Schritt: Sprint 3 – Calibre-Import
 
-**Sprint 2b ist fertig.** Alle Metadatenfelder sind editierbar, Tags sind Chips
-mit Autovervollständigung, Serien filtern und ordnen, die Suche deckt die sechs
-Felder aus CONCEPT §4 ab (ISBN inklusive). Die Zahlen stehen im `CHANGELOG.md`;
-die Belege am Fenster in `docs/screenshots/sprint-2b/`.
+**Sprint 2c ist fertig.** Regale (hierarchisch, per Drag, mit Bestätigung beim
+Löschen), die Tabelle (⌘2, Spalten wählbar, Kopfzeile sortiert), sechs
+Sortierungen in beide Richtungen, Mehrfachauswahl mit einem Undo-Schritt, und
+die beiden letzten Smart Collections (*Duplicates*, *Not on any Shelf*). Die
+Zahlen stehen im `CHANGELOG.md`, die Belege in `docs/screenshots/sprint-2c/`
+und in `Scripts/shelf-proof.sh`.
 
 Was als Nächstes ansteht, in dieser Reihenfolge:
 
-1. **Regale.** Das Einzige, was der Index weiß und eine Buchdatei nicht, also in
-   jede OPF *und* in `library.json` gespiegelt (ADR 0001, Entscheidung 3).
-   `ShelfTree`, das Schema und `shelf:shelves` sind fertig; es fehlen Anlegen,
-   Umbenennen, Drag und die Sidebar-Zeilen. Danach wird `LibraryModel.applyFilter`
-   die leere Menge los, die es heute übergibt, und *Not on any Shelf* wird
-   freigeschaltet.
-2. **Tabelle (⌘2)**: sortierbar, Spalten wählbar. `BookSort` besitzt die
-   SQL-Reihenfolge schon – die Tabellenüberschrift muss dieselbe Quelle nehmen,
-   sonst behaupten Menü und Kopfzeile Verschiedenes.
-3. **Mehrfachauswahl im Grid** und ein Feld über die Auswahl hinweg ändern.
-   `MetadataChange` ist pro Buch gebaut; für n Bücher werden es n Änderungen in
-   einem Undo-Schritt (`UndoManager.beginUndoGrouping`).
-4. **Sortierung**, gespeichert je Bibliothek.
-5. *Duplicates* (Abfrage über `isbn_normalised` und den gefalteten
-   Titel-Schlüssel) und **⌘-Klick zum Kombinieren** der Sidebar-Filter.
+1. **`CalibreReader`.** `metadata.db` **nur über eine Kopie** in
+   `~/Library/Caches/Shelf/` lesen – nie die Originaldatei öffnen, auch nicht
+   lesend (CLAUDE.md). Schema-Version prüfen; eine unbekannte ist eine Warnung,
+   kein Abbruch.
+2. **Das Zählprotokoll vor dem Import**: Bücher, Formate je Typ, Tags, Serien,
+   Autoren, Custom Columns mit ihren Typen, Dateien in der DB die auf der Platte
+   fehlen und umgekehrt, Gesamtgröße, freier Platz × 1,05. `ImportSheet` macht
+   das für einen Ordner schon; ein Calibre-Ordner ist derselbe Ablauf mit einer
+   besseren Quelle.
+3. **Der Import selbst**, mit Wiederaufnahme über UUID + Hash. `ImportRunner`
+   und `ImportReport` sind fertig; was fehlt, ist die Quelle.
+4. **Custom Columns read-only.** `custom_columns` / `custom_values` stehen seit
+   Migration 1 im Schema, und `OPFDocument` hebt unbekannte Metas ohnehin auf –
+   ein Import verliert sie also heute schon nicht.
+5. **Der Beweislauf gegen deine echte Calibre-Bibliothek**: Zahlen vorher und
+   nachher, Stichproben-Hashes, und `find -newer` als Beleg, dass der
+   Calibre-Ordner unangetastet geblieben ist.
 
 ### Was dabei zu beachten ist
 
 - **Die Feldregeln liegen im Kern, nicht in der Ansicht.** `BookField`,
-  `IdentifierEdit`, `TagEdit` und `ISBN` entscheiden, was ein leeres Feld
-  bedeutet, wie Autoren getrennt werden, ob „2,5" eine Zahl ist. Ein neues Feld
-  ist dort ein Fall und im Inspector drei Zeilen. Die Eigenschaft, die alles
-  zusammenhält, ist getestet: *was ein Feld anzeigt, akzeptiert dasselbe Feld
-  zurück.*
-- **Ein Feld wird beim Abschluss geschrieben, nicht beim Tippen** (⏎ oder
-  Fokusverlust), Escape verwirft. Kein Timer – ein Timer schriebe mitten im Wort
-  und müsste vor dem Schließen des Fensters geleert werden.
-- **Die Bearbeitungstasten hängen an keinem Fokus mehr.** `EditingKeyMonitor`
-  ist ein lokaler `NSEvent`-Monitor; seine einzige Regel ist, sich aus Text
-  herauszuhalten, den jemand tippt. Menü-Kurzbefehle bleiben draußen (ADR 0006).
-  **Offen:** Ein Klick aufs Cover nimmt dem *Suchfeld* die Tastatur nicht
-  zuverlässig ab; Escape im Suchfeld tut es. Steht im Backlog.
+  `IdentifierEdit`, `TagEdit`, `ISBN`, `ShelfEdit` und `AcrossBooks` entscheiden,
+  was ein leeres Feld bedeutet, wie Autoren getrennt werden, ob „2,5" eine Zahl
+  ist, was ein Regalname sein darf, und was zwölf Bücher gemeinsam haben. Ein
+  neues Feld ist dort ein Fall und im Inspector drei Zeilen.
+- **Ein Regal steht im Buch, seine Form in `library.json`**
+  ([ADR 0008](adr/0008-shelves-membership-in-the-book-hierarchy-in-library-json.md)).
+  Beim Wiederaufbau **zuerst den Baum speichern, dann die Bücher** – der Index
+  löst die Pfade eines Buches gegen die Regale auf, die er kennt, und überspringt
+  stillschweigend, was er nicht findet. Die andere Reihenfolge verliert jede
+  Zuordnung, ohne zu klagen.
+- **Ein Regalpfad ist ein Name, kein Zeiger.** Ein Umbenennen schreibt jedes Buch
+  auf dem Regal neu. Das ist der Preis für lesbare Pfade in der OPF und steht so
+  in ADR 0008.
+- **Die Tabelle sortiert über das Modell**, nicht im Speicher. `BookSort` besitzt
+  die SQL-Reihenfolge; vier Spalten (Tags, Format, Gelesen, Größe) haben deshalb
+  keinen Pfeil.
 - **Der Ordner wird bei einer Metadatenänderung nicht umbenannt**
-  ([ADR 0007](adr/0007-a-metadata-change-does-not-rename-the-folder.md)). Die
-  UUID hält die Identität. „Reorganize Library…" mit Vorschau kommt später.
-- **Attribut und Elementtext werden unterschiedlich escaped.** Ein Zeilenumbruch
-  in einem Attribut wird sonst beim Parsen zu einem Leerzeichen, und
-  `calibre:title_sort`, `calibre:series` und `opf:file-as` sind Attribute. Und:
-  `"\r\n"` ist in Swift *ein* `Character` – deshalb laufen beide
-  Escaping-Funktionen über Unicode-Skalare.
+  ([ADR 0007](adr/0007-a-metadata-change-does-not-rename-the-folder.md)).
+- **Attribut und Elementtext werden unterschiedlich escaped**, und `"\r\n"` ist
+  in Swift *ein* `Character` – beide Escaping-Funktionen laufen über
+  Unicode-Skalare.
 - **FTS5 kennt kein `ALTER TABLE ADD COLUMN`.** Eine neue Suchspalte heißt:
-  Tabelle neu bauen *und aus den Quelltabellen nachfüllen*. Ohne das Nachfüllen
-  verliert eine bestehende Bibliothek ihren ganzen Suchindex.
-- **`SHELF_TIMING=1`** schaltet die Zeitmessungen im Fenster ein. Ohne die
-  Variable ist es still.
-- **SlateKit steht auf `0.2.1`.** Der Weg zu einer Änderung: dort ändern,
-  `make test && make lint && make contrast`, committen, taggen, pushen, dann
-  hier `exactVersion` hochziehen. Achtung beim Hochziehen: `SlateSidebarRow` hat
-  in 0.1.4 einen `accessory`-ViewBuilder *vor* `action` bekommen, wodurch
-  Trailing-Closures still an den falschen Parameter binden.
+  Tabelle neu bauen *und aus den Quelltabellen nachfüllen*.
+- **`SHELF_TIMING=1`** schaltet die Zeitmessungen im Fenster ein.
+- **SlateKit steht auf `0.3.0`.** Der Weg zu einer Änderung: dort ändern,
+  `make test && make lint && make contrast`, committen, taggen, pushen, dann hier
+  `exactVersion` hochziehen. Das Paket hat seit 2c ein `CHANGELOG.md`; 0.3.0
+  ändert das Aussehen von **Selector** mit, sobald Selector seinen Pin hochzieht
+  (graue Chips statt goldener, Platzhalter in Label-Farbe, kein „3/5" neben den
+  Sternen, keine deutsche Lokalisierung mehr).
+
+### Ein Fallstrick, der eine Stunde gekostet hat
+
+**Ein gesperrter Bildschirm macht jedes fenstergetriebene Skript still kaputt.**
+Nicht rot – still. `screencapture -l <window id>` liefert weiter das *zuletzt
+gezeichnete Bild* des Fensters, also kommen mehrere Aufnahmen byte-gleich heraus;
+System Events sieht keine Fenster; und der Accessibility-Baum schrumpft auf ein
+Application-Element, das nur sich selbst enthält, sodass jede Suche „nichts"
+antwortet statt zu scheitern. `Scripts/window-count.swift` liest dann `5 0 0`.
+
+Bestätigt mit `ioreg -n Root -d1 -r | grep CGSSessionScreenIsLocked` mitten im
+Screenshot-Lauf. Das ist mit hoher Wahrscheinlichkeit auch das, was Sprint 2b als
+„eine App ohne Fenster, nicht reproduzierbar, kein Absturzbericht" notiert hat.
+`Scripts/shots-2c.sh` prüft das jetzt beim Start und startet sich selbst unter
+`caffeinate -di` neu; die anderen Skripte sollten denselben Schutz bekommen.
 
 ## Eine Entscheidung, die dir gehört: SlateKit und CI
 
@@ -134,14 +152,17 @@ wurde nicht gebaut. Lokal baut sie `make app`, und `make smoke` startet sie.
 
 ## Offene Punkte, die keiner Sitzung gehören
 
-- **Bildschirmfotos: erledigt.** Die Freigabe „Bildschirmaufnahme" ist erteilt,
-  `Scripts/screenshots.sh` läuft, und die Bilder liegen in
-  `docs/screenshots/sprint-1/` (Shelf und Selector, gleiche Größe) und
-  `docs/screenshots/sprint-2b/`. Drei der vier Vergleichspixel sind byte-gleich
-  mit Selector. **Was das Skript braucht:** dass *keine* Shelf-Instanz läuft –
-  es bricht sonst mit einer Erklärung ab, statt eine fremde zu fotografieren.
-  Und für Selector ein offenes Fenster; eine Instanz unter Xcodes Debugger hat
-  meist keines.
+- **Bildschirmfotos: erledigt, mit einer Einschränkung.** Die Freigabe
+  „Bildschirmaufnahme" ist erteilt, `Scripts/screenshots.sh` läuft, und die
+  Bilder liegen in `docs/screenshots/sprint-1/` (Shelf und Selector, gleiche
+  Größe), `docs/screenshots/sprint-2b/` und `docs/screenshots/sprint-2c/`.
+  Drei der vier Vergleichspixel sind byte-gleich mit Selector.
+  **Was die Skripte brauchen:** dass *keine* Shelf-Instanz läuft – sie brechen
+  sonst mit einer Erklärung ab, statt eine fremde zu fotografieren; für Selector
+  ein offenes Fenster; und **einen entsperrten Bildschirm** (siehe den Fallstrick
+  oben). Aus 2c fehlen drei Aufnahmen, weil der Bildschirm mitten im Lauf
+  gesperrt hat; `docs/screenshots/sprint-2c/README.md` sagt, welche und wofür
+  es stattdessen Belege gibt.
 - **Die übrigen Handprüfungen aus Sprint 1 sind erledigt** und stehen mit Zahlen
   im `CHANGELOG.md`: Fensterzahl (eines, nicht sechs), Zeit bis alle sichtbaren
   Cover stehen (852 ms kalt, 768 ms warm), gehaltene Pfeiltaste mit `sample`,
@@ -149,8 +170,10 @@ wurde nicht gebaut. Lokal baut sie `make app`, und `make smoke` startet sie.
 - **App-Icon.** `App/Shelf/Resources/Assets.xcassets/AppIcon.appiconset` ist
   leer bis auf die `Contents.json`. Bis dort PNGs liegen, zeigt die App das
   Standardsymbol. Selector hat ein Skript dafür (`docs/icon/make_icons.py`).
-- **SlateKit-Version.** Shelf hängt an `0.1.0`. Ein Pin, der nie erhöht wird,
-  wird schal – beim ersten gemeinsamen UI-Bedarf mitziehen.
+- **SlateKit-Version.** Shelf hängt an `0.3.0`, Selector an `0.1.6`. Wenn
+  Selector nachzieht, ändert sich sein Aussehen an drei Stellen (Chips, Sterne,
+  Platzhalter) und die deutschen Strings des Pakets verschwinden – das ist so
+  gewollt und steht in SlateKits `CHANGELOG.md`.
 - **`Package.resolved` ist nicht im Repo** (`.gitignore`), wie in Selector. Wer
   reproduzierbare Abhängigkeiten will, nimmt die Zeile heraus; das ist eine
   Entscheidung, keine Nachlässigkeit.

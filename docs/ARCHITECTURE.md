@@ -10,8 +10,10 @@
 │  shortcut sheet · welcome scaffold. Knows nothing of books.   │
 ├───────────────────────────────────────────────────────────────┤
 │  App/Shelf (macOS, SwiftUI + AppKit)                          │
-│  Views:    ContentView · WelcomeView · SidebarView ·          │
-│            CoverGridView (grid + cell + search) ·             │
+│  Views:    ContentView (owns the window's one focus value) ·  │
+│            WelcomeView · SidebarView + ShelvesSection ·       │
+│            LibraryBar (mode · sort · size · search) ·         │
+│            CoverGridView (grid + cell) · BookTableView ·      │
 │            InspectorView · ImportSheet · Theme                │
 │  Services: LibraryModel (@MainActor @Observable: what the     │
 │              window is looking at, and every action)          │
@@ -27,14 +29,16 @@
 ├───────────────────────────────────────────────────────────────┤
 │  ShelfCore (Swift package, no UI, runs on Linux too)          │
 │  Model:     Book · SeriesRef · BookFormat · BookFileFormat ·  │
-│             Shelf/ShelfTree · SmartCollection/LibraryFilter · │
-│             BookFolderName · TitleSort/AuthorSort · ISBN ·    │
-│             ShortcutReference                                 │
-│  Library:   Library + LibraryDescriptor · IndexRebuilder ·    │
-│             MetadataChange + MetadataEditor ·                 │
+│             Shelf/ShelfTree/ShelfEdit · SmartCollection/      │
+│             LibraryFilter/DuplicateReason · BookFolderName ·  │
+│             TitleSort/AuthorSort · ISBN · ShortcutReference   │
+│  Library:   Library + LibraryDescriptor + LibraryViewSettings │
+│             IndexRebuilder · MetadataChange + MetadataEditor ·│
 │             BookField/IdentifierEdit/TagEdit (what a typed    │
-│             string does to a book)                            │
-│  Index:     IndexSchema (migrations) · LibraryIndex (GRDB)    │
+│             string does to a book) · AcrossBooks (what a      │
+│             handful of books have in common)                  │
+│  Index:     IndexSchema (migrations) · LibraryIndex (GRDB) ·  │
+│             BookSort + BookOrder (the one SQL order)          │
 │  Formats:   ZipReader · Inflate · XMLTree · OPFDocument ·     │
 │             EPUBMetadata · FileNameMetadata · CoverFile ·     │
 │             ZipWriter + SyntheticEPUB + MinimalPNG (fixtures) │
@@ -194,6 +198,41 @@ whose size and modification date are unchanged, so a rebuild is not a re-hash of
 the whole library. Folders that hold no readable book are *reported*, never
 removed. This is the proof behind [ADR 0001](adr/0001-folder-is-the-truth.md) and
 it is what makes the index safe to treat as a cache.
+
+**The order matters, and silently.** The shelf tree is written *before* the
+books: the index resolves each book's stored shelf paths against the shelves it
+holds and skips what it cannot find, so saving the books first files every one
+of them nowhere without an error
+([ADR 0008](adr/0008-shelves-membership-in-the-book-hierarchy-in-library-json.md)).
+A path that `library.json` has lost — a backup restored without its `.shelf`
+folder — is *created* from what the books say, because the book said where it
+stands and the folder is the truth.
+
+## Data flow: shelves
+
+```
+  sidebar / drag / context menu / inspector
+        ↓   ShelfEdit (may this name? may this go inside that? what happens
+        ↓             to the books?)                       ← rules, in the core
+  LibraryModel
+        ↓   library.json  (the shape: what exists, inside what, in what order)
+        ↓   metadata.opf  (per book: which shelves, as paths)  ← one undo group
+        ↓   LibraryIndex  (a cache of both)
+```
+
+Membership is a field of the `Book`, which is what gives it undo, the
+write-the-file-then-the-index order, and editing across a multiple selection for
+nothing. Renaming a shelf therefore rewrites every book on it — a stored path is
+a name, not a pointer — as one step on the undo stack.
+
+## Data flow: several books at once
+
+`LibraryModel.edit(_:actionName:undoManager:)` is the shape every action across a
+selection takes: build a `MetadataChange` per book, drop the ones that change
+nothing, and wrap the rest in an undo group named for how many books it touched.
+What "the same value" and "Mixed" mean across a selection is `AcrossBooks`, in
+the core, because a tag on *every* book and a tag on *some* of them are
+different things and drawing them alike loses work.
 
 ## Reading a format
 

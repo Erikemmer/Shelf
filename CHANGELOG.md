@@ -3,6 +3,213 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 2c – Shelves, the table, and acting on many books · 17 September 2026
+
+### Added
+
+- **Shelves.** Make one with **+** in the sidebar and name it in place, the way
+  the Finder names a folder; drag a shelf onto another to put it inside; drag
+  books onto a shelf; or use the context menu, or the inspector's *Shelves* row.
+  Removing one asks first, naming the shelf and how many books come off it, and
+  the message says what is *not* happening: "The books stay in the library. Only
+  the shelf goes."
+- **[ADR 0008](docs/adr/0008-shelves-membership-in-the-book-hierarchy-in-library-json.md)** —
+  **a book carries its own shelves; `library.json` carries their shape.**
+  Membership is a field of the `Book`, written into that book's `metadata.opf`
+  as stored paths (`Fiction/Sci-Fi`); what shelves exist, inside what, in what
+  order, lives in the library descriptor. The index holds both and is the
+  authority for neither.
+- **The table (⌘2)**: nine columns — Title, Author, Series, Rating, Tags,
+  Format, Added, Read, Size — plus a tenth, *Changed*, hidden until asked for.
+  Columns are chosen and resized from the header's own menu, and the layout is
+  kept in `library.json`. The same books, the same selection, the same keys as
+  the grid.
+- **Sorting**: six fields, each both ways round. The direction is no longer
+  baked into three of them, so every order reverses. Clicking a column header
+  and picking from the sort menu do the same thing to the same value, and it is
+  saved per library.
+- **Multiple selection** — ⇧, ⌘, ⌘A — and **editing across it as one undo step**,
+  named for how many books it touched ("Add to Shelf (12 books)"). Rating, read
+  status, tags and shelves act on all of them; title, series and description
+  stay locked. The inspector shows shared values and **Mixed**.
+- **Duplicates**, the last greyed-out row in the sidebar, using the importer's
+  own three rules asked of the whole library — and the inspector says *which*
+  rule matched, because identical bytes is a fact and identical title-and-author
+  is a guess that fits two editions and a translation.
+- **Not on any Shelf**, answered from the book itself rather than from a second
+  list, so the sidebar's count and the grid's filter read the same fact.
+- **`shelf-tool shelve`, `unshelve`, `bulk-tag-undo`** — what section 8 of the
+  proof run is made of, and what arranges a library before it is photographed.
+- **`Scripts/shelf-proof.sh`, `keyboard-proof.sh`, `shots-2c.sh`**, and the three
+  small tools they drive the window with (`cell-point.swift`, `click-at.swift`,
+  `drag-at.swift`).
+
+### Changed — the look, through SlateKit 0.3.0
+
+Four corrections, all of them to things the package said louder than it should.
+Three of them change **Selector** too, once it raises its pin from 0.1.6.
+
+- **Tag chips are grey.** They had been `Slate.accent` since 0.1.0 — the same
+  yellow-orange as the selected row and the focused field. That colour means
+  *selected*, and eight tags in it make a window look as though eight things
+  were chosen. The ✕ now waits for the pointer (or keyboard focus), faded rather
+  than added, so a row of chips does not re-flow under the pointer.
+- **An empty field prompts in a label's colour, not a value's.** SwiftUI hands
+  a field's foreground colour to its placeholder unless told otherwise, so an
+  empty inspector read as a filled one: "Add publisher…" in the same ink as
+  "Orbit".
+- **The stars no longer write "3/5" beside themselves.** Five drawn stars are
+  the statement. *Unrated* stays — zero is the one rating with no picture of
+  its own.
+- **The package speaks English again.** The German localisation added in 0.1.5
+  is removed. Shelf and Selector are English until their own Sprint 7, so those
+  nine words would have appeared in German inside an otherwise English window.
+  Localising is a decision about a whole app, taken for the whole app at once.
+
+SlateKit has a `CHANGELOG.md` now, because two apps bind it by tag and that only
+works if the person raising a pin can read what moves.
+
+### Changed — in Shelf
+
+- **The inspector's placeholders invite a value instead of stating a format**:
+  "Add series…", "Add publisher…", "Add date…", "Add language…", "Add ISBN…".
+  The format moved into the help text, where it is there when wanted and
+  invisible when not. `BookField` owns both, next to the label.
+- **One focus for the window.** The grid and the search field had a
+  `@FocusState` each, and handing the keyboard from one to the other meant
+  setting one true while the other still was. One value, `WindowFocus`, replaces
+  both.
+- **Escape in the search field empties it** as well as handing the keyboard to
+  the grid, and ⏎ hands it on rather than dropping it.
+- **⌘A** selects every book the filter shows — in the Library menu, where
+  SwiftUI's own Select All cannot fight it.
+- **A shelf path in an OPF is written as a path.** `JSONEncoder` escapes a
+  slash by default, so `Fiction/Sci-Fi` went into the file as
+  `Fiction\/Sci-Fi`: legal, and unreadable in a field whose argument for being
+  JSON was that it is lossless *and* readable.
+
+### Measured
+
+On this machine (Apple silicon, macOS 26), against a synthetic library of
+**4 996 books** — 5 000 generated, four of them duplicates the importer refused.
+`Scripts/proof-run.sh`, sections 7 and 8.
+
+**Putting a book on a shelf**, 1 000 assignments in 10 batches, each through the
+same `MetadataChange` path a drag uses:
+
+| | |
+|---|---|
+| median of the batch medians | **2.5 ms** |
+| worst single assignment | **14.0 ms** |
+| batches with anything over the 20 ms target | **0 of 10** |
+
+**The sidebar's arithmetic against SQL.** The sidebar counts a shelf by walking
+the books it holds in memory; this asks the database the same question a
+different way, which is the only version of the check worth running — a sidebar
+agreeing with itself is worth nothing.
+
+    Fiction                  500 books   (this shelf and everything inside it)
+    Fiction/Science Fiction   200 books
+    Non-Fiction               300 books
+    To Read                   100 books
+    on a shelf 1000 · on none 3996 · sum 4996 of 4996
+
+**Fifty books tagged at once and undone**, which is what ⌘Z does to a multiple
+selection:
+
+    tagged 50 books in 137.5 ms, undone in 131.4 ms
+    metadata.opf byte for byte as before:  50 of 50
+    EPUBs untouched:                       50 of 50
+    books the index still finds under the tag: 0
+
+**The index thrown away and rebuilt from the folders**, with twenty shelves
+three levels deep:
+
+    books back on a shelf: 1000 of 1000
+    shelves back:            20 of 20
+    the empty shelf among them: yes — no book can remember it, library.json can
+
+**Editing one field** (section 7, re-measured this sprint): median **2.4 ms**,
+worst **23.8 ms**, none over the 50 ms target, across 200 books — including the
+search index. **Searching** 4 996 books for a tag that did not exist five seconds
+earlier: median **0.7 ms**, worst **0.8 ms**, first search on a cold page cache
+**1.4 ms**.
+
+**Memory**: peak **295 MB** with 4 996 books open and 4 901 covers in the cache,
+against CONCEPT §11's 1.5 GB. Measured by `make smoke` — see *Not verified* for
+what that number does and does not cover.
+
+**Tests**: 342 in the core, up from 313 at the start of the sprint. SlateKit: 11,
+and every colour pair still clears WCAG AA.
+
+
+### Not verified
+
+Honestly, and in the order that matters.
+
+- **Three of the four screenshots are missing.** The table with its sort arrow,
+  the inspector showing `Mixed`, and the context menu's *Add to Shelf ▸* were
+  never taken: **the Mac's screen locked in the middle of the run**
+  (`CGSSessionScreenIsLocked = Yes`, 14:36:08, confirmed through `ioreg`), and it
+  stayed locked for the rest of the session. I did not drive the window after
+  that — posting clicks and keystrokes into somebody's locked session is not
+  mine to do. `docs/screenshots/sprint-2c/README.md` says what each was to show
+  and what stands in for it.
+
+  The one image that is there was drawn before the lock, and it carries the
+  shelves, the counts, the new placeholders and *Unrated*.
+
+- **The table has not been scrolled at 5 000 rows.** The `sample` run Sprint 1
+  did for the grid needs a window, and the window was locked away. The table is
+  a SwiftUI `Table`, which recycles rows, and nothing in a row reads a file —
+  but that is an argument, not a measurement, and the brief asked for a
+  measurement.
+
+- **"Clicking a cover does not take the keyboard from the search field" is not
+  fixed, and I cannot show that it ever was broken.** `Scripts/keyboard-proof.sh`
+  reads **5 of 5** on this build and **5 of 5 on the build from before the
+  change too**. The one-focus-per-window change is a simplification that removes
+  the state the symptom was blamed on; the symptom itself could not be
+  reproduced in five rounds either way. What *is* measured, 0 of 5 before and
+  5 of 5 after, is Escape in the search field clearing it.
+
+- **The screen lock is very probably what Sprint 2b recorded as "an app with no
+  window", but that is inference.** Today's two sightings match it exactly
+  (`window-count` reading `5 0 0`, no crash report, app alive at 0 % CPU), and
+  the state is reproducible by locking the screen. I have no record of the lock
+  state at the moment of the Sprint 2b sighting, so I cannot say it was the same.
+
+- **The memory number was taken with the screen locked.** 295 MB is a real
+  reading of a real process holding 4 996 books and 4 901 covers, but a window
+  that is not being composited may do less than one that is. It is not a
+  measurement of scrolling the table.
+
+- **One commit was made while `make smoke` had just failed.** `965bad8`
+  (*Duplicates*). I had piped `make smoke` through `tail`, which hid its exit
+  code behind `tail`'s. The cause was a Shelf instance left running by the proof
+  script, not the code: run again immediately afterwards, three times, it passed
+  with exit code 0. I stopped piping the check after that.
+
+- **Shelf on a German Mac is still untested.** SlateKit's own German strings are
+  gone, so the "two languages in one window" problem is gone with them, but
+  nobody has run Shelf under a German locale.
+
+- **Selector has not been built against SlateKit 0.3.0.** It is pinned to 0.1.6
+  and unaffected until somebody raises that pin; what the three visual changes
+  look like *there* is unverified.
+
+- **`Scripts/shelf-proof.sh` and `keyboard-proof.sh` have not been re-run since
+  they gained the screen-awake guard**, because the screen has been locked ever
+  since. Both passed in full before it; the guard itself was tested on its own,
+  including the bug it had at first — `grep -q` under `set -o pipefail` makes the
+  pipeline exit 141, so the check read a *successful match* as a failure and
+  waved a locked screen straight through.
+
+- **Dragging a shelf onto the *Shelves* heading** — the way to take a shelf back
+  out of another — is implemented and was not exercised by the proof script,
+  which only drags a shelf onto another shelf.
+
+
 ## Sprint 2b – All the fields, tags and series · 17 September 2026
 
 ### Added

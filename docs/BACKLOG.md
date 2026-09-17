@@ -84,16 +84,49 @@ change of controls, not of layout.
       the new tag searched for across 5 000 books, the index thrown away and
       every change found again
 
-### 2c – shelves, the table, and acting on many books
+### 2c – shelves, the table, and acting on many books · done
 
-- [ ] Shelves: create, rename, drag books onto them, hierarchy in the sidebar,
-      mirrored into the OPFs and `library.json`
-- [ ] The table view (⌘2): sortable, choosable columns
-- [ ] Multiple selection in the grid, and editing a field across it
-- [ ] Sorting: the sort menu and the table header agreeing, saved per library
-- [ ] The two smart collections Sprint 1 left disabled: **Duplicates** (needs a
-      query over `isbn_normalised` and the folded title key) and **Not on any
-      Shelf** (needs shelves)
+- [x] Shelves: create, rename in place, nest by dragging, drag books onto them,
+      a context menu and an inspector row, removal behind a confirmation that
+      names the shelf and the books. Membership in each book's OPF, the shape in
+      `library.json`
+      ([ADR 0008](adr/0008-shelves-membership-in-the-book-hierarchy-in-library-json.md))
+- [x] The table view (⌘2): nine columns plus a hidden tenth, chosen and resized
+      from the header's own menu, the layout kept in `library.json`
+- [x] Multiple selection (⇧, ⌘, ⌘A) and editing across it as **one** undo step;
+      the inspector shows shared values and `Mixed`
+- [x] Sorting: six fields, both directions, the sort menu and the table header
+      reading the same `BookOrder`, saved per library
+- [x] **Duplicates** — the importer's own three rules asked of the whole
+      library, with the rule that matched named in the inspector — and
+      **Not on any Shelf**, answered from the book itself
+- [x] Proof run section 8: twenty shelves in three levels, a thousand books
+      distributed, the sidebar's arithmetic checked against SQL, fifty books
+      tagged and undone with every file compared, the index thrown away and
+      every shelving found again
+
+### What 2c deliberately did not do
+
+- [ ] **Editing publisher, language or date across a selection.** Only rating,
+      read status, tags and shelves act on all the selected books; every text
+      field is read-only while several are selected. Title, series and
+      description should stay that way — a title typed once into twelve books is
+      a mistake with twelve copies — but a publisher across a selection is a
+      reasonable thing to want
+- [ ] **Sorting by Tags, Format, Read or Size.** Those four columns have no
+      arrow, because `BookSort` has no case for them and a column that sorted
+      only the rows in memory would put the table in one order and leave the
+      grid and the sort menu in another. Size needs a `SUM(byte_size)` join;
+      the others are straightforward
+- [ ] **Reordering shelves among their sisters.** `Shelf.position` exists and is
+      honoured; nothing in the window sets it yet, so shelves sit in the order
+      they were made
+- [ ] **Scrolling 5 000 table rows, measured.** The `sample` run that Sprint 1
+      did for the grid needs the window, and the screen locked during the run
+      that would have taken it (see below)
+
+### Still open, carried from 2b
+
 - [ ] Combining filters with ⌘-click, as Selector's sidebar does
 - [ ] Series view proper: missing volumes visible, not only the ones present
 - [ ] **"Reorganize Library…"** — the command that *does* rename folders to match
@@ -102,16 +135,41 @@ change of controls, not of layout.
       Until it exists, a library that has been edited for a while has folder
       names that are historical, which costs nothing but tidiness
 - [ ] **Clicking a cover does not take the keyboard back from the search field.**
-      After a search, 1–5, 0, R and T keep going into the search box until
-      Escape is pressed there. Escape works and is a normal macOS idiom, so this
-      is awkward rather than broken. The editing keys themselves no longer
-      depend on SwiftUI focus at all (`EditingKeyMonitor`); what is left is
-      SwiftUI putting focus back into the field after AppKit and the model have
-      both been told to let go
+      Carried, but narrower than it was. Sprint 2c replaced the two competing
+      `@FocusState` bindings with one window-wide value, and
+      `Scripts/keyboard-proof.sh` now drives the real window: search, click a
+      cover, press R, and read the book's status back out of the index. It reads
+      **5 of 5** — and **5 of 5 against the build from before the change too**,
+      so the symptom Sprint 2b reported could not be reproduced and the change
+      cannot be credited with fixing it. What the change did fix, measured 0 of 5
+      before and 5 of 5 after, is Escape in the search field: it now empties the
+      field as well as handing the keyboard on. There is a script to point at
+      this now, which is the real progress
 - [ ] **Debouncing the search field**, if it turns out to be wanted. It already
       waits 120 ms after the last keystroke before asking FTS5, and a search
       over 5 000 books measured 0.6 ms, so there is nothing to fix yet — written
       down so the question is not asked twice
+
+### Not a Shelf defect, but it wastes a sprint's evidence
+
+- [ ] **The Mac's screen lock silently breaks every window-driven script.**
+      Confirmed with `ioreg` (`CGSSessionScreenIsLocked = Yes`) in the middle of
+      the Sprint 2c screenshot run. While the screen is locked:
+      `screencapture -l <window id>` keeps working and returns the window's
+      *last drawn frame*, so shot after shot is byte-identical; System Events
+      reports no windows; and the accessibility tree degenerates to an
+      application element containing only itself, so every lookup answers
+      "nothing" rather than failing. `Scripts/window-count.swift` reads `5 0 0`.
+
+      This is almost certainly what Sprint 2b recorded as "one launch produced
+      an app with no window, not reproducible, no crash report", and what
+      happened twice more during 2c. The app is fine: it still creates and shows
+      its window, and `make smoke` passes while locked.
+
+      `Scripts/shots-2c.sh` now refuses to start on a locked screen and re-runs
+      itself under `caffeinate -di`. `Scripts/screenshots.sh`,
+      `Scripts/shelf-proof.sh` and `Scripts/keyboard-proof.sh` should get the
+      same guard
 
 ## Sprint 3 – Calibre import
 

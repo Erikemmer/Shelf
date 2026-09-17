@@ -54,7 +54,12 @@ book that cannot be found again:
   "shelves" : [
     { "id" : "…", "name" : "Fiction", "position" : 0 },
     { "id" : "…", "name" : "Science Fiction", "parentID" : "…", "position" : 0 }
-  ]
+  ],
+  "view" : {
+    "mode" : "table",
+    "order" : { "field" : "author", "ascending" : false },
+    "tableColumns" : "…"
+  }
 }
 ```
 
@@ -64,11 +69,43 @@ text editor, and one whose diffs should mean something. Written atomically.
 `schemaVersion` is refused if it is higher than this Shelf understands: writing
 such a library back could drop fields it does not know about.
 
-Shelves are hierarchical (CONCEPT §15, decision 3) through a `parentID`, so
-moving a shelf is one field change and not a rewrite of its children.
-`ShelfTree.canMove` refuses a move that would make a loop, and both tree walks
-carry a visited set so a loop that already exists (from a corrupt file) cannot
-hang the app.
+### Shelves
+
+This file holds the **shape**: what shelves exist, what is inside what, in what
+order. *Which* shelves a book is on is in the book
+([ADR 0008](adr/0008-shelves-membership-in-the-book-hierarchy-in-library-json.md)).
+
+Hierarchical (CONCEPT §15, decision 3) through a `parentID`, so moving a shelf
+is one field change and not a rewrite of its children. `ShelfTree.canMove`
+refuses a move that would make a loop, and both tree walks carry a visited set
+so a loop that already exists (from a corrupt file) cannot hang the app.
+
+An **empty shelf lives only here**. No book can remember a shelf with nothing on
+it, which is the clearest single reason the shape is kept in a file rather than
+derived from what the books say.
+
+`ShelfEdit` in the core owns the rules — what a name may be, what may go inside
+what, and what happens to the books when a shelf is renamed, moved or removed.
+The same rules run for a drag, a menu, a rebuild and somebody else's
+`library.json`.
+
+### `view`: how the library was last looked at
+
+Grid or table, the sort field and its direction, and the table's column layout.
+**Per library, not per app**: it describes this collection, so a library of
+comics can want different columns from a library of novels, and it travels with
+the folder the way the shelves do.
+
+`tableColumns` is SwiftUI's own `TableColumnCustomization`, carried as an opaque
+string. Deliberately not interpreted here — it is the framework's structure, and
+a second reading of it would be a second thing to keep in step with something
+that owns it. A value that cannot be decoded gives the default layout rather
+than an error.
+
+The whole `view` block may be **missing**: every `library.json` written before
+Sprint 2c lacks it. The descriptor is decoded by hand so that absent means "the
+default", because a new field that makes existing libraries unopenable would be
+a migration, and this is not worth one.
 
 ## 3. `metadata.opf`
 
@@ -94,7 +131,7 @@ fields as `shelf:` metas, which Calibre ignores silently.
     <meta name="calibre:rating" content="5"/>
     <meta name="calibre:timestamp" content="2026-09-16T20:56:31+00:00"/>
     <meta name="shelf:read" content="true"/>
-    <meta name="shelf:shelves" content="[&quot;Fiction ▸ Science Fiction&quot;]"/>
+    <meta name="shelf:shelves" content="[&quot;Fiction/Science Fiction&quot;,&quot;To Read&quot;]"/>
   </metadata>
   <guide/>
 </package>
@@ -120,6 +157,7 @@ list ([`Sources/ShelfCore/Library/BookFieldEdit.swift`](../Sources/ShelfCore/Lib
 | Description | `<dc:description>` | several lines; ⏎ is a line break, not a commit |
 | Tags | one `<dc:subject>` each, sorted | a case-insensitive set |
 | Identifiers | `<dc:identifier opf:scheme="ISBN">` … | an ISBN is checked against its check digit |
+| Shelves | `<meta name="shelf:shelves">` | a JSON array of stored paths, sorted |
 | Rating | `<meta name="calibre:rating">` | Calibre's 0…10, five stars × 2 |
 | Read | `<meta name="shelf:read">` | Shelf's own |
 
@@ -127,6 +165,13 @@ Rules that come with the table:
 
 * **An empty field removes the element** rather than writing an empty one. A
   book with no publisher has no `<dc:publisher>`, not an empty one.
+* **`shelf:shelves` is one meta holding a JSON array**, not one meta per shelf:
+  `<meta name>` is looked up by name, and repeated names would collapse into
+  one. JSON because a shelf name may contain a comma or a pipe, and because the
+  obvious ASCII separators (the unit separator) are *not legal in XML 1.0* — a
+  parser refuses the whole file. Slashes are **not** escaped (`Fiction/Sci-Fi`,
+  not `Fiction\/Sci-Fi`): the argument for JSON here was that it is lossless
+  *and readable*, and a decoder accepts either spelling.
 * **`calibre:title_sort` follows the title, but only when nobody had set it.**
   "Nobody set it" is recognisable: the stored value is exactly what
   `TitleSort.of` produces for the old title. A hand-written "Dispossessed, The"
@@ -225,7 +270,7 @@ migrations (`IndexSchema`). Tables as CONCEPT §5.2 names them:
 | `authors`, `book_authors` | one row per name; `position` keeps the printed order | the OPFs |
 | `series` | one row per name | the OPFs |
 | `tags`, `book_tags` | one row per keyword | the OPFs |
-| `shelves`, `book_shelves` | the hierarchy and its contents | `library.json` + `shelf:shelves` |
+| `shelves`, `book_shelves` | the hierarchy and its contents | `library.json` (shape) + `shelf:shelves` (membership) |
 | `formats` | one row per file: format, file_name, byte_size, **sha256**, modified_at, drm | the files |
 | `identifiers` | scheme → value, plus a normalised `isbn_normalised` row | the OPFs |
 | `custom_columns`, `custom_values` | Calibre's custom columns (Sprint 3, read-only) | the OPFs' unknown metas |
@@ -258,17 +303,45 @@ Notes:
 * **`last_seen_at`** records when the folder was last found as expected. A
   mismatch between index and disk is shown, never resolved silently
   (CONCEPT §5.2).
+* **`book_shelves` is written from the book, and invents nothing.** Saving a
+  book resolves each of its stored paths against the `shelves` table — one level
+  at a time, case-insensitively — and *skips* a path with no shelf behind it.
+  A shelf conjured up in the cache would be one `library.json` never hears
+  about. It follows that a rebuild must save the tree **before** the books, or
+  every membership is silently dropped.
+* **Reading them back is one recursive CTE**, walking each shelf to the root and
+  joining the names, so 5 000 books on 20 shelves cost one statement rather than
+  one per level. It has to work: `Book.shelves` is what the grid filters on and
+  what *Not on any Shelf* is answered from.
+* **Duplicates are three queries, not a column.** Same bytes (`GROUP BY sha256`),
+  same ISBN (`GROUP BY value` over `isbn_normalised`), and same title-and-author
+  — the last folded in Swift, because the folding drops accents, punctuation and
+  runs of space and `DuplicateKey` is where that rule lives. Which rule matched
+  is kept, because identical bytes is a fact and identical title-and-author is a
+  guess that fits two editions and a translation.
 
 ### Sort orders
 
-`BookSort` owns the SQL, so the sidebar, the table header and a stored
-preference cannot disagree about what "by author" means. Two rules are easy to
-get wrong and are therefore written down:
+`BookSort` owns the SQL, so the sort menu, the table header and a stored
+preference cannot disagree about what "by author" means. Six fields — title,
+author, series, rating, date added, last changed — and the direction is a
+separate thing (`BookOrder`), so every one of them works both ways round.
+
+Rules that are easy to get wrong and are therefore written down:
 
 * `COLLATE NOCASE` wherever a person's eye reads the column — a library that
   puts "Zola" before "adams" is unscannable.
-* By series, books *without* one sort last: a `NULL` sorts before everything in
-  SQLite, which would bury every series behind them.
+* By series, books *without* one sort last **in both directions**: a `NULL`
+  sorts before everything in SQLite, so a plain `DESC` would move them to the
+  front.
+* **Every order ends in the title**, so two books that tie keep a fixed order
+  instead of reshuffling on every reload.
+* A field decides which way round *one* click gives (`prefersDescending`): names
+  A–Z, dates and ratings newest and best first. Both are always offered.
+* The table's header sorts **through the model**, which re-queries. Four columns
+  — Tags, Format, Read, Size — have no `BookSort` and therefore no arrow: a
+  column that sorted only the rows in memory would put the table in one order
+  and leave the grid and the menu in another.
 
 ## 5. The cover cache
 
