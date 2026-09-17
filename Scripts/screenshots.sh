@@ -30,6 +30,11 @@ fail() { echo "screenshots: FAILED – $1" >&2; exit 1; }
 
 mkdir -p "$OUT"
 
+# A locked screen breaks everything below without failing any of it – see
+# `screen-awake.sh`, which also holds the display awake for the run.
+. "$HERE/screen-awake.sh"
+require_awake_screen "$@"
+
 # ── The permission, checked before anything is launched ───────────────────────
 PROBE=$(mktemp -t shelf-shot).png
 if ! screencapture -x "$PROBE" 2>/dev/null || [ ! -s "$PROBE" ]; then

@@ -30,6 +30,11 @@ INDEX="$LIBRARY/.shelf/library.sqlite"
 
 fail() { echo "keyboard-proof: FAILED – $1" >&2; exit 1; }
 
+# A locked screen breaks everything below without failing any of it – see
+# `screen-awake.sh`, which also holds the display awake for the run.
+. "$HERE/screen-awake.sh"
+require_awake_screen "$@"
+
 [ -f "$INDEX" ] || fail "'$LIBRARY' holds no index – import a library there first"
 
 APP="${SHOT_APP:-}"

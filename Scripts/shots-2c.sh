@@ -31,26 +31,8 @@ say() { echo "shots-2c: $1"; }
 mkdir -p "$OUT"
 
 # ── Is anybody looking at this screen? ───────────────────────────────────────
-# A locked screen breaks every step below without failing any of them.
-# `screencapture -l <window>` keeps returning the window's *last drawn frame*,
-# so three shots come out byte-identical; System Events sees no windows, and the
-# accessibility tree degenerates to an application element containing only
-# itself. This happened mid-run: the screen locked at 14:36:08 while the shots
-# were being taken, and the script cheerfully wrote the same picture three times.
-#
-# Checked first, and then held awake for the length of the run.
-if ioreg -n Root -d1 -r 2>/dev/null | grep -q '"CGSSessionScreenIsLocked"=Yes'; then
-    fail "the screen is locked.
-       While it is, a window cannot be driven and a screenshot is the window's
-       last drawn frame – which looks like success and is not. Unlock the
-       screen and run this again."
-fi
-if [ -z "${SHOTS_CAFFEINATED:-}" ] && command -v caffeinate >/dev/null; then
-    # -d keeps the display awake, -i the system. Re-runs itself once under
-    # caffeinate rather than asking the reader to remember to.
-    export SHOTS_CAFFEINATED=1
-    exec caffeinate -di "$0" "$@"
-fi
+. "$HERE/screen-awake.sh"
+require_awake_screen "$@"
 
 PROBE=$(mktemp -t shelf-shot).png
 if ! screencapture -x "$PROBE" 2>/dev/null || [ ! -s "$PROBE" ]; then
