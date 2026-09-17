@@ -223,7 +223,11 @@ struct InspectorView: View {
             // when they differ: five hollow stars would say "none of these is
             // rated", which is a different thing from "they are not all the
             // same". Clicking still sets all of them.
-            SlateStarRating(rating: model.sharedStars ?? 0) { star in
+            // `.unratedOnly` because SlateKit 0.3.1 writes "3/5" beside the
+            // stars again by default — the reading Selector has had since 0.1.0
+            // and keeps. Five drawn stars are the statement here; the word at
+            // zero stays either way.
+            SlateStarRating(rating: model.sharedStars ?? 0, label: .unratedOnly) { star in
                 model.setStars(star, undoManager: undoManager)
             }
             .help(
@@ -394,6 +398,11 @@ struct InspectorView: View {
             // handed in with `.help()` it reached every chip and replaced each
             // one's own "Remove science fiction".
             help: "⏎ adds, ⌫ removes the last one, click the ✕ to remove one",
+            // Grey, with the ✕ under the pointer. SlateKit 0.3.1 defaults both
+            // back to the accent-filled chip Selector draws, so Shelf asks for
+            // the look it has had since 2c rather than inheriting it.
+            chipStyle: .neutral,
+            chipRemoveButton: .onHover,
             onDraftChange: { model.updateTagDraft($0) },
             onAdd: { model.addTag($0, undoManager: undoManager) },
             onRemove: { model.removeTag($0, undoManager: undoManager) }
@@ -419,7 +428,7 @@ struct InspectorView: View {
                         .foregroundStyle(Slate.textSecondary)
                 } else {
                     SlateWrappingChips(items: shelves) { path in
-                        SlateChip(path) {
+                        SlateChip(path, style: .neutral, removeButton: .onHover) {
                             model.removeFromShelf(path, books: model.selectedEntries, undoManager: undoManager)
                         }
                         .help(

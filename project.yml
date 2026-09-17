@@ -16,7 +16,7 @@ packages:
   # Raising it is a deliberate step – see docs/HANDOFF.md.
   SlateKit:
     url: https://github.com/Erikemmer/SlateKit
-    exactVersion: 0.3.0
+    exactVersion: 0.3.1
 
 settings:
   base:

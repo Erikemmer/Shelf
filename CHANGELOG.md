@@ -3,6 +3,60 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 3 – Calibre import, and what Sprint 2c left open · 17 September 2026
+
+### Changed — SlateKit 0.3.1, and Shelf looks exactly as it did
+
+0.3.0 changed how two components that **Selector also draws** look, and Selector
+is pinned to 0.1.6. The day it raised that pin for something else, its tag rows
+and its rating rows would have been redrawn by a decision it never took part in.
+A pin exists so that cannot happen, and 0.3.0 had made it possible.
+
+0.3.1 turns all three of 0.3.0's appearance changes into options that default to
+the older look:
+
+| what 0.3.0 changed | how Shelf asks for it now | the package's default |
+|---|---|---|
+| chips grey instead of accent | `SlateChip(style: .neutral)` | `.accent`, the fill since 0.1.0 |
+| the ✕ fades in under the pointer | `SlateChip(removeButton: .onHover)` | `.always`, as since 0.1.0 |
+| no "3/5" beside the stars | `SlateStarRating(label: .unratedOnly)` | `.value`, as since 0.1.0 |
+
+Shelf sets all three at its three call sites and is pixel-for-pixel what it was
+on 0.3.0. **Selector can now raise its pin to 0.3.1 and see nothing change at
+all** — which is the point. The placeholder-colour fix is not in the table and
+does not need to be: `SlateEditableFields` arrived in 0.2.0, after 0.1.6, so no
+shipping app has ever seen those fields look another way.
+
+The rule this establishes, and it is now in `CLAUDE.md`: **an existing SlateKit
+component keeps its previous look in the default; what is new arrives as an
+option the host asks for.**
+
+### Changed — SlateKit speaks German again
+
+Removing the German localisation in 0.3.0 was wrong, and the reasoning was about
+the wrong app. It argued that Shelf is English until Sprint 7, which is true —
+and Shelf is not the only customer. **Selector ships German.** Taking out the
+package's nine strings does not spare Selector a mixed window; it puts nine
+English words into its German one, in an app that has already shipped. That two
+apps are at different points is what binding by tag is *for*, not a reason for
+the package to have one language.
+
+The catalogue, the `resources:` clause and the eight `String(localized:)` call
+sites are back, all nine keys with them. `Unrated` is **"Ohne Bewertung"** rather
+than 0.1.5's "Unbewertet" — that reads as a verdict on the book, where the point
+is that nothing has been said yet.
+
+Three tests hold it, each watched failing before it was kept: every key has a
+German unit in state `translated`; every plain-literal `String(localized:)` in
+the sources is a key the catalogue knows; and the four keys the compiler builds
+out of an interpolation are spelled out, because renaming one of those still
+compiles and falls back to English without a word. SlateKit: **23 tests**, up
+from 11.
+
+Shelf's own UI stays English until Sprint 7. The strings in this package are the
+package's own; Shelf's — "Mixed", "Add series…" and the rest — are Shelf's, and
+they are translated when Shelf is.
+
 ## Sprint 2c – Shelves, the table, and acting on many books · 17 September 2026
 
 ### Added
