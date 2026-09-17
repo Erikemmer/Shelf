@@ -1,0 +1,45 @@
+One book's metadata.opf before and after a title, tag and description change,
+made with: shelf-tool bulk-edit <library> 1
+
+The book file itself:
+  $(shelf-tool digest) before: 401efb3c0dc028e1916f5e09c1be0b04330cfcf46296f9e1cf9839b22cb339a0
+
+diff --git aopf-before.xml bopf-after.xml
+index d762bff..13c50a0 100644
+--- aopf-before.xml
++++ bopf-after.xml
+@@ -1,15 +1,16 @@
+ <?xml version='1.0' encoding='utf-8'?>
+ <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="uuid_id" version="2.0">
+   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+-    <dc:title>The Handmaid&apos;s of Darkness #2</dc:title>
++    <dc:title>The Handmaid&apos;s of Darkness #2 [2b]</dc:title>
+     <dc:creator opf:role="aut" opf:file-as="Clarke, Becky">Becky Clarke</dc:creator>
+     <dc:language>en</dc:language>
+     <dc:publisher>Gollancz</dc:publisher>
+-    <dc:description>Synthetic book number 2, for measuring how Shelf behaves with many of them.</dc:description>
++    <dc:description>Edited by the Sprint 2b proof run, book number 1.</dc:description>
+     <dc:identifier id="uuid_id" opf:scheme="uuid">7E4DA8A1-824A-41E3-832C-34112F4F700F</dc:identifier>
+     <dc:subject>fantasy</dc:subject>
++    <dc:subject>proof-run-2b</dc:subject>
+     <dc:subject>space opera</dc:subject>
+-    <meta name="calibre:title_sort" content="Handmaid&apos;s of Darkness #2, The"/>
++    <meta name="calibre:title_sort" content="Handmaid&apos;s of Darkness #2 [2b], The"/>
+     <meta name="calibre:timestamp" content="2026-09-17T09:22:20+00:00"/>
+     <meta property="dcterms:modified">2026-09-17T09:22:20+00:00</meta>
+     <meta name="shelf:read" content="false"/>
+
+  $(shelf-tool digest) after:  401efb3c0dc028e1916f5e09c1be0b04330cfcf46296f9e1cf9839b22cb339a0
+
+The EPUB is byte for byte what it was — the two digests above are the same
+string. Only metadata.opf changed, and in it only what was edited:
+
+  * dc:title, and calibre:title_sort *followed it* without being asked,
+    because the stored sort title was still the one the rule produces
+  * one new dc:subject, in sorted position among the two that were there —
+    one element per tag, the way Calibre writes them
+  * dc:description
+
+dcterms:modified is unchanged in this particular diff, and that is not a bug:
+the edit happened in the same second as the import, and the stamp has one-second
+precision on purpose (DATA-MODEL §3). An edit a second later moves it.

@@ -5,6 +5,156 @@ on and what was *not* measured.
 
 ## Sprint 2b – All the fields, tags and series · 17 September 2026
 
+### Added
+
+- **Every metadata field is editable**, and the rules for each one live in the
+  core rather than in a text field: `BookField`, `IdentifierEdit`, `TagEdit` and
+  `ISBN` decide what an empty field means, how several authors are separated,
+  whether "2,5" is a number, whether an ISBN can be that number at all. The
+  inspector is three lines per field. One property is tested for every field at
+  once — **what a field shows, the same field accepts back** — and it failed when
+  written, for a real reason: `published` stores a moment and shows a day, so
+  committing an untouched field would have moved the book's date to midnight.
+- **Debouncing, in the form it turned out to need**: a field is written when it
+  is *finished* — ⏎, or the focus leaving it — and Escape discards. Not a timer:
+  a timer still writes in the middle of a word and has to be flushed before the
+  window closes. Undo is one step per finished field.
+- **Tags as chips**, in Selector's shape: a field reading "Add tag… (T)", the
+  completions under it, the chips below that. ⏎ adds, ⌫ in an empty field
+  removes the last, the chip's ✕ removes that one. Completion comes from the
+  sidebar's own tag facets, so it is not a second query, and a tag that differs
+  only in case keeps the spelling the library already uses. **T** focuses the
+  field, shows the inspector if it is hidden, and scrolls the field into view.
+- **Series**: the sidebar filters, the grid inside a series is ordered by series
+  index whatever the sort menu says, and the inspector reads "Book 3 of 7" —
+  counted from this library, and the help says so.
+- **Search covers the six fields CONCEPT §4 asks for**, ISBN included. FTS5 has
+  no `ALTER TABLE … ADD COLUMN`, so migration 2 rebuilds the table and refills
+  it from the tables it summarises. Both spellings of an ISBN are indexed.
+- **[ADR 0007](docs/adr/0007-a-metadata-change-does-not-rename-the-folder.md)** —
+  a metadata change does not rename the book's folder. The UUID holds the
+  identity; a rename is the one file operation that can lose a book, and it
+  would happen at the worst moment. "Reorganize Library…" becomes its own
+  command with a preview.
+- **`shelf-tool bulk-edit`, `epub-digests`, `search-time`, `verify-edits`** —
+  what section 7 of the proof run is made of.
+
+### Fixed
+
+1. **A line break inside an OPF attribute came back as a space.** XML
+   attribute-value normalisation replaces a literal tab, newline or carriage
+   return in an attribute *before* the parser reports it, and
+   `calibre:title_sort`, `calibre:series`, `opf:file-as` and Calibre's custom
+   columns are all attributes holding text a person typed. There are two
+   escaping functions now. Two more layers of the same defect were underneath:
+   XML line-ending normalisation turns a literal CR in element text into LF, and
+   **`"\r\n"` is a single `Character` in Swift**, so `case "\r"` never matched a
+   Windows line break at all — both escaping functions walk unicode scalars.
+2. **The editing keys died once a text field had been typed in.** 1–5, 0, R and
+   T were handled by `.onKeyPress` on the grid; after an inspector field had
+   held focus, the accessibility tree reported focus on the *window* and on no
+   control, where that handler never fires — and clicking a cover could not
+   revive it, because the grid's `@FocusState` still said `true` and assigning
+   `true` is not a change. Measured: a tag typed through T landed **0 times out
+   of 5**. `EditingKeyMonitor`, a local `NSEvent` monitor, does not depend on
+   SwiftUI focus; its one rule is to keep out of text being typed, which is the
+   definite question "is the first responder a field editor". Measured again
+   afterwards: **5 of 5**.
+3. **The sidebar buried Series, Formats and Devices.** A section could take 200
+   rows and a 120-book library already has 97 authors. Twelve per section, with
+   the "+ N more — use ⌘F" line that was already written for it.
+4. **One window wrote "epub" in the sidebar and "EPUB" in the inspector.** One
+   spelling now, `BookFileFormat.label`, with a test over every case.
+5. **The smoke test called an app with no window "ok"** — twice. First because
+   it only asserted that a window *exists*; then, after that was fixed, because
+   the one thing "on screen" found was a **menu-bar strip**, one of the four
+   1512 × 33 windows every app carries. `window-count.swift` prints a third
+   number now, and the assertion looks five times before failing, because the
+   reading flickers.
+6. **The screenshot script reported success for work it had not done**: it
+   photographed a stale instance four times (a `quit` is refused while a sheet
+   is open), asked the wrong Selector process for a window, never scrolled the
+   sidebar (System Events has no `scroll` command — `sidebar.png` was a
+   byte-for-byte copy of `library.png`), and kept the 1.2 MB PNGs it said it had
+   replaced.
+7. **SlateKit 0.2.0 and 0.2.1** — the editable fields, and then the look of
+   them: a field showing its background at all times made nine filled boxes that
+   read as a form, where Selector's inspector reads as a column of values that
+   happen to be editable. Also the welcome screen's shortcut line, which squeezed
+   its labels instead of wrapping, and the tag chips, which claimed the tag
+   field's help text in place of their own.
+
+### Measured
+
+MacBook Pro, Apple silicon, macOS 26.6.2, Release build.
+`Scripts/proof-run.sh ~/Library/Caches/Shelf/proof-2b`, 5 000 synthetic EPUBs
+(4 996 books after the duplicate check), 200 of them edited.
+
+| | median | slowest | target |
+|---|---|---|---|
+| one change — title, tag and description, `metadata.opf` **and** the search index | **2.2 ms** | **13.6 ms** | 50 ms |
+| searching 4 996 books for a tag that did not exist a second earlier | **0.6 ms** | 0.7 ms | 100 ms |
+| the same search, cold page cache | 1.2 ms | | |
+
+95th percentile of a change: 4.1 ms. **None of the 200 was over the 50 ms
+target.**
+
+Memory, with the 4 996-book library open in the window and 16 tags typed into
+the inspector by keyboard: **250 MB before, 262 MB at the peak** — against the
+1.5 GB the concept allows. All 16 were written and are findable.
+
+And the three claims the sprint is really about:
+
+```
+══ are those 200 book files still byte for byte what they were?
+  every one of them is unchanged ✓
+══ throwing the index away again, and asking the folders about all 200
+checked 200 books
+  titles without the suffix:      0
+  books without the tag:          0
+  descriptions that do not match: 0
+  found by searching for the tag: 200
+  every change survived ✓
+```
+
+**313 core tests**, 49 of them new. Three were checked by removing the fix and
+watching them fail: the search migration (an existing library loses its *whole*
+search index without the refill, not only the ISBN), the carriage return in a
+description, and the line break in an attribute.
+
+The evidence at the window is in `docs/screenshots/sprint-2b/`:
+
+- `inspector-tags.jpg` — the tag field with "fa" typed and focused, "fantasy"
+  and "favourites" offered under it, the book's own tags as chips with ✕, and
+  the sidebar's tag counts beside it.
+- `ax-tree.txt` — the same thing as the accessibility tree reads it: every field
+  with a name and a value where Sprint 1 had static text, the suggestions and
+  the chips as buttons of their own, each saying what it does.
+- `opf-diff.txt` — one book's `metadata.opf` before and after, with the EPUB's
+  SHA-256 on both sides of it. Four lines change; `calibre:title_sort` follows
+  the title without being asked; the EPUB is the same string.
+
+### Not verified
+
+- **Clicking a cover does not reliably take the keyboard back from the search
+  field.** After a search, the editing keys keep going into the search box until
+  Escape is pressed there. Escape works, is a normal macOS idiom, and is the
+  documented way out; the rest is in `docs/BACKLOG.md`. Three attempts at a fix
+  (AppKit's `makeFirstResponder(nil)`, a model-owned focus flag, clearing the
+  `@FocusState` first) each improved it without settling it.
+- **One launch produced no window at all.** The app ran at 0 % CPU with a menu
+  bar and no window in its accessibility tree. It happened once, was not
+  reproducible in six further cold starts, and left no crash report. It is the
+  reason the smoke test's window check was tightened twice; if it returns, the
+  smoke test will now say so instead of printing "ok".
+- **The window was driven by AppleScript, not by hand.** Every claim above about
+  the keyboard was measured that way — clicks at fixed coordinates, keystrokes
+  with delays. It found real defects, but it is not a person using the app, and
+  a few of its failures turned out to be the coordinates rather than the code.
+- **German** is Sprint 7, but SlateKit localises *its own* strings from 0.1.1.
+  On a German Mac the package's words ("Unrated", "Remove") will appear in
+  German beside Shelf's English ones. Not checked on a German system.
+
 ### Somebody has now seen the window
 
 The Screen Recording permission exists, so `Scripts/screenshots.sh` ran for the

@@ -100,6 +100,55 @@ fields as `shelf:` metas, which Calibre ignores silently.
 </package>
 ```
 
+### Which field goes where
+
+Every editable field and the element it becomes. `BookField` in the core owns
+the reading and writing of each one, so this table and the code are the same
+list ([`Sources/ShelfCore/Library/BookFieldEdit.swift`](../Sources/ShelfCore/Library/BookFieldEdit.swift)).
+
+| field in the inspector | in `metadata.opf` | notes |
+|---|---|---|
+| Title | `<dc:title>` | may not be empty: it names the folder |
+| — (derived) | `<meta name="calibre:title_sort">` | follows the title, unless somebody set it by hand |
+| Authors | one `<dc:creator opf:role="aut">` each | separated by ` & ` in the field, order kept |
+| — (derived) | `opf:file-as` on each `dc:creator` | `AuthorSort.of(name)`, follows the author |
+| Series | `<meta name="calibre:series">` | empty removes the series *and* its index |
+| Series index | `<meta name="calibre:series_index">` | a decimal; `2,5` and `2.5` both mean 2.5 |
+| Publisher | `<dc:publisher>` | |
+| Published | `<dc:date>` | typed as a year, a month or a day |
+| Language | `<dc:language>` | not validated: "eng" is what the file said |
+| Description | `<dc:description>` | several lines; ⏎ is a line break, not a commit |
+| Tags | one `<dc:subject>` each, sorted | a case-insensitive set |
+| Identifiers | `<dc:identifier opf:scheme="ISBN">` … | an ISBN is checked against its check digit |
+| Rating | `<meta name="calibre:rating">` | Calibre's 0…10, five stars × 2 |
+| Read | `<meta name="shelf:read">` | Shelf's own |
+
+Rules that come with the table:
+
+* **An empty field removes the element** rather than writing an empty one. A
+  book with no publisher has no `<dc:publisher>`, not an empty one.
+* **`calibre:title_sort` follows the title, but only when nobody had set it.**
+  "Nobody set it" is recognisable: the stored value is exactly what
+  `TitleSort.of` produces for the old title. A hand-written "Dispossessed, The"
+  survives the next typo fix, because overwriting it would be the app changing
+  data nobody asked it to change.
+* **The author sort form is never stored**, only derived — which is why it
+  follows a changed author into `opf:file-as` and into the index's `name_sort`
+  without anybody maintaining it.
+* **Authors are separated by `&`, never by a comma.** `AuthorSort` reads a comma
+  as "this name is already in sort form", so "Austen, Jane" is *one* author;
+  splitting on commas would make it two.
+* **Tags are sorted and case-folded.** The OPF writes them sorted, the index
+  reads them back `ORDER BY name`, and `Book` sorts them on construction — three
+  places, one order, so the same book read from its folder and read from the
+  index cannot differ in a field nobody touched. Adding a tag that differs only
+  in case keeps the spelling the library already uses, so a sidebar never lists
+  "Science Fiction" and "science fiction" as two keywords.
+* **A metadata change never renames the book's folder**
+  ([ADR 0007](adr/0007-a-metadata-change-does-not-rename-the-folder.md)). The
+  UUID holds the identity; a folder named after an old title is a name, not a
+  defect. "Reorganize Library…" is a separate command with a preview.
+
 Rules worth knowing:
 
 * **Written atomically**, through a `metadata.opf.part` that is renamed into
@@ -114,6 +163,24 @@ Rules worth knowing:
   version of this used `U+001F` and a test caught it.)
 * **Rendering is stable**: the same book gives byte-identical output, so a diff
   in a library folder means a real change.
+* **Text between tags and text inside an attribute are escaped differently.**
+  Both get the five XML entities. An attribute also gets `&#9;`, `&#10;` and
+  `&#13;` for tab, newline and carriage return, because XML *attribute-value
+  normalisation* turns those into a space before the parser ever reports them —
+  a sort title with a line break came back changed, and `calibre:title_sort`,
+  `calibre:series`, `opf:file-as` and Calibre's custom columns are all
+  attributes. Element text escapes the carriage return for the same kind of
+  reason (*line-ending normalisation* turns a literal CR into LF) and leaves
+  newlines and tabs as themselves, so a long description is still readable by
+  eye in the file.
+* **A value that looks like XML arrives as text.** A book titled
+  `<meta name="calibre:rating" content="10"/>` keeps that title and keeps its
+  rating of 0; it cannot set its own fields by being called the right thing.
+* **A value is trimmed at both ends.** The XML reader trims an element's text,
+  so a value stored with a leading space would not come back with one. The
+  editor trims what is typed, which makes "what was stored" and "what comes
+  back" the same string.
+
 * **Unknown metas are kept**, not dropped. Calibre's `user_metadata:*` custom
   columns land in `unmappedMetas` and are written back, so Sprint 3 is a feature
   and not a migration.
@@ -163,7 +230,7 @@ migrations (`IndexSchema`). Tables as CONCEPT §5.2 names them:
 | `identifiers` | scheme → value, plus a normalised `isbn_normalised` row | the OPFs |
 | `custom_columns`, `custom_values` | Calibre's custom columns (Sprint 3, read-only) | the OPFs' unknown metas |
 | `devices`, `device_books` | what is on which reader (Sprint 5) | the devices |
-| `search` | FTS5 over title, authors, series, tags, description | everything above |
+| `search` | FTS5 over title, authors, series, tags, description, **ISBN** | everything above |
 
 Notes:
 
@@ -175,7 +242,13 @@ Notes:
 * **`identifiers` carries a second, normalised ISBN row** (`isbn_normalised`):
   the importer compares those, so `0-306-40615-x` and `030640615X` are one book.
 * **`search` is a plain FTS5 table**, not one with external content: the text
-  searched spans five tables, so there is no single row to point at.
+  searched spans six tables, so there is no single row to point at. Migration 2
+  added the `isbn` column — FTS5 has no `ALTER TABLE … ADD COLUMN`, so the table
+  is dropped, built again and *refilled* from the tables it summarises. The
+  refill is not optional: without it an existing library loses its whole search
+  index, not merely the ISBN, because nothing rewrites a book's row until
+  somebody edits that book. Both spellings of an ISBN are indexed, hyphens and
+  no hyphens, because neither prefix-matches the other.
   `LibraryIndex` writes that row whenever it writes a book — one place, rather
   than five triggers that have to stay in step. A book's search row is deleted
   and reinserted on every save, because FTS5 has no useful `UPDATE` and a stale

@@ -38,7 +38,7 @@ die Entscheidungen in `docs/adr/`.
 - **SlateKit-Änderungen laufen über Commit + Tag + Abhängigkeits-Update.** Das
   Paket liegt in einem eigenen Repo (`~/Documents/SlateKit`,
   https://github.com/Erikemmer/SlateKit). Shelf bindet es über einen **Tag** ein
-  (`project.yml`, derzeit `0.1.0`), nie über einen Pfad – sonst ändert ein
+  (`project.yml`, derzeit `0.2.1`), nie über einen Pfad – sonst ändert ein
   Nachmittag Arbeit an SlateKit still, was diese App baut und wogegen ihre Tests
   gelaufen sind. Der Weg: dort ändern, `make test && make lint`, committen, Tag
   setzen und pushen, dann hier `exactVersion` hochziehen, `make project &&
@@ -54,55 +54,65 @@ die Entscheidungen in `docs/adr/`.
 
 ---
 
-## Nächster Schritt: Sprint 2b – Tags, Regale, Serien, Suche, Tabelle
+## Nächster Schritt: Sprint 2c – Regale, Tabelle, Sortierung, Mehrfachauswahl
 
-**Sprint 2a ist fertig**: ein Feld ganz durch, mit Undo zuerst, wie es hier
-vorgeschlagen war. `MetadataChange` und `MetadataEditor` liegen im Kern und
-machen aus „altes Buch, neues Buch" ein OPF-Delta plus Index-Nachzug; die
-App-Schicht hängt nur die Registrierung beim `UndoManager` des Fensters und den
-Dateischreibvorgang an. Bewertung (Inspector, 1–5, 0) und Gelesen-Status
-(Inspector, R) sind editierbar, ⌘Z/⇧⌘Z funktionieren, die Zahlen stehen im
-`CHANGELOG.md`.
+**Sprint 2b ist fertig.** Alle Metadatenfelder sind editierbar, Tags sind Chips
+mit Autovervollständigung, Serien filtern und ordnen, die Suche deckt die sechs
+Felder aus CONCEPT §4 ab (ISBN inklusive). Die Zahlen stehen im `CHANGELOG.md`;
+die Belege am Fenster in `docs/screenshots/sprint-2b/`.
 
 Was als Nächstes ansteht, in dieser Reihenfolge:
 
-1. **Die übrigen Felder im Inspector** – Titel, Autoren, Serie, Verlag, Datum,
-   Sprache, Beschreibung. Die Kette steht; das sind Textfelder gegen dieselbe
-   `MetadataChange`. **Hier wird Entprellen nötig**: bei 5–8 ms je Schreibvorgang
-   war es für Bewertung und Gelesen-Status keines wert, aber ein Textfeld
-   schreibt sonst pro Tastendruck eine Datei.
-2. **Tags (T)**, mit `SlateSuggestionChip` für die vorhandenen Tags.
-3. **Regale.** Das Einzige, was der Index weiß und eine Buchdatei nicht, also in
+1. **Regale.** Das Einzige, was der Index weiß und eine Buchdatei nicht, also in
    jede OPF *und* in `library.json` gespiegelt (ADR 0001, Entscheidung 3).
    `ShelfTree`, das Schema und `shelf:shelves` sind fertig; es fehlen Anlegen,
-   Umbenennen, Drag und die Sidebar-Zeilen. Danach wird
-   `LibraryModel.applyFilter` die leeren Mengen los, die es heute übergibt, und
-   *Not on any Shelf* wird freigeschaltet.
-4. **Serienansicht**, **Tabelle (⌘2)**, **Mehrfachauswahl**, dann *Duplicates*
-   (Abfrage über `isbn_normalised` und den gefalteten Titel-Schlüssel).
-5. **⌘-Klick zum Kombinieren** der Sidebar-Filter.
+   Umbenennen, Drag und die Sidebar-Zeilen. Danach wird `LibraryModel.applyFilter`
+   die leere Menge los, die es heute übergibt, und *Not on any Shelf* wird
+   freigeschaltet.
+2. **Tabelle (⌘2)**: sortierbar, Spalten wählbar. `BookSort` besitzt die
+   SQL-Reihenfolge schon – die Tabellenüberschrift muss dieselbe Quelle nehmen,
+   sonst behaupten Menü und Kopfzeile Verschiedenes.
+3. **Mehrfachauswahl im Grid** und ein Feld über die Auswahl hinweg ändern.
+   `MetadataChange` ist pro Buch gebaut; für n Bücher werden es n Änderungen in
+   einem Undo-Schritt (`UndoManager.beginUndoGrouping`).
+4. **Sortierung**, gespeichert je Bibliothek.
+5. *Duplicates* (Abfrage über `isbn_normalised` und den gefalteten
+   Titel-Schlüssel) und **⌘-Klick zum Kombinieren** der Sidebar-Filter.
 
 ### Was dabei zu beachten ist
 
-- **Der Index liefert Identifier jetzt mit.** Bis Sprint 2a war
-  `entries.identifiers` immer leer: der Inspector hat die ISBN-Zeile nie
-  gezeichnet, und ein erneutes `save` einer aus dem Index gelesenen Zeile hätte
-  die Identifier-Zeilen gelöscht und keine zurückgeschrieben – also die ISBN
-  jedes bearbeiteten Buchs und damit die Duplikatsprüfung. Beides ist behoben
-  und getestet.
-- **`MetadataEditor` legt das Delta über die Datei, nicht über den Index.**
-  Calibres eigene Spalten stehen nur in der OPF; ein Schreiben aus der
-  Index-Sicht würde sie stillschweigend wegwerfen. Neue Felder gehören deshalb
-  in `MetadataChange.Field` – dort stehen „was hat sich geändert" und „kopiere
-  das Geänderte" nebeneinander.
-- **Tastenkürzel zum Bearbeiten gehören nicht in die Menüleiste**
-  (ADR 0006, mit Messung). Die Pfeiltasten sind noch dort; das steht im Backlog.
-- `OPFDocument.render` ist stabil (gleiches Buch → gleiche Bytes). Bitte so
-  lassen: nur dann bedeutet ein Diff in einem Bibliotheksordner eine echte
-  Änderung. `dcterms:modified` wird seit 2a mitgeschrieben.
-- **`SHELF_TIMING=1`** schaltet die Zeitmessungen im Fenster ein (Öffnen,
-  sichtbare Cover fertig, Tastendruck → OPF). Ohne die Variable ist es still.
-  Lesen mit `open --env SHELF_TIMING=1 --stdout <datei> -a <Shelf.app> <Bibliothek>`.
+- **Die Feldregeln liegen im Kern, nicht in der Ansicht.** `BookField`,
+  `IdentifierEdit`, `TagEdit` und `ISBN` entscheiden, was ein leeres Feld
+  bedeutet, wie Autoren getrennt werden, ob „2,5" eine Zahl ist. Ein neues Feld
+  ist dort ein Fall und im Inspector drei Zeilen. Die Eigenschaft, die alles
+  zusammenhält, ist getestet: *was ein Feld anzeigt, akzeptiert dasselbe Feld
+  zurück.*
+- **Ein Feld wird beim Abschluss geschrieben, nicht beim Tippen** (⏎ oder
+  Fokusverlust), Escape verwirft. Kein Timer – ein Timer schriebe mitten im Wort
+  und müsste vor dem Schließen des Fensters geleert werden.
+- **Die Bearbeitungstasten hängen an keinem Fokus mehr.** `EditingKeyMonitor`
+  ist ein lokaler `NSEvent`-Monitor; seine einzige Regel ist, sich aus Text
+  herauszuhalten, den jemand tippt. Menü-Kurzbefehle bleiben draußen (ADR 0006).
+  **Offen:** Ein Klick aufs Cover nimmt dem *Suchfeld* die Tastatur nicht
+  zuverlässig ab; Escape im Suchfeld tut es. Steht im Backlog.
+- **Der Ordner wird bei einer Metadatenänderung nicht umbenannt**
+  ([ADR 0007](adr/0007-a-metadata-change-does-not-rename-the-folder.md)). Die
+  UUID hält die Identität. „Reorganize Library…" mit Vorschau kommt später.
+- **Attribut und Elementtext werden unterschiedlich escaped.** Ein Zeilenumbruch
+  in einem Attribut wird sonst beim Parsen zu einem Leerzeichen, und
+  `calibre:title_sort`, `calibre:series` und `opf:file-as` sind Attribute. Und:
+  `"\r\n"` ist in Swift *ein* `Character` – deshalb laufen beide
+  Escaping-Funktionen über Unicode-Skalare.
+- **FTS5 kennt kein `ALTER TABLE ADD COLUMN`.** Eine neue Suchspalte heißt:
+  Tabelle neu bauen *und aus den Quelltabellen nachfüllen*. Ohne das Nachfüllen
+  verliert eine bestehende Bibliothek ihren ganzen Suchindex.
+- **`SHELF_TIMING=1`** schaltet die Zeitmessungen im Fenster ein. Ohne die
+  Variable ist es still.
+- **SlateKit steht auf `0.2.1`.** Der Weg zu einer Änderung: dort ändern,
+  `make test && make lint && make contrast`, committen, taggen, pushen, dann
+  hier `exactVersion` hochziehen. Achtung beim Hochziehen: `SlateSidebarRow` hat
+  in 0.1.4 einen `accessory`-ViewBuilder *vor* `action` bekommen, wodurch
+  Trailing-Closures still an den falschen Parameter binden.
 
 ## Eine Entscheidung, die dir gehört: SlateKit und CI
 
@@ -124,18 +134,14 @@ wurde nicht gebaut. Lokal baut sie `make app`, und `make smoke` startet sie.
 
 ## Offene Punkte, die keiner Sitzung gehören
 
-- **Bildschirmfotos brauchen eine Freigabe, die nur Erik geben kann.**
-  `screencapture` verlangt „Bildschirmaufnahme" für das Terminal, das es
-  startet; ohne sie verweigert es mit „could not create image from display" und
-  schreibt gar nichts. **Weg:** Systemeinstellungen ▸ Datenschutz & Sicherheit ▸
-  Bildschirmaufnahme, Terminal hinzufügen, Terminal beenden und neu öffnen, dann
-  `Scripts/screenshots.sh`. Das Skript fotografiert Shelf *und* Selector in
-  derselben Größe und liest mit `Scripts/pixel-probe.swift` dieselben vier Pixel
-  aus beiden – Sidebar-Hintergrund, Hauptfläche, Inspector-Hintergrund,
-  Sidebar-Zeile. „Sieht aus wie Selector" wird dadurch eine Zahl.
-  Die Bedienungshilfen-Freigabe ist vorhanden, deshalb liegt der
-  Barrierefreiheits-Baum in `docs/screenshots/` – er hat zwei Fehler gefunden,
-  die auf einem Bildschirmfoto niemandem aufgefallen wären.
+- **Bildschirmfotos: erledigt.** Die Freigabe „Bildschirmaufnahme" ist erteilt,
+  `Scripts/screenshots.sh` läuft, und die Bilder liegen in
+  `docs/screenshots/sprint-1/` (Shelf und Selector, gleiche Größe) und
+  `docs/screenshots/sprint-2b/`. Drei der vier Vergleichspixel sind byte-gleich
+  mit Selector. **Was das Skript braucht:** dass *keine* Shelf-Instanz läuft –
+  es bricht sonst mit einer Erklärung ab, statt eine fremde zu fotografieren.
+  Und für Selector ein offenes Fenster; eine Instanz unter Xcodes Debugger hat
+  meist keines.
 - **Die übrigen Handprüfungen aus Sprint 1 sind erledigt** und stehen mit Zahlen
   im `CHANGELOG.md`: Fensterzahl (eines, nicht sechs), Zeit bis alle sichtbaren
   Cover stehen (852 ms kalt, 768 ms warm), gehaltene Pfeiltaste mit `sample`,

@@ -1,0 +1,52 @@
+The inspector of one book, read out of the accessibility tree while the tag
+field holds "fa" and offers what it could mean.
+
+Taken with: swift Scripts/ax-dump.swift <pid> 6
+Library: ~/Library/Caches/Shelf/measure-library-2b, 120 synthetic books.
+What to look for: every field has a name and a value where Sprint 1 had
+static text; the tag field holds what is being typed; the suggestions and the
+chips are buttons of their own, each saying what it does.
+
+      AXImage
+      AXTextField value="Ancillary #41" desc="Title" help="Title — ⏎ or clicking away saves, Escape discards"
+      AXTextField value="Terry Jemisin" desc="Authors" help="Authors — ⏎ or clicking away saves, Escape discards"
+      AXTextField desc="Series" help="Series — empty removes the book from its series"
+      AXStaticText value="RATING"
+      AXUnknown valueDescription="1 of 5" desc="Rating" help="1–5 sets the rating, 0 clears it; the same star again clears it"
+      AXCheckBox value="0" desc="Read" help="Whether the book has been read (R)"
+      AXStaticText value="DETAILS"
+      AXStaticText value="Publisher" help="Publisher — empty removes it from metadata.opf"
+      AXTextField value="Orbit" help="Publisher — empty removes it from metadata.opf"
+      AXStaticText value="Published" help="Published — empty removes it from metadata.opf"
+      AXTextField help="Published — empty removes it from metadata.opf"
+      AXStaticText value="Language" help="Language — empty removes it from metadata.opf"
+      AXTextField value="en" help="Language — empty removes it from metadata.opf"
+      AXStaticText value="Added, 17. Sep 2026"
+      AXStaticText value="Size, 134.4 KB"
+      AXStaticText value="IDENTIFIERS"
+      AXTextField desc="New identifier name" help="The name of the identifier – ISBN, ASIN, DOI, Goodreads"
+      AXTextField desc="New identifier value" help="An ISBN is checked against its check digit; the others are not"
+      AXStaticText value="TAGS"
+      AXTextField value="fa" help="⏎ adds, ⌫ removes the last one, click the ✕ to remove one"
+      AXButton desc="fantasy"
+      AXButton desc="favourites"
+      AXStaticText value="book club"
+      AXButton desc="Remove book club" help="Remove"
+      AXStaticText value="mprobe1"
+      AXButton desc="Remove mprobe1" help="Remove"
+      AXStaticText value="mprobe2"
+      AXButton desc="Remove mprobe2" help="Remove"
+      AXStaticText value="mprobe3"
+      AXButton desc="Remove mprobe3" help="Remove"
+      AXStaticText value="mprobe4"
+      AXButton desc="Remove mprobe4" help="Remove"
+      AXStaticText value="mprobe5"
+      AXButton desc="Remove mprobe5" help="Remove"
+      AXStaticText value="science fiction"
+      AXButton desc="Remove science fiction" help="Remove"
+      AXStaticText value="DESCRIPTION"
+      AXTextField value="Synthetic book number 41, for measuring how Shelf behaves with many of them." desc="Description" help="Several lines. Finished when the field loses focus; Escape discards"
+      AXStaticText value="FORMATS"
+      AXStaticText value="EPUB, 134.4 KB"
+      AXButton desc="Open in Default App" help="Hands the file to Books, Preview or whatever reads it (↩)"
+      AXButton desc="Show in Finder" help="Reveals Jemisin, Terry/Ancillary #41 (14) (⇧⌘R)"

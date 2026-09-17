@@ -57,23 +57,61 @@ change of controls, not of layout.
 - [x] The proof in `Scripts/proof-run.sh`: ten changes, the EPUB's SHA-256
       unchanged, the OPF changed, the index erased and rebuilt finds the same
       rating and read status
-- [ ] Debouncing. Not needed yet at 5–8 ms a write; it becomes necessary with
-      the text fields of 2b, where every keystroke would otherwise be a file
+- [x] Debouncing — done in 2b, and not as a timer: a field is written when it is
+      *finished* (⏎ or focus lost). A timer would still write in the middle of a
+      word and would have to be flushed before the window closed
 
-### 2b – the rest
+### 2b – all the fields, tags, series, search · done
 
-- [ ] The remaining fields in the inspector: title, authors, series, publisher,
-      date, language, description
-- [ ] Tags (T) from the keyboard
+- [x] Every remaining field in the inspector: title, authors, series and its
+      index, publisher, date, language, description, identifiers. The rules for
+      each live in the core (`BookField`, `IdentifierEdit`, `TagEdit`, `ISBN`),
+      not in a text field
+- [x] Debouncing, in the form it turned out to need: **one write per finished
+      field** (⏎ or focus lost), not a timer. Escape discards
+- [x] Tags as chips with completion, T to focus the field, ⏎ adds, ⌫ removes
+      the last, the chip's ✕ removes that one; the sidebar's counts move at once
+- [x] Series: the sidebar filters, the grid is in series index order inside a
+      series, the inspector says "Book 3 of 7"
+- [x] Search over title, author, series, tags, description **and ISBN**
+      (CONCEPT §4, Must) — migration 2, refilled from the tables it summarises
+- [x] XML safety: the five entities, umlauts, emoji, tabs, Windows line breaks
+      and a 20 KB description survive a round trip, the OPF stays well-formed,
+      and a title that looks like markup lands as text
+- [x] [ADR 0007](adr/0007-a-metadata-change-does-not-rename-the-folder.md) — a
+      metadata change does not rename the book's folder
+- [x] Proof run section 7: 200 books edited, timings, the book files unchanged,
+      the new tag searched for across 5 000 books, the index thrown away and
+      every change found again
+
+### 2c – shelves, the table, and acting on many books
+
 - [ ] Shelves: create, rename, drag books onto them, hierarchy in the sidebar,
       mirrored into the OPFs and `library.json`
-- [ ] Series view: the books of a series in index order, missing volumes visible
 - [ ] The table view (⌘2): sortable, choosable columns
+- [ ] Multiple selection in the grid, and editing a field across it
+- [ ] Sorting: the sort menu and the table header agreeing, saved per library
 - [ ] The two smart collections Sprint 1 left disabled: **Duplicates** (needs a
       query over `isbn_normalised` and the folded title key) and **Not on any
-      Shelf**
+      Shelf** (needs shelves)
 - [ ] Combining filters with ⌘-click, as Selector's sidebar does
-- [ ] Multiple selection in the grid, and acting on it
+- [ ] Series view proper: missing volumes visible, not only the ones present
+- [ ] **"Reorganize Library…"** — the command that *does* rename folders to match
+      the metadata, with a preview of every move and a report afterwards
+      ([ADR 0007](adr/0007-a-metadata-change-does-not-rename-the-folder.md)).
+      Until it exists, a library that has been edited for a while has folder
+      names that are historical, which costs nothing but tidiness
+- [ ] **Clicking a cover does not take the keyboard back from the search field.**
+      After a search, 1–5, 0, R and T keep going into the search box until
+      Escape is pressed there. Escape works and is a normal macOS idiom, so this
+      is awkward rather than broken. The editing keys themselves no longer
+      depend on SwiftUI focus at all (`EditingKeyMonitor`); what is left is
+      SwiftUI putting focus back into the field after AppKit and the model have
+      both been told to let go
+- [ ] **Debouncing the search field**, if it turns out to be wanted. It already
+      waits 120 ms after the last keystroke before asking FTS5, and a search
+      over 5 000 books measured 0.6 ms, so there is nothing to fix yet — written
+      down so the question is not asked twice
 
 ## Sprint 3 – Calibre import
 
@@ -163,17 +201,15 @@ shelves; iPad.
 These need the window open and a person watching, so they are listed here rather
 than claimed:
 
-- [ ] **Does the window look right?** Nobody has seen it, and this session could
-      not photograph it: `screencapture` needs Screen Recording permission for
-      the terminal that runs it, and this terminal has none — it refuses with
-      "could not create image from display". `Scripts/screenshots.sh` does the
-      whole job the moment the permission exists: it photographs Shelf's four
-      screens and Selector's window at one size and reads the same four pixels
-      out of both with `Scripts/pixel-probe.swift`. **For Erik:** System
-      Settings ▸ Privacy & Security ▸ Screen Recording, add the terminal, quit
-      and reopen it, then `Scripts/screenshots.sh`.
-      What could be read without it is the accessibility tree
-      (`docs/screenshots/sprint-1/ax-tree.txt`), and it found two defects.
+- [x] **Does the window look right?** Answered in Sprint 2b, once the Screen
+      Recording permission existed. Five shots in `docs/screenshots/sprint-1/`,
+      Shelf and Selector at 1440 × 877: the sidebar background, the inspector
+      background and the selected sidebar row are identical to the byte
+      (`#2B2B2B`, `#2B2B2B`, `#52472F`). The fourth probe point compares nothing
+      — it sits in the content area, where Selector has a photograph and Shelf
+      has the ground behind a cover grid — and is named as such rather than
+      moved somewhere that would agree. Looking at the shots found five defects
+      that no test could have; all five are fixed.
 - [x] **Is there more than one window?** Settled: **no.** Shelf reports `5 1` –
       five layer-0 windows, one of them on screen – and the accessibility API,
       which counts real windows, reports **one**. Four of the five are

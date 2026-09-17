@@ -23,14 +23,17 @@
 │            RecentLibrariesStore (security-scoped bookmarks)   │
 │            SHA256Hasher (CryptoKit, the fast path)            │
 │            TimingLog (SHELF_TIMING=1; silent otherwise)       │
+│            EditingKeyMonitor (1–5, 0, R, T at the window)     │
 ├───────────────────────────────────────────────────────────────┤
 │  ShelfCore (Swift package, no UI, runs on Linux too)          │
 │  Model:     Book · SeriesRef · BookFormat · BookFileFormat ·  │
 │             Shelf/ShelfTree · SmartCollection/LibraryFilter · │
-│             BookFolderName · TitleSort/AuthorSort ·           │
+│             BookFolderName · TitleSort/AuthorSort · ISBN ·    │
 │             ShortcutReference                                 │
 │  Library:   Library + LibraryDescriptor · IndexRebuilder ·    │
-│             MetadataChange + MetadataEditor                   │
+│             MetadataChange + MetadataEditor ·                 │
+│             BookField/IdentifierEdit/TagEdit (what a typed    │
+│             string does to a book)                            │
 │  Index:     IndexSchema (migrations) · LibraryIndex (GRDB)    │
 │  Formats:   ZipReader · Inflate · XMLTree · OPFDocument ·     │
 │             EPUBMetadata · FileNameMetadata · CoverFile ·     │
@@ -147,8 +150,11 @@ counter is stored. See [ADR 0002](adr/0002-copy-verify-then-trust.md).
 The chain Sprint 2a built, and the order matters at every step:
 
 ```
-a key press or a click in the inspector
-  → LibraryModel.setStars / toggleRead
+a key press (EditingKeyMonitor) or a finished field in the inspector
+  → BookField.apply / TagEdit / IdentifierEdit                    (ShelfCore)
+      turns what was typed into .changed(Book) / .unchanged / .rejected
+      — the rules for empty values, separators, decimals and check digits
+  → LibraryModel.commit / setStars / toggleRead
       builds a MetadataChange from the *old* book: (before, after)
   → LibraryModel.apply
       1. registers change.inverse with the window's UndoManager   ← before any write
@@ -170,7 +176,13 @@ Undo is registered *before* the write because once the file is written nobody
 can ask it what it used to say. Registering the inverse from inside the undo
 block is what gives redo for nothing: `UndoManager` records whatever is
 registered while undoing as the redo action. Measured from the key press to the
-written file: 8 ms for a rating, 5 ms for a read status.
+written file: 8 ms for a rating, 5 ms for a read status; and over 200 books
+changing title, tags and description at once, 2.2 ms median and 13.6 ms at
+worst, the search index included.
+
+A **text** field is finished by ⏎ or by losing focus, and only then does any of
+this happen. That is the whole of the debouncing: a timer would still write in
+the middle of a word and would have to be flushed before the window closed.
 
 No book file is opened for writing anywhere in that chain.
 
