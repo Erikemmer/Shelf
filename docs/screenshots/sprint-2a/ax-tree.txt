@@ -1,0 +1,63 @@
+Accessibility tree of the inspector after Sprint 2a — the editable fields
+=========================================================================
+
+Taken with `swift Scripts/ax-dump.swift <pid>` from the running Release build,
+one book selected, rating set to three stars with the keyboard (the 3 key) and
+the read status left off. Read-only; this is the tree VoiceOver walks.
+
+What it shows:
+
+* The star control publishes its value: `valueDescription="3 of 5"`. The OPF
+  beside the book says `calibre:rating` 6 at the same moment, which is the
+  same rating on Calibre's ten-point scale.
+* The read status is an `AXCheckBox` with a value, where Sprint 1 had a static
+  "Read: No" text. A keyboard-only user can reach and toggle it.
+* Both carry help text naming their keys.
+
+Note on the Sprint 1 excerpt in ../sprint-1/ax-tree.txt: it claimed the star
+count was "not readable by assistive technology". That was wrong, and the fault
+was in the tool, not the app – SwiftUI puts `.accessibilityValue` on a custom
+control into `AXValueDescription`, and the first version of the dumper only
+read `AXValue`. `Scripts/ax-dump.swift` reads both now.
+
+--- INSPECTOR ---
+      AXImage
+      AXStaticText value="The Handmaid's of Darkness #2"
+      AXStaticText value="Becky Clarke"
+      AXStaticText value="RATING"
+      AXUnknown valueDescription="3 of 5" desc="Rating" help="1–5 sets the rating, 0 clears it; the same star again clears it"
+      AXCheckBox value="0" desc="Read" help="Whether the book has been read (R)"
+      AXStaticText value="DETAILS"
+      AXStaticText value="Publisher"
+      AXStaticText value="Gollancz"
+      AXStaticText value="Language"
+      AXStaticText value="en"
+      AXStaticText value="Added"
+      AXStaticText value="17. Sep 2026"
+      AXStaticText value="Size"
+      AXStaticText value="134.4 KB"
+      AXStaticText value="TAGS"
+      AXStaticText value="fantasy"
+      AXStaticText value="space opera"
+      AXStaticText value="DESCRIPTION"
+      AXStaticText value="Synthetic book number 2, for measuring how Shelf behaves with many of them."
+      AXStaticText value="FORMATS"
+      AXStaticText value="EPUB"
+      AXStaticText value="134.4 KB"
+      AXButton desc="Open in Default App" help="Hands the file to Books, Preview or whatever reads it (↩)"
+      AXButton desc="Show in Finder" help="Reveals Clarke, Becky/The Handmaid's of Darkness #2 (1) (⇧⌘R)"
+      AXScrollBar value="0"
+        AXValueIndicator value="0"
+        AXButton [AXIncrementArrow]
+        AXButton [AXDecrementArrow]
+        AXButton [AXIncrementPage]
+        AXButton [AXDecrementPage]
+  AXToolbar
+    AXButton desc="Open Library"
+    AXButton desc="Add Books"
+    AXGroup
+      AXCheckBox [AXToggle] value="1" desc="Inspector" help="Hide the Inspector"
+  AXButton [AXCloseButton]
+  AXButton [AXFullScreenButton] help="this button also has an action to zoom the window"
+    AXGroup
+      AXGroup

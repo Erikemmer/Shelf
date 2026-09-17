@@ -19,6 +19,10 @@ let usage = """
       synthesise <folder> [count]   write <count> synthetic EPUBs with real covers
       import <source> <library>     import a folder into a library, verified
       rebuild <library>             erase the index and rebuild it from the folders
+      edit <library> <title> <stars> <read>
+                                    set one book's rating (0–5) and read status
+                                    (yes/no) – writes metadata.opf, never the book
+      show <library> <title>        print what the index holds about one book
       digest <file>                 SHA-256 of one file, to compare with shasum
 
     Test material belongs under ~/Library/Caches/Shelf, never under ~/Documents.
@@ -30,6 +34,8 @@ switch arguments.first {
 case "synthesise": try Commands.synthesise(Array(arguments.dropFirst()))
 case "import": try await Commands.importFolder(Array(arguments.dropFirst()))
 case "rebuild": try await Commands.rebuild(Array(arguments.dropFirst()))
+case "edit": try await Commands.edit(Array(arguments.dropFirst()))
+case "show": try await Commands.show(Array(arguments.dropFirst()))
 case "digest": try Commands.digest(Array(arguments.dropFirst()))
 default:
     print(usage)
@@ -202,6 +208,85 @@ enum Commands {
             exit(1)
         }
         print("index and folders agree")
+    }
+
+    // MARK: edit
+
+    /// Sets one book's rating and read status from the command line.
+    ///
+    /// The same `MetadataEditor` the window uses, so the proof run can make ten
+    /// changes and then ask whether the book file survived them – which is the
+    /// Sprint 2 form of "the folder is the truth" (ADR 0001).
+    static func edit(_ arguments: [String]) async throws {
+        guard arguments.count >= 4, let stars = Int(arguments[2]) else {
+            print("usage: shelf-tool edit <library> <title substring> <stars 0-5> <read yes|no>")
+            exit(2)
+        }
+        let (library, index) = try openLibrary(arguments[0])
+        let entry = try await findBook(arguments[1], in: index)
+        let read = ["yes", "true", "1"].contains(arguments[3].lowercased())
+
+        let change = MetadataChange.make(from: entry.book) {
+            $0.stars = stars
+            $0.isRead = read
+        }
+        guard !change.isEmpty else {
+            print("nothing to change: “\(entry.book.title)” is already \(stars) stars, read=\(read)")
+            return
+        }
+        let updated = try await MetadataEditor(library: library).apply(change, to: entry, in: index)
+        print(
+            "“\(updated.book.title)”: \(change.fields.map(\.label).joined(separator: ", ")) "
+                + "→ \(updated.book.stars) stars (calibre:rating \(updated.book.rating)), "
+                + "read=\(updated.book.isRead)")
+    }
+
+    // MARK: show
+
+    /// What the index holds about one book – the other half of the edit proof:
+    /// erase the index, rebuild it from the folders, and ask again.
+    static func show(_ arguments: [String]) async throws {
+        guard arguments.count >= 2 else {
+            print("usage: shelf-tool show <library> <title substring>")
+            exit(2)
+        }
+        let (_, index) = try openLibrary(arguments[0])
+        let entry = try await findBook(arguments[1], in: index)
+        print("title:    \(entry.book.title)")
+        print("authors:  \(entry.book.authors.joined(separator: ", "))")
+        print("folder:   \(entry.folder)")
+        print("stars:    \(entry.book.stars)")
+        print("rating:   \(entry.book.rating)")
+        print("read:     \(entry.book.isRead)")
+        print("tags:     \(entry.book.tags.joined(separator: ", "))")
+        let ids = entry.book.identifiers.sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: " ")
+        print("ids:      \(ids)")
+        print("modified: \(OPFDate.render(entry.book.modifiedAt))")
+    }
+
+    private static func openLibrary(_ path: String) throws -> (Library, LibraryIndex) {
+        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        let (library, _) = try Library.open(url)
+        return (library, try LibraryIndex(library: library))
+    }
+
+    /// The first book whose title contains `needle`, case-insensitively. Enough
+    /// for a proof run and for a person at a prompt; the window searches
+    /// properly.
+    ///
+    /// An empty `needle` means the first book in title order. The proof run
+    /// uses that: it has to name the same book twice, before and after a
+    /// rebuild, without knowing what is in a freshly generated library.
+    private static func findBook(_ needle: String, in index: LibraryIndex) async throws -> LibraryEntry {
+        let all = try await index.allEntries()
+        if needle.isEmpty, let first = all.first { return first }
+        guard let entry = all.first(where: { $0.book.title.localizedCaseInsensitiveContains(needle) }) else {
+            print("no book whose title contains “\(needle)” – \(all.count) books in the index")
+            exit(1)
+        }
+        return entry
     }
 
     // MARK: digest

@@ -16,8 +16,11 @@ What it shows, and what it shows is missing:
   has to give these rows a role.
 * The counts read "4.996" — grouped in the user's locale — while the status
   bar one line below reads "4996 books". Two number formats in one window.
-* The rating control comes out as AXUnknown with a description and *no*
-  value: the star count is not readable by assistive technology.
+* The rating control comes out as AXUnknown with a description and, as first
+  written here, "no value". **That was wrong**, and the fault was in the tool:
+  SwiftUI puts `.accessibilityValue` on a custom control into
+  `AXValueDescription`, and the first version of the dumper read only `AXValue`.
+  `Scripts/ax-dump.swift` reads both now. See ../sprint-2a/ax-tree.txt.
 
 --- SIDEBAR ---
     AXScrollArea

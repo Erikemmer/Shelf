@@ -2,10 +2,14 @@
 # The Sprint 1 proof run, on the command line.
 #
 # It measures what can be measured without a window: generating 5 000 synthetic
-# EPUBs, importing them with SHA-256 verification, reading the index, and
-# rebuilding the index from the folders. The window's own numbers – how long
-# until every visible cover is on screen, and whether a held arrow key stutters
-# – have to be measured with the app open; `docs/BACKLOG.md` says how.
+# EPUBs, importing them with SHA-256 verification, reading the index, rebuilding
+# the index from the folders, and – since Sprint 2a – making ten metadata
+# changes to one book and checking that the book file survived them byte for
+# byte while a rebuilt-from-scratch index still knows the rating.
+#
+# The window's own numbers – how long until every visible cover is on screen,
+# and whether a held arrow key stutters – need the app open. `SHELF_TIMING=1`
+# and `docs/BACKLOG.md` say how.
 #
 # Everything lands under ~/Library/Caches/Shelf, never under ~/Documents: that
 # folder is synced, and 5 000 generated books would be uploaded to iCloud.
@@ -71,6 +75,67 @@ echo "  files in the source: $(find "$SOURCE" -type f | wc -l | tr -d ' ')"
 # claim true rather than hopeful.
 say "erasing the index and rebuilding it from the folders"
 /usr/bin/time -l "$TOOL" rebuild "$LIBRARY" 2>&1 | grep -Ev "^  *[0-9]+  " | tail -15
+
+# ── 6. Editing: the folder is still the truth ────────────────────────────────
+# The Sprint 2 form of ADR 0001. Ten metadata changes to one book, then three
+# questions: did the book file survive them byte for byte, did the metadata.opf
+# actually change, and does a rebuilt-from-scratch index still know the rating
+# and the read status?
+say "ten metadata changes, and what they did and did not touch"
+# The empty search term means "the first book in title order", so the same book
+# is named before and after the rebuild without knowing what the generator made.
+BEFORE_SHOW=$("$TOOL" show "$LIBRARY" "" 2>/dev/null)
+TITLE=$(echo "$BEFORE_SHOW" | sed -n 's/^title: *//p')
+FOLDER=$(echo "$BEFORE_SHOW" | sed -n 's/^folder: *//p')
+BOOK_DIR="$LIBRARY/$FOLDER"
+EPUB=$(find "$BOOK_DIR" -name "*.epub" 2>/dev/null | head -1)
+if [ -z "$EPUB" ] || [ -z "$TITLE" ]; then
+    echo "  no book to edit – skipping"
+else
+    echo "  book:  $TITLE"
+    EPUB_BEFORE=$("$TOOL" digest "$EPUB")
+    OPF_BEFORE=$("$TOOL" digest "$BOOK_DIR/metadata.opf")
+    echo "  epub before: $EPUB_BEFORE"
+
+    for round in 1 2 3 4 5 6 7 8 9 10; do
+        STARS=$((round % 6))
+        READ=$([ $((round % 2)) -eq 0 ] && echo yes || echo no)
+        "$TOOL" edit "$LIBRARY" "" "$STARS" "$READ" >/dev/null || {
+            echo "  edit $round failed" >&2
+            exit 1
+        }
+    done
+    # The last round: 10 % 6 = 4 stars, read=yes. That is what has to come back
+    # out of a rebuilt index.
+    EPUB_AFTER=$("$TOOL" digest "$EPUB")
+    OPF_AFTER=$("$TOOL" digest "$BOOK_DIR/metadata.opf")
+    echo "  epub after:  $EPUB_AFTER"
+    if [ "$EPUB_BEFORE" = "$EPUB_AFTER" ]; then
+        echo "  the book file is untouched after ten metadata changes ✓"
+    else
+        echo "  THE BOOK FILE CHANGED – this must never happen" >&2
+        exit 1
+    fi
+    if [ "$OPF_BEFORE" != "$OPF_AFTER" ]; then
+        echo "  metadata.opf changed, as it must ✓"
+    else
+        echo "  metadata.opf did not change – the edits went nowhere" >&2
+        exit 1
+    fi
+
+    say "throwing the index away and asking the folders again"
+    "$TOOL" rebuild "$LIBRARY" 2>&1 | tail -4
+    REBUILT=$("$TOOL" show "$LIBRARY" "")
+    echo "$REBUILT" | grep -E "^(title|stars|rating|read):"
+    STARS_BACK=$(echo "$REBUILT" | awk '/^stars:/ {print $2}')
+    READ_BACK=$(echo "$REBUILT" | awk '/^read:/ {print $2}')
+    if [ "$STARS_BACK" = "4" ] && [ "$READ_BACK" = "true" ]; then
+        echo "  the rebuilt index found the same rating and read status ✓"
+    else
+        echo "  the rebuild lost the edit: stars=$STARS_BACK read=$READ_BACK (wanted 4 / true)" >&2
+        exit 1
+    fi
+fi
 
 say "done"
 echo "source:  $SOURCE"

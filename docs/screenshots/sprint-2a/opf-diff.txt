@@ -1,0 +1,45 @@
+What two keystrokes change in a book's metadata.opf — Sprint 2a
+===============================================================
+
+A synthetic library of five books, opened in the Release build. One book
+selected; the 4 key pressed, then R. `git diff --no-index` between the file
+before and the file after:
+
+diff --git a/before/metadata.opf b/after/metadata.opf
+index 4aa180d..7ee7c5b 100644
+--- a/before/metadata.opf
++++ b/after/metadata.opf
+@@ -10,9 +10,10 @@
+     <dc:subject>fantasy</dc:subject>
+     <dc:subject>space opera</dc:subject>
+     <meta name="calibre:title_sort" content="Handmaid&apos;s of Darkness #2, The"/>
++    <meta name="calibre:rating" content="8"/>
+     <meta name="calibre:timestamp" content="2026-09-17T07:00:03+00:00"/>
+-    <meta property="dcterms:modified">2026-09-17T07:00:03+00:00</meta>
+-    <meta name="shelf:read" content="false"/>
++    <meta property="dcterms:modified">2026-09-17T07:00:34+00:00</meta>
++    <meta name="shelf:read" content="true"/>
+   </metadata>
+   <guide/>
+ </package>
+
+Three lines, and nothing else in the file moved: the rating arrives as
+`calibre:rating` 8 — four stars on Calibre's ten-point scale — the read status
+flips, and the modification date follows. The title, the author, the identifier,
+the subjects and the timestamp are byte-for-byte what they were.
+
+The book file itself, in the same folder:
+
+  before  6ce31fd8f73834db9a5ce49584c6377be3978b2946cfc6be106e4c6ae488f6e0
+  after   6ce31fd8f73834db9a5ce49584c6377be3978b2946cfc6be106e4c6ae488f6e0
+
+⌘Z twice put `metadata.opf` back *byte-identical* to the first file, modification
+date included: the undo restores the previous value rather than recomputing it.
+⇧⌘Z twice put both changes back.
+
+Measured with SHELF_TIMING=1, from the key press to the written file:
+
+  Rating written:      8 ms
+  Read Status written: 5 ms
+
+against the 50 ms the sprint brief asks for.
