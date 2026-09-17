@@ -171,10 +171,6 @@ fi
 # The title says whether a library actually opened: "<name> — Shelf".
 TITLE=$(osascript -e 'tell application "System Events" to tell process "Shelf" to get name of front window' 2>/dev/null)
 echo "smoke: front window title: ${TITLE:-unavailable}"
-# Existence is the criterion: a minimised window, one on another Space, or one
-# another app's full-screen window covers is not "on screen" while the app is
-# perfectly fine. Both numbers are reported and only "at least one" is asserted.
-#
 # The first number is not a window count: four of those layer-0 windows are the
 # system's menu bar (1512 x 33 at 0,0, never on screen), and Selector reports the
 # same four. A healthy Shelf reads "5 1". Established by launching Selector's
@@ -187,6 +183,30 @@ if [ "$WINDOWS" -lt 1 ]; then
     echo "smoke: System Events counts: $VIA_EVENTS"
     cleanup
     fail "measured $WINDOWS windows for pid $PID"
+fi
+# Nothing on screen is a failure, and it was not until Sprint 2b.
+#
+# The old rule asserted only "at least one window exists", on the argument that
+# a minimised window, one on another Space, or one behind another app's
+# full-screen window is not "on screen" while the app is perfectly fine. That
+# argument does not apply to *this* script: it launches the app itself, on the
+# current Space, and never minimises it. It was left as a reported number, and
+# a launch that spawned no window duly reported "windows: 1 (of those on screen:
+# 0)", "front window title: unavailable" — and then "ok". That is the one thing
+# the smoke test exists to catch, and it waved it through.
+#
+# Occlusion is not a false negative here: a window another window covers is
+# still on screen to the window server. `SMOKE_ALLOW_OFFSCREEN=1` is the way
+# out for a machine where this turns out to be flaky.
+if [ "$ONSCREEN" -lt 1 ] && [ "${SMOKE_ALLOW_OFFSCREEN:-0}" != "1" ]; then
+    VIA_EVENTS=$(osascript -e 'tell application "System Events" to tell process "Shelf" to count windows' 2>&1)
+    echo "smoke: System Events counts: $VIA_EVENTS"
+    cleanup
+    fail "the app is running but has no window on screen (of $WINDOWS layer-0 windows, a
+       healthy Shelf shows 1 of 5). Either the launch produced no window, or the
+       window opened somewhere this Space cannot see. Run it again; if it keeps
+       happening with a window plainly visible, set SMOKE_ALLOW_OFFSCREEN=1 and
+       say so in the report."
 fi
 
 # ── CPU and memory ────────────────────────────────────────────────────────────
