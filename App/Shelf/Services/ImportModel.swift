@@ -341,23 +341,28 @@ final class ImportModel {
             let digest = try? FileDigest.sha256(of: facts.url, makeHasher: SHA256Hasher.factory)
         else { return nil }
 
-        if format.hasReadableMetadata, let read = try? EPUBMetadata.read(url: facts.url) {
-            return ImportCandidate(
-                source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: read.book,
-                cover: read.cover, coverName: read.coverName, drm: read.drm, modifiedAt: facts.modifiedAt,
-                warnings: read.warnings)
+        // One call for every format since Sprint 4: `FileReader` picks the
+        // reader off `BookFileFormat.readerLayer` — the core for EPUB, MOBI,
+        // AZW3 and CBZ, this layer for PDF and CBR, and the file name for KFX,
+        // which nothing can read. It never throws: a file that will not parse
+        // is still a book named after itself, and what went wrong is in the
+        // warnings and therefore in `Import-Report.txt`.
+        //
+        // The *original* URL is handed in for the name, because that is what
+        // the user chose; the bytes come from `facts.url`, which has followed
+        // any symlink.
+        let read = FileReader.read(url: facts.url, format: format)
+        var book = read.book
+        // A file behind a symlink is named by the link, and the link's name is
+        // the one the person picked. Only when the file itself said nothing.
+        if !read.fromTheFile, facts.url != url {
+            let stem = url.deletingPathExtension().lastPathComponent
+            book = Book(title: FileNameMetadata.title(from: stem), authors: FileNameMetadata.authors(from: stem))
         }
-        // Everything else imports by file name in Sprint 1 (CONCEPT §6). The
-        // book is still added, and the report says where its metadata came from.
-        // The *original* name is used, because that is what the user chose.
-        let stem = url.deletingPathExtension().lastPathComponent
-        let book = Book(title: FileNameMetadata.title(from: stem), authors: FileNameMetadata.authors(from: stem))
         return ImportCandidate(
             source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: book,
-            modifiedAt: facts.modifiedAt,
-            warnings: [
-                "metadata from the file name – \(format.rawValue.uppercased()) is read from Sprint 4 on"
-            ])
+            cover: read.cover, coverName: read.coverName, drm: read.drm, modifiedAt: facts.modifiedAt,
+            warnings: read.warnings)
     }
 
     /// Every book file in what was chosen: the files themselves, and the

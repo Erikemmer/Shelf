@@ -174,6 +174,24 @@ public enum EPUBMetadata {
     }
 }
 
+/// Splitting one author field into several names.
+///
+/// One place, because three formats need it and a fourth will: MOBI's EXTH 100,
+/// a PDF's `Author` attribute and `ComicInfo.xml`'s `Writer` are all one string
+/// holding however many people wrote the book.
+///
+/// **A comma is not a separator**, and that is the whole difficulty. These
+/// files overwhelmingly write authors surname-first — "Le Guin, Ursula K." —
+/// so splitting on commas turns one author into two half-people. Ampersands and
+/// semicolons are separators, because nothing writes a single name with either.
+public enum AuthorField {
+    public static func split(_ raw: String) -> [String] {
+        raw.split(whereSeparator: { $0 == "&" || $0 == ";" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+}
+
 /// What a file name says about a book when the file itself says nothing.
 ///
 /// Used for MOBI, PDF and comics in Sprint 1, and for any EPUB whose metadata

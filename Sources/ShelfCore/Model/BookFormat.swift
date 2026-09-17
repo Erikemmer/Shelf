@@ -31,22 +31,56 @@ public enum BookFileFormat: String, CaseIterable, Sendable, Codable, Comparable 
     /// thing that makes an app look unfinished.
     public var label: String { rawValue.uppercased() }
 
-    /// Whether `ShelfCore` can read metadata out of the file itself.
+    /// Whether Shelf can read metadata out of the file itself.
     /// Everything else falls back to the file name.
+    ///
+    /// True for everything but KFX since Sprint 4. KFX is the one format listed
+    /// here that Shelf cannot open at all: the container is undocumented, and a
+    /// parser written against guesses would be wrong in ways nobody could see
+    /// (ADR 0011). A `.kfx` is carried as a file with a name and a size, which
+    /// is the honest answer.
     public var hasReadableMetadata: Bool {
         switch self {
-        case .epub, .kepub: return true
-        // Sprint 4 adds these; today they import by file name.
-        case .azw3, .mobi, .pdf, .cbz, .cbr: return false
+        case .epub, .kepub, .azw3, .mobi, .pdf, .cbz, .cbr: return true
         case .kfx: return false
         }
     }
 
-    /// Whether Shelf can pull a cover out of the file in Sprint 1.
-    public var hasReadableCover: Bool {
+    /// Whether Shelf can pull a cover out of the file.
+    public var hasReadableCover: Bool { hasReadableMetadata }
+
+    /// Which part of the program reads it.
+    ///
+    /// A row per format rather than a chain of `if`s at the one place that has
+    /// to choose, and it says something real: the core reads what it can read
+    /// on Linux, and PDF and CBR need frameworks that only exist on a Mac — so
+    /// they are read in the app layer and their *rules* are in the core
+    /// (ADR 0003).
+    public var readerLayer: ReaderLayer {
         switch self {
-        case .epub, .kepub: return true
-        case .azw3, .mobi, .pdf, .cbz, .cbr, .kfx: return false
+        case .epub, .kepub, .azw3, .mobi, .cbz: return .core
+        // PDFKit is not Linux-capable, and neither is libarchive's RAR support.
+        case .pdf, .cbr: return .app
+        case .kfx: return .none
+        }
+    }
+
+    public enum ReaderLayer: Sendable, Equatable {
+        /// `ShelfCore`, and therefore tested on Linux in CI too.
+        case core
+        /// `App/Shelf`, because the framework it needs is Apple's.
+        case app
+        /// Nothing reads it. The file is carried by name and size.
+        case none
+    }
+
+    /// What the inspector says about a format Shelf cannot open.
+    public var unreadableNote: String? {
+        switch self {
+        case .kfx:
+            return "Shelf cannot read KFX. The file is kept, named and counted, and nothing more."
+        default:
+            return nil
         }
     }
 

@@ -249,15 +249,45 @@ struct BookFileFormatTests {
         #expect([BookFileFormat.pdf, .epub, .mobi].min() == .epub)
     }
 
-    /// Sprint 1 reads EPUB only; the rest import by file name and say so. This
-    /// test is what will change in Sprint 4, deliberately.
-    @Test("only EPUB and KEPUB have readable metadata in Sprint 1")
+    /// The one place Sprint 4 was always going to change, and it has: Sprint 1
+    /// read EPUB only, and every format but KFX is read now.
+    ///
+    /// KFX stays false, and not as an omission. Its container is undocumented,
+    /// so a parser written against guesses would be wrong in ways nobody could
+    /// see — the file is carried by name and size instead, which is the honest
+    /// answer (ADR 0011).
+    @Test("every format but KFX has readable metadata")
     func readableMetadata() {
-        #expect(BookFileFormat.epub.hasReadableMetadata)
-        #expect(BookFileFormat.kepub.hasReadableMetadata)
-        #expect(!BookFileFormat.azw3.hasReadableMetadata)
-        #expect(!BookFileFormat.pdf.hasReadableMetadata)
+        for format in BookFileFormat.allCases where format != .kfx {
+            #expect(format.hasReadableMetadata, "\(format.label) should be readable in Sprint 4")
+            #expect(format.hasReadableCover, "\(format.label) should give a cover in Sprint 4")
+        }
         #expect(!BookFileFormat.kfx.hasReadableMetadata)
+        #expect(!BookFileFormat.kfx.hasReadableCover)
+        #expect(BookFileFormat.kfx.unreadableNote != nil)
+    }
+
+    /// The table that says which half of the program reads a format, and it is
+    /// a real claim: the core has to build and pass on Linux, so anything
+    /// needing PDFKit or libarchive is the app's.
+    @Test("PDF and CBR are read in the app layer, everything else in the core")
+    func readerLayers() {
+        #expect(BookFileFormat.epub.readerLayer == .core)
+        #expect(BookFileFormat.kepub.readerLayer == .core)
+        #expect(BookFileFormat.mobi.readerLayer == .core)
+        #expect(BookFileFormat.azw3.readerLayer == .core)
+        #expect(BookFileFormat.cbz.readerLayer == .core)
+        #expect(BookFileFormat.pdf.readerLayer == .app)
+        #expect(BookFileFormat.cbr.readerLayer == .app)
+        #expect(BookFileFormat.kfx.readerLayer == .none)
+
+        // And the two tables agree: nothing is readable with no reader, and
+        // nothing has a reader while claiming to be unreadable.
+        for format in BookFileFormat.allCases {
+            #expect(
+                format.hasReadableMetadata == (format.readerLayer != .none),
+                "\(format.label): hasReadableMetadata and readerLayer disagree")
+        }
     }
 
     @Test("KFX is listed rather than left out, so a file is named and not lost")

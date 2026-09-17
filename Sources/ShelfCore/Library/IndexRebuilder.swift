@@ -136,9 +136,21 @@ public struct IndexRebuilder: Sendable {
         {
             book = parsed.book
             hadOPF = true
-        } else if let epub = bookFiles.first(where: { $0.1.hasReadableMetadata }),
-            let read = try? EPUBMetadata.read(url: folder.appendingPathComponent(epub.0), readCover: false)
+        } else if let readable = bookFiles.sorted(by: { $0.1 < $1.1 })
+            .first(where: { $0.1.readerLayer == .core }),
+            case let read = BookFileReader.read(
+                url: folder.appendingPathComponent(readable.0), format: readable.1, readCover: false),
+            read.fromTheFile
         {
+            // The book file itself, when there is no OPF. Sorted by preference
+            // first, so a folder holding both an EPUB and a MOBI is described
+            // by the EPUB — the same order the planner uses, so a rebuild and
+            // an import cannot disagree about the same folder.
+            //
+            // Only the formats the *core* reads. A rebuild must give the same
+            // answer on Linux as on this Mac, and asking PDFKit here would make
+            // that untrue; a folder holding only a PDF falls through to the
+            // folder name, which its OPF will normally have saved it from.
             book = read.book
         } else {
             // Last resort, and still a book: the folder name is

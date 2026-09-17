@@ -1006,19 +1006,14 @@ enum Commands {
         guard let format = BookFileFormat.of(url), let facts = FileFacts.of(url) else { return nil }
         let digest = try FileDigest.sha256(of: facts.url, makeHasher: PortableSHA256Hasher.factory)
 
-        if format.hasReadableMetadata, let read = try? EPUBMetadata.read(url: facts.url) {
-            return ImportCandidate(
-                source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: read.book,
-                cover: read.cover, coverName: read.coverName, drm: read.drm, modifiedAt: facts.modifiedAt,
-                warnings: read.warnings)
-        }
-        // Everything else imports by file name in Sprint 1 (CONCEPT §6).
-        let stem = url.deletingPathExtension().lastPathComponent
-        let book = Book(title: FileNameMetadata.title(from: stem), authors: FileNameMetadata.authors(from: stem))
+        // One call for every format. This tool has no app layer, so PDF and
+        // CBR come back as their file names with a warning saying why — which
+        // is honest, and is what `BookFileReader` says of them.
+        let read = BookFileReader.read(url: facts.url, format: format)
         return ImportCandidate(
-            source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: book,
-            modifiedAt: facts.modifiedAt,
-            warnings: ["metadata from the file name – \(format.rawValue.uppercased()) is read in Sprint 4"])
+            source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: read.book,
+            cover: read.cover, coverName: read.coverName, drm: read.drm, modifiedAt: facts.modifiedAt,
+            warnings: read.warnings)
     }
 
     static func openOrCreate(_ url: URL) throws -> (Library, LibraryDescriptor) {
