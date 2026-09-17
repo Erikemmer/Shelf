@@ -369,3 +369,77 @@ public enum TagEdit {
         return Array((prefixed + contained).prefix(limit))
     }
 }
+
+extension BookField {
+    /// The value every one of these books shows, or `nil` when they disagree.
+    ///
+    /// The whole of what an inspector needs in order to show a selection
+    /// honestly: a value, or "Mixed". In the core because it is a rule about
+    /// what a field *means* across several books, and because it has to use
+    /// `text(of:)` — the same function a single book's field shows — or a
+    /// selection of one would read differently from that book on its own.
+    public func sharedText(across books: [Book]) -> String? {
+        guard let first = books.first else { return nil }
+        let text = self.text(of: first)
+        return books.dropFirst().allSatisfy { self.text(of: $0) == text } ? text : nil
+    }
+}
+
+/// What a handful of books have in common, for an inspector showing several at
+/// once.
+///
+/// Set arithmetic, in the core, because the answers are not obvious and each of
+/// them is a decision: a tag on *every* book is part of the selection's own
+/// state, a tag on *some* of them is not, and the two have to be drawn
+/// differently or removing one would quietly do nothing to most of the books.
+public enum AcrossBooks {
+    /// Tags every book carries. Removing one of these acts on all of them.
+    public static func sharedTags(_ books: [Book]) -> [String] {
+        shared(books.map { Set($0.tags) })
+    }
+
+    /// Tags some books carry and others do not.
+    public static func mixedTags(_ books: [Book]) -> [String] {
+        mixed(books.map { Set($0.tags) })
+    }
+
+    public static func sharedShelves(_ books: [Book]) -> [String] {
+        shared(books.map { Set($0.shelves) })
+    }
+
+    public static func mixedShelves(_ books: [Book]) -> [String] {
+        mixed(books.map { Set($0.shelves) })
+    }
+
+    /// The rating every book has, or `nil` when they differ.
+    public static func sharedStars(_ books: [Book]) -> Int? {
+        guard let first = books.first?.stars else { return nil }
+        return books.allSatisfy { $0.stars == first } ? first : nil
+    }
+
+    /// Whether every book is read, every book is unread, or they differ.
+    public static func sharedReadStatus(_ books: [Book]) -> Bool? {
+        guard let first = books.first?.isRead else { return nil }
+        return books.allSatisfy { $0.isRead == first } ? first : nil
+    }
+
+    /// What R does to a mixed selection: **read**, because the useful half of
+    /// "mark these as read" is finishing the job. Toggling each book on its own
+    /// would leave the selection exactly as mixed as before, one book at a
+    /// time, which is not a thing anybody wants from one key.
+    public static func readStatusAfterToggle(_ books: [Book]) -> Bool {
+        sharedReadStatus(books).map { !$0 } ?? true
+    }
+
+    private static func shared(_ sets: [Set<String>]) -> [String] {
+        guard let first = sets.first else { return [] }
+        return sets.dropFirst().reduce(first) { $0.intersection($1) }.sorted()
+    }
+
+    private static func mixed(_ sets: [Set<String>]) -> [String] {
+        guard let first = sets.first else { return [] }
+        let all = sets.reduce(first) { $0.union($1) }
+        let every = sets.dropFirst().reduce(first) { $0.intersection($1) }
+        return all.subtracting(every).sorted()
+    }
+}

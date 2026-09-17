@@ -674,23 +674,29 @@ final class LibraryModel {
     /// rating a book already has clears it, which is how every rating control
     /// that is worth using behaves – otherwise there is no way back to unrated.
     func setStars(_ stars: Int, undoManager: UndoManager?) {
-        guard let entry = selectedEntry else { return }
-        let wanted = entry.book.stars == stars ? 0 : stars
-        apply(MetadataChange.make(from: entry.book) { $0.stars = wanted }, to: entry, undoManager: undoManager)
+        let books = selectedEntries
+        guard !books.isEmpty else { return }
+        // Clicking the rating a book already has clears it, which is how every
+        // rating control worth using behaves — otherwise there is no way back
+        // to unrated. Across a selection the *shared* rating decides: twelve
+        // books already at three stars go to unrated, a mixed twelve go to
+        // three, because "make these all three" is the useful half.
+        let shared = AcrossBooks.sharedStars(books.map(\.book))
+        let wanted = shared == stars ? 0 : stars
+        edit(books, actionName: "Rating", undoManager: undoManager) { $0.stars = wanted }
     }
 
     /// The 0 key: unrated, whatever it was.
     func clearRating(undoManager: UndoManager?) {
-        guard let entry = selectedEntry else { return }
-        apply(MetadataChange.make(from: entry.book) { $0.stars = 0 }, to: entry, undoManager: undoManager)
+        edit(selectedEntries, actionName: "Rating", undoManager: undoManager) { $0.stars = 0 }
     }
 
     /// R, and the checkbox in the inspector.
     func toggleRead(undoManager: UndoManager?) {
-        guard let entry = selectedEntry else { return }
-        apply(
-            MetadataChange.make(from: entry.book) { $0.isRead.toggle() }, to: entry,
-            undoManager: undoManager)
+        let books = selectedEntries
+        guard !books.isEmpty else { return }
+        let wanted = AcrossBooks.readStatusAfterToggle(books.map(\.book))
+        edit(books, actionName: "Read Status", undoManager: undoManager) { $0.isRead = wanted }
     }
 
     // MARK: Editing the text fields
@@ -719,28 +725,50 @@ final class LibraryModel {
     /// The rules are the core's (`BookField.apply`), so nothing about what an
     /// empty value means or how authors are separated is decided here.
     func commit(_ field: BookField, _ typed: String, undoManager: UndoManager?) {
-        guard let entry = selectedEntry else { return }
+        // One book at a time. A title, a series or a description typed once and
+        // written to twelve books is not an edit, it is a mistake with twelve
+        // copies — so the inspector draws these read-only when several books
+        // are selected, and this refuses them even if something else asks.
+        guard !hasMultipleSelection, let entry = selectedEntry else { return }
         handle(field.apply(typed, to: entry.book), key: field.rawValue, entry: entry, undoManager: undoManager)
     }
 
     func commitIdentifier(scheme: String, value: String, undoManager: UndoManager?) {
-        guard let entry = selectedEntry else { return }
+        // An ISBN belongs to one edition. Twelve books with the same one would
+        // be twelve duplicates of each other.
+        guard !hasMultipleSelection, let entry = selectedEntry else { return }
         handle(
             IdentifierEdit.set(scheme: scheme, value: value, in: entry.book),
             key: "identifier:\(scheme.lowercased())", entry: entry, undoManager: undoManager)
     }
 
+    /// Adds a tag to every selected book, in one undo step.
+    ///
+    /// Through `TagEdit` per book, so the canonical spelling of an existing tag
+    /// wins ("Sci-Fi" typed where the library says "sci-fi") and a book that
+    /// already has it is left alone rather than rewritten.
     func addTag(_ name: String, undoManager: UndoManager?) {
-        guard let entry = selectedEntry else { return }
-        handle(
-            TagEdit.add(name, to: entry.book, knownTags: knownTags), key: "tags", entry: entry,
-            undoManager: undoManager)
+        let books = selectedEntries
+        guard !books.isEmpty else { return }
+        fieldRejection = nil
+        // `TagEdit.add` per book, not a canonical spelling worked out once: the
+        // rule for what a tag becomes ("Sci-Fi" typed where the library says
+        // "sci-fi") lives there, and a second copy of it here would be a second
+        // rule. A book that already has the tag comes back `.unchanged` and is
+        // not rewritten.
+        let known = knownTags
+        edit(books, actionName: "Tags", undoManager: undoManager) { book in
+            if case .changed(let edited) = TagEdit.add(name, to: book, knownTags: known) {
+                book = edited
+            }
+        }
         tagDraft = ""
     }
 
     func removeTag(_ name: String, undoManager: UndoManager?) {
-        guard let entry = selectedEntry else { return }
-        handle(TagEdit.remove(name, from: entry.book), key: "tags", entry: entry, undoManager: undoManager)
+        edit(selectedEntries, actionName: "Tags", undoManager: undoManager) { book in
+            book.tags.removeAll { $0 == name }
+        }
     }
 
     /// Turns one outcome into a change, a message, or nothing at all.
@@ -782,9 +810,36 @@ final class LibraryModel {
     }
 
     var tagCompletions: [String] {
+        // Excluding what *every* selected book already has: a tag only some of
+        // them carry is still worth offering, because adding it is what
+        // finishes the job.
         TagEdit.completions(
-            for: tagDraft, among: knownTags, excluding: selectedEntry?.book.tags ?? [])
+            for: tagDraft, among: knownTags,
+            excluding: AcrossBooks.sharedTags(selectedEntries.map(\.book)))
     }
+
+    // MARK: What a selection of several books shows
+
+    /// The value every selected book shows, or `nil` for "Mixed".
+    func sharedText(_ field: BookField) -> String? {
+        field.sharedText(across: selectedEntries.map(\.book))
+    }
+
+    /// The rating every selected book has, or `nil` when they differ.
+    var sharedStars: Int? { AcrossBooks.sharedStars(selectedEntries.map(\.book)) }
+
+    var sharedReadStatus: Bool? { AcrossBooks.sharedReadStatus(selectedEntries.map(\.book)) }
+
+    /// Tags on every selected book — removing one of these acts on all of them.
+    var sharedTags: [String] { AcrossBooks.sharedTags(selectedEntries.map(\.book)) }
+
+    /// Tags on some of them. Drawn apart from the shared ones, or removing one
+    /// would quietly do nothing to most of the books.
+    var mixedTags: [String] { AcrossBooks.mixedTags(selectedEntries.map(\.book)) }
+
+    var sharedShelves: [String] { AcrossBooks.sharedShelves(selectedEntries.map(\.book)) }
+
+    var mixedShelves: [String] { AcrossBooks.mixedShelves(selectedEntries.map(\.book)) }
 
     /// Bumped by T. A counter, so pressing T twice focuses twice (the same
     /// reason `focusSearchRequest` is one).

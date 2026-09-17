@@ -483,3 +483,79 @@ struct ISBNTests {
         #expect(!ISBN.isValid("97803064O6157"))
     }
 }
+
+/// What an inspector may say about several books at once.
+///
+/// The interesting half is not the arithmetic but the distinction: a tag on
+/// *every* book is part of the selection's own state, and a tag on *some* of
+/// them is not. Drawn the same way, removing one would quietly do nothing to
+/// most of the books.
+@Suite("Several books at once")
+struct AcrossBooksTests {
+
+    private func books() -> [Book] {
+        [
+            Book(title: "One", authors: ["A"], publisher: "Orbit", tags: ["sf", "owned"]),
+            Book(title: "Two", authors: ["A"], publisher: "Orbit", tags: ["sf", "to read"]),
+            Book(title: "Three", authors: ["A"], publisher: "Gollancz", tags: ["sf"]),
+        ]
+    }
+
+    @Test("a field shows its value when they agree and nothing when they do not")
+    func sharedText() {
+        let books = self.books()
+        #expect(BookField.authors.sharedText(across: books) == "A")
+        #expect(BookField.publisher.sharedText(across: books) == nil)
+        #expect(BookField.title.sharedText(across: books) == nil)
+        // One book is not a special case: the value it shows on its own.
+        #expect(BookField.title.sharedText(across: [books[0]]) == "One")
+        #expect(BookField.title.sharedText(across: []) == nil)
+    }
+
+    @Test("a tag on every book and a tag on some of them are told apart")
+    func sharedAndMixedTags() {
+        let books = self.books()
+        #expect(AcrossBooks.sharedTags(books) == ["sf"])
+        #expect(AcrossBooks.mixedTags(books) == ["owned", "to read"])
+        // With one book everything it has is shared and nothing is mixed –
+        // otherwise the inspector would draw a selection of one differently
+        // from that book on its own.
+        #expect(AcrossBooks.sharedTags([books[0]]) == ["owned", "sf"])
+        #expect(AcrossBooks.mixedTags([books[0]]).isEmpty)
+    }
+
+    @Test("the shelves they all stand on, and the ones only some do")
+    func sharedAndMixedShelves() {
+        let shelved = [
+            Book(title: "One", shelves: ["Fiction", "Fiction/Sci-Fi"]),
+            Book(title: "Two", shelves: ["Fiction"]),
+        ]
+        #expect(AcrossBooks.sharedShelves(shelved) == ["Fiction"])
+        #expect(AcrossBooks.mixedShelves(shelved) == ["Fiction/Sci-Fi"])
+    }
+
+    /// R on a mixed selection finishes the job rather than inverting each book:
+    /// toggling one by one would leave the selection exactly as mixed as before.
+    @Test("R marks a mixed selection read, and an all-read one unread")
+    func toggleAcrossASelection() {
+        var read = Book(title: "r")
+        read.isRead = true
+        let unread = Book(title: "u")
+
+        #expect(AcrossBooks.sharedReadStatus([read, unread]) == nil)
+        #expect(AcrossBooks.readStatusAfterToggle([read, unread]))
+        #expect(AcrossBooks.readStatusAfterToggle([read, read]) == false)
+        #expect(AcrossBooks.readStatusAfterToggle([unread, unread]))
+    }
+
+    @Test("a rating they share is shown, one they do not is not")
+    func sharedStars() {
+        var three = Book(title: "a")
+        three.stars = 3
+        var five = Book(title: "b")
+        five.stars = 5
+        #expect(AcrossBooks.sharedStars([three, three]) == 3)
+        #expect(AcrossBooks.sharedStars([three, five]) == nil)
+        #expect(AcrossBooks.sharedStars([]) == nil)
+    }
+}

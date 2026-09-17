@@ -38,6 +38,7 @@ struct InspectorView: View {
                 if let entry = model.selectedEntry {
                     VStack(alignment: .leading, spacing: 16) {
                         cover(for: entry)
+                        selectionHeader
                         title(for: entry)
                         rating(for: entry)
                         duplicate(for: entry)
@@ -79,6 +80,38 @@ struct InspectorView: View {
 
     private static let tagsAnchor = "tags"
 
+    // MARK: A selection of several
+
+    /// What the inspector is talking about, when it is not one book.
+    ///
+    /// Said out loud because every field below it changes meaning: the cover is
+    /// one of twelve, a value may be one of twelve, and three of the fields
+    /// stop being editable. An inspector that looked the same for one book and
+    /// for twelve would invite exactly the edit that must not happen.
+    @ViewBuilder
+    private var selectionHeader: some View {
+        if model.hasMultipleSelection {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(model.selection.count) books selected")
+                    .font(.callout)
+                    .foregroundStyle(Slate.accent)
+                Text("Rating, read status, tags and shelves apply to all of them.")
+                    .font(.caption2)
+                    .foregroundStyle(Slate.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// What one field shows: the value, or "Mixed" when the books disagree.
+    ///
+    /// "Mixed" and not an empty field. An empty field says "these books have no
+    /// publisher", which is a different fact — and it is the one that would
+    /// invite somebody to fill it in.
+    private static let mixed = "Mixed"
+
     // MARK: Cover
 
     private func cover(for entry: LibraryEntry) -> some View {
@@ -97,13 +130,48 @@ struct InspectorView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// A field's value across the selection, drawn rather than edited.
+    ///
+    /// Used for every text field once more than one book is selected. A title,
+    /// a series or a description typed once and written to twelve books is not
+    /// an edit but a mistake with twelve copies; a publisher across a selection
+    /// is a reasonable thing to want and is in the backlog, not in this sprint.
+    private func locked(_ which: BookField, font: Font = .callout) -> some View {
+        Text(model.sharedText(which) ?? Self.mixed)
+            .font(font)
+            .foregroundStyle(
+                model.sharedText(which) == nil ? Slate.textSecondary : Slate.textPrimary
+            )
+            .lineLimit(which.isMultiline ? 6 : 1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .accessibilityLabel(which.label)
+            .accessibilityValue(model.sharedText(which) ?? Self.mixed)
+            .help("\(which.label) — edited one book at a time")
+    }
+
+    private func lockedRow(_ which: BookField) -> some View {
+        SlateValueRow(name: which.label, value: model.sharedText(which) ?? Self.mixed)
+            .help("\(which.label) — edited one book at a time")
+    }
+
     /// The series name, its index beside it, and where the book sits in it.
     ///
     /// "Book 3 of 7" is counted from the index's own facets, which the sidebar
     /// has already loaded — so it is the number of books *in this library*, and
     /// says so in the help rather than pretending to know how long the series
     /// really is.
+    @ViewBuilder
     private func series(for entry: LibraryEntry) -> some View {
+        if model.hasMultipleSelection {
+            locked(.seriesName, font: .caption)
+        } else {
+            editableSeries(for: entry)
+        }
+    }
+
+    private func editableSeries(for entry: LibraryEntry) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 SlateEditableBlock(
@@ -151,25 +219,44 @@ struct InspectorView: View {
             // `stars`, not `rating`: the control counts to five and the model
             // keeps Calibre's ten. Sprint 1 handed it `rating` unconverted, so
             // anything rated 5 or more drew five full stars.
-            SlateStarRating(rating: entry.book.stars) { star in
+            // The *shared* rating across the selection, and no stars at all
+            // when they differ: five hollow stars would say "none of these is
+            // rated", which is a different thing from "they are not all the
+            // same". Clicking still sets all of them.
+            SlateStarRating(rating: model.sharedStars ?? 0) { star in
                 model.setStars(star, undoManager: undoManager)
             }
-            .help("1–5 sets the rating, 0 clears it; the same star again clears it")
+            .help(
+                model.hasMultipleSelection
+                    ? "1–5 rates all \(model.selection.count) books, 0 clears them"
+                    : "1–5 sets the rating, 0 clears it; the same star again clears it"
+            )
             // SlateKit labels the control but publishes no value, so the stars
             // come out of the accessibility tree as an element with a name and
             // nothing in it. Said here until SlateKit says it itself.
-            .accessibilityValue(Text("\(entry.book.stars) of 5"))
+            .accessibilityValue(
+                Text(model.sharedStars.map { "\($0) of 5" } ?? Self.mixed))
 
             Toggle(
                 "Read",
                 isOn: Binding(
-                    get: { entry.book.isRead },
+                    get: { model.sharedReadStatus ?? false },
                     set: { _ in model.toggleRead(undoManager: undoManager) })
             )
             .toggleStyle(.checkbox)
             .foregroundStyle(Slate.textSecondary)
             .font(.callout)
-            .help("Whether the book has been read (R)")
+            // A mixed selection shows the box unticked and ticking it marks
+            // them all read, which is the useful half of the gesture: toggling
+            // each book on its own would leave the selection exactly as mixed
+            // as before.
+            .help(
+                model.sharedReadStatus == nil
+                    ? "Some of these are read — this marks all \(model.selection.count) read (R)"
+                    : "Whether the book has been read (R)"
+            )
+            .accessibilityValue(
+                Text(model.sharedReadStatus.map { $0 ? "Read" : "Unread" } ?? Self.mixed))
         }
     }
 
@@ -274,20 +361,43 @@ struct InspectorView: View {
     /// key is written on it is a control people find (CONCEPT §3.3).
     private func tags(for entry: LibraryEntry) -> some View {
         SlateInspectorSection("Tags") {
-            SlateTokenField(
-                tokens: entry.book.tags,
-                placeholder: "Add tag… (T)",
-                completions: model.tagCompletions,
-                focusRequest: model.focusTagFieldRequest,
-                // The help belongs to the entry field, not to the whole
-                // control: handed in with `.help()` it reached every chip and
-                // replaced each one's own "Remove science fiction".
-                help: "⏎ adds, ⌫ removes the last one, click the ✕ to remove one",
-                onDraftChange: { model.updateTagDraft($0) },
-                onAdd: { model.addTag($0, undoManager: undoManager) },
-                onRemove: { model.removeTag($0, undoManager: undoManager) }
-            )
+            VStack(alignment: .leading, spacing: 6) {
+                tagField(for: entry)
+                // Tags only *some* of the selected books carry, drawn apart
+                // from the ones they all share. Removing one of these would
+                // quietly do nothing to most of the books if they were in the
+                // same row; adding it finishes the job, which is what clicking
+                // one does.
+                if model.hasMultipleSelection, !model.mixedTags.isEmpty {
+                    Text("On some of them")
+                        .font(.caption2)
+                        .foregroundStyle(Slate.textSecondary)
+                    SlateFlowLayout(spacing: 6) {
+                        ForEach(model.mixedTags, id: \.self) { tag in
+                            SlateSuggestionChip(tag) { model.addTag(tag, undoManager: undoManager) }
+                                .help("Add “\(tag)” to all \(model.selection.count) books")
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    private func tagField(for entry: LibraryEntry) -> some View {
+        SlateTokenField(
+            tokens: model.hasMultipleSelection ? model.sharedTags : entry.book.tags,
+            placeholder: model.hasMultipleSelection
+                ? "Add tag to \(model.selection.count) books… (T)" : "Add tag… (T)",
+            completions: model.tagCompletions,
+            focusRequest: model.focusTagFieldRequest,
+            // The help belongs to the entry field, not to the whole control:
+            // handed in with `.help()` it reached every chip and replaced each
+            // one's own "Remove science fiction".
+            help: "⏎ adds, ⌫ removes the last one, click the ✕ to remove one",
+            onDraftChange: { model.updateTagDraft($0) },
+            onAdd: { model.addTag($0, undoManager: undoManager) },
+            onRemove: { model.removeTag($0, undoManager: undoManager) }
+        )
     }
 
     // MARK: Shelves
@@ -302,16 +412,34 @@ struct InspectorView: View {
     private func shelves(for entry: LibraryEntry) -> some View {
         SlateInspectorSection("Shelves") {
             VStack(alignment: .leading, spacing: 6) {
-                if entry.book.shelves.isEmpty {
-                    Text("Not on any shelf")
+                let shelves = model.hasMultipleSelection ? model.sharedShelves : entry.book.shelves
+                if shelves.isEmpty {
+                    Text(model.hasMultipleSelection ? "No shelf they all stand on" : "Not on any shelf")
                         .font(.caption)
                         .foregroundStyle(Slate.textSecondary)
                 } else {
-                    SlateWrappingChips(items: entry.book.shelves) { path in
+                    SlateWrappingChips(items: shelves) { path in
                         SlateChip(path) {
-                            model.removeFromShelf(path, books: [entry], undoManager: undoManager)
+                            model.removeFromShelf(path, books: model.selectedEntries, undoManager: undoManager)
                         }
-                        .help("Remove this book from \(path)")
+                        .help(
+                            model.hasMultipleSelection
+                                ? "Take all \(model.selection.count) books off \(path)"
+                                : "Remove this book from \(path)")
+                    }
+                }
+                if model.hasMultipleSelection, !model.mixedShelves.isEmpty {
+                    Text("Some of them stand on")
+                        .font(.caption2)
+                        .foregroundStyle(Slate.textSecondary)
+                    SlateFlowLayout(spacing: 6) {
+                        ForEach(model.mixedShelves, id: \.self) { path in
+                            SlateSuggestionChip(path) {
+                                guard let shelf = model.shelfTree.shelf(atPath: path) else { return }
+                                model.addToShelf(shelf.id, books: model.selectedEntries, undoManager: undoManager)
+                            }
+                            .help("Put all \(model.selection.count) books on \(path)")
+                        }
                     }
                 }
                 addToShelfMenu(for: entry)
@@ -321,9 +449,10 @@ struct InspectorView: View {
 
     @ViewBuilder
     private func addToShelfMenu(for entry: LibraryEntry) -> some View {
+        let already = model.hasMultipleSelection ? model.sharedShelves : entry.book.shelves
         let available = model.shelfTree.inDrawnOrder().filter {
             guard let path = model.shelfTree.storedPath(of: $0.shelf.id) else { return false }
-            return !entry.book.shelves.contains(path)
+            return !already.contains(path)
         }
         if available.isEmpty {
             Text(model.shelfTree.isEmpty ? "Make one with + in the sidebar" : "On every shelf there is")
@@ -333,7 +462,8 @@ struct InspectorView: View {
             Menu("Add to Shelf…") {
                 ForEach(available, id: \.shelf.id) { row in
                     Button(String(repeating: "    ", count: row.depth) + row.shelf.name) {
-                        model.addToShelf(row.shelf.id, books: [entry], undoManager: undoManager)
+                        model.addToShelf(
+                            row.shelf.id, books: model.selectedEntries, undoManager: undoManager)
                     }
                 }
             }
@@ -344,7 +474,16 @@ struct InspectorView: View {
         }
     }
 
+    @ViewBuilder
     private func description(for entry: LibraryEntry) -> some View {
+        if model.hasMultipleSelection {
+            SlateInspectorSection("Description") { locked(.description, font: .caption) }
+        } else {
+            editableDescription(for: entry)
+        }
+    }
+
+    private func editableDescription(for entry: LibraryEntry) -> some View {
         SlateInspectorSection("Description") {
             VStack(alignment: .leading, spacing: 4) {
                 SlateEditableBlock(
@@ -392,7 +531,18 @@ struct InspectorView: View {
     // MARK: One field
 
     /// A field with no name beside it, for the title block.
+    @ViewBuilder
     private func field(
+        _ which: BookField, of entry: LibraryEntry, font: Font
+    ) -> some View {
+        if model.hasMultipleSelection {
+            locked(which, font: font)
+        } else {
+            editableField(which, of: entry, font: font)
+        }
+    }
+
+    private func editableField(
         _ which: BookField, of entry: LibraryEntry, font: Font
     ) -> some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -411,7 +561,16 @@ struct InspectorView: View {
     }
 
     /// A named row in the Details block.
+    @ViewBuilder
     private func row(_ which: BookField, of entry: LibraryEntry) -> some View {
+        if model.hasMultipleSelection {
+            lockedRow(which)
+        } else {
+            editableRow(which, of: entry)
+        }
+    }
+
+    private func editableRow(_ which: BookField, of entry: LibraryEntry) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             SlateEditableRow(
                 name: which.label, value: which.text(of: entry.book),

@@ -32,6 +32,11 @@ let usage = """
     order: the number is in the folder name and no edit changes it, where title
     order moves the moment a title is edited.
 
+      bulk-tag-undo <library> <count> <tag>
+                                    add a tag to <count> books as one undo
+                                    group, undo it, and check that every OPF is
+                                    byte for byte what it was and every EPUB
+                                    untouched
       bulk-edit <library> <count>   change the title, tags and description of
                                     <count> books, one write each, and print how
                                     long a change takes including the search index
@@ -57,6 +62,7 @@ case "edit": try await Commands.edit(Array(arguments.dropFirst()))
 case "show": try await Commands.show(Array(arguments.dropFirst()))
 case "digest": try Commands.digest(Array(arguments.dropFirst()))
 case "bulk-edit": try await Commands.bulkEdit(Array(arguments.dropFirst()))
+case "bulk-tag-undo": try await Commands.bulkTagUndo(Array(arguments.dropFirst()))
 case "epub-digests": try await Commands.epubDigests(Array(arguments.dropFirst()))
 case "search-time": try await Commands.searchTime(Array(arguments.dropFirst()))
 case "verify-edits": try await Commands.verifyEdits(Array(arguments.dropFirst()))
@@ -477,6 +483,123 @@ enum Commands {
                 print("\(digest)  \(entry.folder)/\(format.fileName)")
             }
         }
+    }
+
+    // MARK: bulk-tag-undo
+
+    /// Tags many books at once and then undoes it, the way ⌘Z does.
+    ///
+    /// This is the multiple-selection claim tested where it can be checked to
+    /// the byte: *one* undo step for however many books, and after it every
+    /// `metadata.opf` is exactly the file it was. Undo is built from
+    /// `MetadataChange.inverse`, which carries the previous *value* rather than
+    /// re-deriving it, so "restores exactly" is something that can be asserted
+    /// rather than hoped for — and this is the assertion.
+    ///
+    /// The EPUB digests are taken as well, because the one rule that is never
+    /// negotiable is that a book file is not written (CONCEPT §4). An edit that
+    /// restored every OPF and touched one EPUB would pass the interesting half
+    /// of this test and fail the important one.
+    static func bulkTagUndo(_ arguments: [String]) async throws {
+        guard arguments.count >= 2, let count = Int(arguments[1]) else {
+            print("usage: shelf-tool bulk-tag-undo <library> <count> [tag]")
+            exit(2)
+        }
+        let tag = arguments.count > 2 ? arguments[2] : proofTag
+        let (library, index) = try openLibrary(arguments[0])
+        let books = try await firstBooks(count, in: index)
+        guard !books.isEmpty else {
+            print("no books to tag")
+            exit(1)
+        }
+        let editor = MetadataEditor(library: library)
+
+        func opf(_ entry: LibraryEntry) -> URL {
+            library.root
+                .appendingPathComponent(entry.folder, isDirectory: true)
+                .appendingPathComponent(OPFDocument.fileName)
+        }
+        func epubDigest(_ entry: LibraryEntry) throws -> [String] {
+            try entry.formats.sorted(by: { $0.fileName < $1.fileName }).map { format in
+                try FileDigest.sha256(
+                    of: library.root
+                        .appendingPathComponent(entry.folder, isDirectory: true)
+                        .appendingPathComponent(format.fileName),
+                    makeHasher: PortableSHA256Hasher.factory)
+            }
+        }
+
+        var opfBefore: [UUID: Data] = [:]
+        var bookBefore: [UUID: [String]] = [:]
+        for entry in books {
+            opfBefore[entry.id] = (try? Data(contentsOf: opf(entry))) ?? Data()
+            bookBefore[entry.id] = try epubDigest(entry)
+        }
+
+        // The edit, as one group. Each change keeps its own inverse, which is
+        // what an undo group holds.
+        var changes: [(entry: LibraryEntry, change: MetadataChange)] = []
+        let started = ContinuousClock.now
+        for entry in books {
+            guard case .changed(let edited) = TagEdit.add(tag, to: entry.book) else { continue }
+            let change = MetadataChange.make(from: entry.book) { $0 = edited }
+            guard !change.isEmpty else { continue }
+            let updated = try await editor.apply(change, to: entry, in: index)
+            changes.append((updated, change))
+        }
+        let tookToTag = ContinuousClock.now - started
+        print("tagged \(changes.count) book(s) with “\(tag)” in \(milliseconds(tookToTag)) ms")
+
+        var changedOnDisk = 0
+        for (entry, _) in changes where (try? Data(contentsOf: opf(entry))) != opfBefore[entry.id] {
+            changedOnDisk += 1
+        }
+        guard changedOnDisk == changes.count else {
+            print("FAILED – only \(changedOnDisk) of \(changes.count) OPFs actually changed")
+            exit(1)
+        }
+        print("  every one of those \(changes.count) metadata.opf files changed on disk")
+
+        // ⌘Z: the same changes, inverted, newest first.
+        let undoStarted = ContinuousClock.now
+        for (entry, change) in changes.reversed() {
+            _ = try await editor.apply(change.inverse, to: entry, in: index)
+        }
+        print("undid them in \(milliseconds(ContinuousClock.now - undoStarted)) ms")
+
+        var restored = 0
+        var untouched = 0
+        var wrong: [String] = []
+        for (entry, _) in changes {
+            let now = (try? Data(contentsOf: opf(entry))) ?? Data()
+            if now == opfBefore[entry.id] {
+                restored += 1
+            } else {
+                wrong.append(entry.folder)
+            }
+            if try epubDigest(entry) == bookBefore[entry.id] { untouched += 1 }
+        }
+        print("  metadata.opf byte for byte as before: \(restored) of \(changes.count)")
+        print("  EPUBs untouched: \(untouched) of \(changes.count)")
+        for folder in wrong.prefix(5) { print("    still different: \(folder)") }
+
+        // The tag must also be gone from the index, not only from the files:
+        // a search that still finds it would mean the undo stopped half way.
+        let stillFound = try await index.search(tag).count
+        print("  books the index still finds under “\(tag)”: \(stillFound)")
+
+        guard restored == changes.count, untouched == changes.count, stillFound == 0 else {
+            print("FAILED – the undo did not put everything back")
+            exit(1)
+        }
+        print("ok – \(changes.count) books tagged and undone, every file as it was")
+    }
+
+    private static func milliseconds(_ duration: Duration) -> String {
+        let value =
+            Double(duration.components.attoseconds) / 1e15
+            + Double(duration.components.seconds) * 1_000
+        return String(format: "%.1f", value)
     }
 
     // MARK: search-time
