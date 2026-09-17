@@ -3,6 +3,33 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## The app icon · 17 September 2026
+
+### Added
+
+**Shelf has its own icon.** The finished icon package Erik drew lives in
+`docs/icon/` — the same place Selector keeps its — and its macOS variant is now
+the app's `AppIcon` asset: ten PNGs from 16 to 1024 px, checked with
+`sips -g pixelWidth -g pixelHeight` (16/32, 32/64, 128/256, 256/512, 512/1024 —
+each `@2x` twice its base, as the catalog claims). `iconutil -c icns` on
+`docs/icon/iconset/Shelf.iconset` is the independent cross-check: it produces a
+422 KB `.icns` from the same source, while Xcode's `actool` compiles the catalog
+to a 33 KB `AppIcon.icns` inside the bundle. Both draw the same picture; the
+size difference is that `actool` re-encodes and shares, `iconutil` keeps the
+PNGs as they came.
+
+Proof: `docs/screenshots/sprint-4/icon-in-dock.jpg` and
+`icon-window-and-dock.jpg`. At 16 px the two shelf boards and the coloured
+spines still read as a bookcase — the individual books merge into bands of
+colour, which is what that size can carry.
+
+**Worth knowing for the next person.** The first launch after the build still
+showed the generic placeholder in the Dock: the bundle was right (`AppIcon.icns`
+present, `CFBundleIconFile` and `CFBundleIconName` both `AppIcon`), and
+LaunchServices was serving the icon it had cached from every earlier build,
+which had an empty icon set. `lsregister -f <app>` clears that. Nothing about
+the build needed changing, and a fresh machine would not see it.
+
 ## Sprint 3 – Calibre import, and what Sprint 2c left open · 17 September 2026
 
 ### Added — the Calibre import

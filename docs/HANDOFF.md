@@ -170,9 +170,16 @@ wurde nicht gebaut. Lokal baut sie `make app`, und `make smoke` startet sie.
   im `CHANGELOG.md`: Fensterzahl (eines, nicht sechs), Zeit bis alle sichtbaren
   Cover stehen (852 ms kalt, 768 ms warm), gehaltene Pfeiltaste mit `sample`,
   Spitzenspeicher im Vordergrund (301 MB).
-- **App-Icon.** `App/Shelf/Resources/Assets.xcassets/AppIcon.appiconset` ist
-  leer bis auf die `Contents.json`. Bis dort PNGs liegen, zeigt die App das
-  Standardsymbol. Selector hat ein Skript dafür (`docs/icon/make_icons.py`).
+- **App-Icon: erledigt.** Eriks fertiges Paket liegt in `docs/icon/`, die
+  macOS-Variante ist das `AppIcon`-Asset der App, alle zehn Größen mit `sips`
+  geprüft, `iconutil -c icns` als Gegenprobe, Belege in
+  `docs/screenshots/sprint-4/`. **Eine Falle für den Nächsten:** der Dock zeigt
+  nach dem ersten Build weiter das Standardsymbol, weil LaunchServices das
+  Symbol des leeren Icon-Sets zwischengespeichert hat. `lsregister -f <app>`
+  räumt das auf; am Bundle ist nichts falsch.
+  Der Willkommensschirm zeigt weiterhin das Platzhalter-Logo aus SlateKits
+  Welcome-Gerüst, nicht das App-Icon – das war nicht beauftragt und ist keine
+  Nachlässigkeit, sondern eine offene Frage an Erik.
 - **SlateKit-Version.** Shelf hängt an `0.3.1`, Selector weiter an `0.1.6`.
   **Selector kann jetzt gefahrlos nachziehen**: 0.3.1 macht die drei
   Aussehensänderungen aus 0.3.0 zu Optionen mit dem alten Default und holt die
