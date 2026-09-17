@@ -54,75 +54,155 @@ fi
 [ -d "$LIBRARY" ] || fail "'$LIBRARY' is not a folder"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+# The pid whose window is actually on screen.
+#
+# `pgrep -x | head -1` is not it, and that cost the Selector comparison shot for
+# a whole sprint: a second instance under Xcode's debugger has no window and
+# sorts first by pid, so the script asked that one for a window, got none, and
+# reported "no window for Selector" while a perfectly good Selector window was
+# on screen next to it.
+pid_with_window() {
+    local pid
+    for pid in $(pgrep -x "$1"); do
+        swift "$HERE/window-id.swift" "$pid" >/dev/null 2>&1 && { echo "$pid"; return 0; }
+    done
+    return 1
+}
+
+# Everything below addresses a process by its unix id rather than by name.
+# With two instances of one app running, "process Selector" is whichever one
+# System Events happens to resolve – which is how the script came to resize one
+# instance and photograph the other.
+front() {
+    osascript >/dev/null 2>&1 <<EOF
+tell application "System Events"
+    set frontmost of (first application process whose unix id is $1) to true
+end tell
+EOF
+}
+
 # The window is sized through the accessibility API. macOS clamps it to the
 # screen's visible area, so with the Dock showing the height comes out smaller
 # than asked; the actual size is printed, and it is the size both apps get.
 resize() {
+    local pid="$1"
+    front "$pid"
+    sleep 0.6
     osascript >/dev/null 2>&1 <<EOF
-tell application "$1" to activate
-delay 0.6
-tell application "System Events" to tell process "$1"
+tell application "System Events" to tell (first application process whose unix id is $pid)
     set position of window 1 to {30, 40}
     delay 0.3
     set size of window 1 to {$WIDTH, $HEIGHT}
 end tell
 EOF
     sleep 1
-    osascript -e "tell application \"System Events\" to tell process \"$1\" to get size of window 1" 2>/dev/null
+    osascript <<EOF 2>/dev/null
+tell application "System Events" to tell (first application process whose unix id is $pid)
+    get size of window 1
+end tell
+EOF
 }
 
 shoot() {
-    local process="$1" name="$2"
-    osascript -e "tell application \"$process\" to activate" >/dev/null 2>&1
+    local pid="$1" name="$2"
+    front "$pid"
     sleep 1
-    local pid wid
-    pid=$(pgrep -x "$process" | head -1)
+    local wid
     wid=$(swift "$HERE/window-id.swift" "$pid" 2>/dev/null)
-    [ -n "$wid" ] || { echo "screenshots: no window for $process – skipping $name"; return 1; }
+    [ -n "$wid" ] || { echo "screenshots: no window for pid $pid – skipping $name"; return 1; }
     screencapture -o -x -l "$wid" "$OUT/$name.png" || { echo "screenshots: capture failed for $name"; return 1; }
     # PNG first because it is lossless and the pixel readings are taken from it;
-    # a shot over the size limit is kept as JPEG instead, and the readings are
-    # taken before the conversion.
+    # a shot over the size limit is converted to JPEG and the PNG is removed
+    # once the readings have been taken – see the end of this script.
     local bytes
     bytes=$(stat -f %z "$OUT/$name.png")
     if [ "$bytes" -gt "$MAX_BYTES" ]; then
-        sips -s format jpeg -s formatOptions 80 "$OUT/$name.png" --out "$OUT/$name.jpg" >/dev/null 2>&1
-        echo "screenshots: $name.png was $((bytes / 1024)) KB – kept as $name.jpg ($(($(stat -f %z "$OUT/$name.jpg") / 1024)) KB)"
+        # Quality first, then size. A window full of photographs – Selector's –
+        # came out at 1.2 MB even as JPEG, and a repository is not a place to
+        # put a megabyte per screenshot. Readable beats pixel-perfect here: the
+        # pixel *readings* are taken from the PNG, before any of this.
+        local quality jbytes=0
+        for quality in 80 60 40; do
+            sips -s format jpeg -s formatOptions "$quality" "$OUT/$name.png" --out "$OUT/$name.jpg" >/dev/null 2>&1
+            jbytes=$(stat -f %z "$OUT/$name.jpg" 2>/dev/null || echo 0)
+            [ "$jbytes" -le "$MAX_BYTES" ] && break
+        done
+        if [ "$jbytes" -gt "$MAX_BYTES" ]; then
+            sips -Z 1600 -s format jpeg -s formatOptions 60 "$OUT/$name.png" --out "$OUT/$name.jpg" >/dev/null 2>&1
+            jbytes=$(stat -f %z "$OUT/$name.jpg" 2>/dev/null || echo 0)
+            echo "screenshots: $name.png was $((bytes / 1024)) KB – kept as $name.jpg ($((jbytes / 1024)) KB, scaled to 1600 px)"
+        else
+            echo "screenshots: $name.png was $((bytes / 1024)) KB – kept as $name.jpg ($((jbytes / 1024)) KB, quality $quality)"
+        fi
+        OVERSIZED="$OVERSIZED $name"
     else
         echo "screenshots: $name.png ($((bytes / 1024)) KB)"
     fi
     return 0
 }
 
+# Shots whose PNG is only alive until the pixel probe has read it.
+OVERSIZED=""
+
 # ── Shelf ─────────────────────────────────────────────────────────────────────
-STARTED_SHELF=0
-pgrep -x Shelf >/dev/null || STARTED_SHELF=1
-osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1; sleep 2
+# An instance that is already running is asked to quit and then *checked*.
+#
+# "Ask and hope" is what this did, and it cost four screenshots: a Shelf left
+# over from an earlier run had the import sheet open, `quit` is refused while a
+# sheet is up, `open -n` then added nothing, and the script photographed the
+# stale window four times – dimmed, with the sheet in it, from the previous
+# build – and reported success for all four. An instance that will not go is now
+# a full stop with a sentence saying what to do, not something to photograph.
+# It is never killed: ending a process this script did not start is not its call.
+if pgrep -x Shelf >/dev/null; then
+    # Escape first: it dismisses a sheet, which is the usual reason a quit is
+    # refused. Then ask, then wait and look.
+    osascript -e 'tell application "System Events" to key code 53' >/dev/null 2>&1
+    sleep 1
+    # The quit is re-issued each round rather than sent once: a quit that
+    # arrives while the sheet is still closing is refused, and only the *next*
+    # one gets through. Measured by hand – Escape and quit back to back left
+    # the app running, a second quit a moment later ended it.
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        pgrep -x Shelf >/dev/null || break
+        osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1
+        sleep 1
+    done
+    pgrep -x Shelf >/dev/null && fail "a Shelf instance (pid $(pgrep -x Shelf | tr '\n' ' ')) will not quit.
+       Usually a sheet or a modal panel is open in it. Close it and run this
+       again. This script does not end a process it did not start."
+fi
 
 open -n -F "$APP"; sleep 4
-echo "screenshots: window size: $(resize Shelf)"
-shoot Shelf welcome
+SHELF_PID=$(pid_with_window Shelf) || fail "Shelf started but shows no window"
+echo "screenshots: Shelf is pid $SHELF_PID"
+echo "screenshots: window size: $(resize "$SHELF_PID")"
+shoot "$SHELF_PID" welcome
 
 open -a "$APP" "$LIBRARY"; sleep 8
-resize Shelf >/dev/null
-shoot Shelf library
+resize "$SHELF_PID" >/dev/null
+shoot "$SHELF_PID" library
 
-# The sidebar scrolled down to where tags, authors and series are, so the shot
-# shows filled sections rather than only the collections at the top.
-osascript >/dev/null 2>&1 <<'EOF'
-tell application "System Events" to tell process "Shelf"
-    repeat 12 times
-        scroll down at {120, 400}
-    end repeat
-end tell
-EOF
+# The sidebar scrolled down to where series, formats and devices are, so the
+# shot shows the sections the first screenful cuts off.
+#
+# Through a real scroll wheel event (`Scripts/scroll-at.swift`). The previous
+# version asked System Events to "scroll down at {120, 400}" – a command System
+# Events does not have. It failed silently and `sidebar.png` was a byte-for-byte
+# copy of `library.png`; two identical files with different names are worse than
+# one missing file, because nobody looks twice at a file that is there.
+swift "$HERE/scroll-at.swift" 120 500 -14 || echo "screenshots: could not scroll the sidebar"
 sleep 1
-shoot Shelf sidebar
+shoot "$SHELF_PID" sidebar
+# Back to the top, so the import sheet is photographed over the same view the
+# library shot shows.
+swift "$HERE/scroll-at.swift" 120 500 20 >/dev/null 2>&1
 
 # The import sheet, reached the way a person reaches it: ⌘I, then the open panel
 # is pointed at the source folder with ⇧⌘G.
+front "$SHELF_PID"
 osascript >/dev/null 2>&1 <<EOF
-tell application "Shelf" to activate
 delay 0.5
 tell application "System Events"
     keystroke "i" using command down
@@ -137,7 +217,12 @@ tell application "System Events"
 end tell
 EOF
 sleep 6
-shoot Shelf import-sheet
+shoot "$SHELF_PID" import-sheet
+# The sheet is dismissed here rather than left for the next run: `quit` is
+# refused while it is open, which is exactly how a stale instance survived a
+# run and got photographed by the next one.
+osascript -e 'tell application "System Events" to key code 53' >/dev/null 2>&1
+sleep 1
 
 # ── Selector, at the same size ────────────────────────────────────────────────
 STARTED_SELECTOR=0
@@ -148,9 +233,13 @@ if ! pgrep -x Selector >/dev/null; then
         open -a Selector >/dev/null 2>&1 && STARTED_SELECTOR=1 && sleep 6
     fi
 fi
-if pgrep -x Selector >/dev/null; then
-    echo "screenshots: Selector window size: $(resize Selector)"
-    shoot Selector selector-reference
+if SELECTOR_PID=$(pid_with_window Selector); then
+    echo "screenshots: Selector is pid $SELECTOR_PID"
+    echo "screenshots: Selector window size: $(resize "$SELECTOR_PID")"
+    shoot "$SELECTOR_PID" selector-reference
+elif pgrep -x Selector >/dev/null; then
+    echo "screenshots: Selector is running but has no window on screen – no comparison shot."
+    echo "             Open a library in it (or close the debugger's instance) and run this again."
 else
     echo "screenshots: Selector is not running and could not be started – no comparison shot"
 fi
@@ -169,8 +258,29 @@ echo ""
 echo "The four points: sidebar background · main area · inspector background ·"
 echo "a sidebar row near the top. The values must be identical in both files."
 
+# ── The oversized PNGs, now that they have been read ──────────────────────────
+# The JPEG is what goes into the repository; keeping the PNG as well would put
+# 1.2 MB per shot into git *and* make the script's own "kept as .jpg" a lie.
+for name in $OVERSIZED; do
+    rm -f "$OUT/$name.png"
+done
+[ -n "$OVERSIZED" ] && echo "" && echo "screenshots: removed the oversized PNG(s) after reading them:$OVERSIZED"
+
 # ── Only what this script started ─────────────────────────────────────────────
+# Selector is quit only if this script started it. Shelf always is: the run
+# refuses to begin while another instance is up, so the one that is running now
+# is this script's own. It is checked, because an instance left behind is what
+# the next run photographs.
 [ "$STARTED_SELECTOR" = "1" ] && osascript -e 'tell application "Selector" to quit' >/dev/null 2>&1
-[ "$STARTED_SHELF" = "1" ] && osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1
+front "$SHELF_PID"
+osascript -e 'tell application "System Events" to key code 53' >/dev/null 2>&1
+sleep 1
+for _ in 1 2 3 4 5 6 7 8; do
+    kill -0 "$SHELF_PID" 2>/dev/null || break
+    osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1
+    sleep 1
+done
+kill -0 "$SHELF_PID" 2>/dev/null && echo "screenshots: NOTE – the Shelf this run started (pid $SHELF_PID) is still up.
+             Quit it before the next run, or that run will stop and say so."
 echo ""
 echo "screenshots: files in $OUT"
