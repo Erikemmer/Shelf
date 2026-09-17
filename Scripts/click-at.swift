@@ -9,21 +9,28 @@
 //
 // Needs the Accessibility permission for whatever runs it.
 //
-// Usage: swift Scripts/click-at.swift <x> <y>   (screen points, origin top-left)
+// Usage: swift Scripts/click-at.swift <x> <y> [right]
+//   x, y    screen points, origin top-left
+//   right   posts a right-click instead, for a context menu
 import CoreGraphics
 import Foundation
 
-let arguments = CommandLine.arguments.dropFirst().compactMap(Double.init)
-guard arguments.count >= 2 else {
-    FileHandle.standardError.write(Data("usage: click-at.swift <x> <y>\n".utf8))
+let words = Array(CommandLine.arguments.dropFirst())
+let numbers = words.compactMap(Double.init)
+guard numbers.count >= 2 else {
+    FileHandle.standardError.write(Data("usage: click-at.swift <x> <y> [right]\n".utf8))
     exit(2)
 }
-let point = CGPoint(x: arguments[0], y: arguments[1])
+let point = CGPoint(x: numbers[0], y: numbers[1])
+let isRight = words.contains("right")
+let down: CGEventType = isRight ? .rightMouseDown : .leftMouseDown
+let up: CGEventType = isRight ? .rightMouseUp : .leftMouseUp
+let button: CGMouseButton = isRight ? .right : .left
 let wasAt = CGEvent(source: nil)?.location ?? .zero
 
 func post(_ type: CGEventType) {
     guard let event = CGEvent(
-        mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)
+        mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: button)
     else { return }
     // Without this the event carries click state 0, which is "the mouse moved
     // while a button happened to be down", not "somebody clicked". AppKit
@@ -36,7 +43,7 @@ func post(_ type: CGEventType) {
 
 // A move first: a window that has not seen the pointer arrive can treat the
 // button-down as landing outside itself.
-CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?
+CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: button)?
     .post(tap: .cghidEventTap)
 
 CGWarpMouseCursorPosition(point)
@@ -44,8 +51,8 @@ CGWarpMouseCursorPosition(point)
 // cursor, and it lands wherever the pointer used to be.
 CGAssociateMouseAndMouseCursorPosition(1)
 usleep(120_000)
-post(.leftMouseDown)
+post(down)
 usleep(40_000)
-post(.leftMouseUp)
+post(up)
 usleep(120_000)
 CGWarpMouseCursorPosition(wasAt)

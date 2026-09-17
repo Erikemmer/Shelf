@@ -19,6 +19,8 @@ let usage = """
       synthesise <folder> [count]   write <count> synthetic EPUBs with real covers
       import <source> <library>     import a folder into a library, verified
       rebuild <library>             erase the index and rebuild it from the folders
+      unshelve <library>            remove every shelf and take every book off
+                                    it – writes each metadata.opf, never a book
       edit <library> <title> <stars> <read>
                                     set one book's rating (0–5) and read status
                                     (yes/no) – writes metadata.opf, never the book
@@ -50,6 +52,7 @@ switch arguments.first {
 case "synthesise": try Commands.synthesise(Array(arguments.dropFirst()))
 case "import": try await Commands.importFolder(Array(arguments.dropFirst()))
 case "rebuild": try await Commands.rebuild(Array(arguments.dropFirst()))
+case "unshelve": try await Commands.unshelve(Array(arguments.dropFirst()))
 case "edit": try await Commands.edit(Array(arguments.dropFirst()))
 case "show": try await Commands.show(Array(arguments.dropFirst()))
 case "digest": try Commands.digest(Array(arguments.dropFirst()))
@@ -188,6 +191,35 @@ enum Commands {
     ///
     /// The proof behind ADR 0001. It prints the counts before and after,
     /// because "the folder is the truth" is a claim about numbers.
+    /// Takes every book off every shelf and removes the shelves themselves.
+    ///
+    /// What a proof run needs in order to be run twice: the shelves it makes
+    /// live in three places (`library.json`, the index, and every book's
+    /// `metadata.opf`), and clearing only one of them leaves a library that
+    /// disagrees with itself. It writes `metadata.opf` files and nothing else —
+    /// a book file is never written (CONCEPT §4).
+    static func unshelve(_ arguments: [String]) async throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool unshelve <library folder>")
+            exit(2)
+        }
+        let libraryURL = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        let (library, stored) = try Library.open(libraryURL)
+        var descriptor = stored
+        let index = try LibraryIndex(library: library)
+        let editor = MetadataEditor(library: library)
+
+        let shelved = try await index.allEntries().filter { !$0.book.shelves.isEmpty }
+        for entry in shelved {
+            let change = MetadataChange.make(from: entry.book) { $0.shelves = [] }
+            _ = try await editor.apply(change, to: entry, in: index)
+        }
+        descriptor.shelves = []
+        try library.write(descriptor)
+        try await index.saveShelves([])
+        print("took \(shelved.count) book(s) off their shelves and removed every shelf")
+    }
+
     static func rebuild(_ arguments: [String]) async throws {
         guard let path = arguments.first else {
             print("usage: shelf-tool rebuild <library folder>")
@@ -236,7 +268,10 @@ enum Commands {
         print("  folders with no readable book: \(result.unreadableFolders.count)")
         print("  books whose metadata came from the file rather than an OPF: \(result.withoutOPF.count)")
         for folder in result.unreadableFolders.prefix(10) { print("    \(folder)") }
-        guard before == after else {
+        // An index that was empty before is not a disagreement: that is what
+        // "the index was deleted" looks like, and rebuilding it is the point.
+        // Saying MISMATCH there taught the proof run to ignore the word.
+        guard before == after || before == 0 else {
             print("MISMATCH – the index and the folders disagree")
             exit(1)
         }

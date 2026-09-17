@@ -17,6 +17,8 @@
 //   what   cell      the nth cover in the grid (default n = 0)
 //          search    the search field
 //          row       the nth row of the table
+//          text=…    the nth element whose value or title is exactly this
+//          desc=…    the nth element whose description or help starts with this
 import ApplicationServices
 import Foundation
 
@@ -27,6 +29,14 @@ guard arguments.count >= 2, let pid = Int32(arguments.first ?? "") else {
 }
 let what = Array(arguments)[1]
 let wanted = arguments.count > 2 ? Int(Array(arguments)[2]) ?? 0 : 0
+
+extension String {
+    /// `"desc=New shelf".dropPrefix("desc=")` → `"New shelf"`, and `nil` when
+    /// the prefix is not there – so the caller can try one form after another.
+    func dropPrefix(_ prefix: String) -> String? {
+        hasPrefix(prefix) ? String(dropFirst(prefix.count)) : nil
+    }
+}
 
 func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
     var value: CFTypeRef?
@@ -77,21 +87,37 @@ func matches(_ element: AXUIElement, into found: inout [AXUIElement], depth: Int
     case "row":
         if role == "AXRow" { found.append(element) }
     default:
-        break
+        if let wanted = what.dropPrefix("text=") {
+            for key in [kAXValueAttribute, kAXTitleAttribute] where string(element, key as String) == wanted {
+                found.append(element)
+                break
+            }
+        } else if let wanted = what.dropPrefix("desc=") {
+            for key in [kAXDescriptionAttribute, kAXHelpAttribute]
+            where string(element, key as String)?.hasPrefix(wanted) ?? false {
+                found.append(element)
+                break
+            }
+        }
     }
     for child in children(element) { matches(child, into: &found, depth: depth + 1) }
 }
 
 let application = AXUIElementCreateApplication(pid)
 guard let windows = attribute(application, kAXWindowsAttribute as String) as? [AXUIElement],
-    let window = windows.first
+    !windows.isEmpty
 else {
     FileHandle.standardError.write(Data("no window for pid \(pid)\n".utf8))
     exit(1)
 }
 
+// Every window, not `windows.first`. A tooltip is a window and it sorts first
+// while it is up, so leaving the pointer over a control was enough to make this
+// answer "found 0" about a sidebar that was plainly there – and the script
+// calling it reported "no + button in the Shelves heading". A tooltip left over
+// from the previous step is the normal state of a script that clicks things.
 var found: [AXUIElement] = []
-matches(window, into: &found)
+for window in windows { matches(window, into: &found) }
 guard wanted < found.count, let box = frame(found[wanted]) else {
     FileHandle.standardError.write(Data("found \(found.count) “\(what)” – no number \(wanted)\n".utf8))
     exit(1)
