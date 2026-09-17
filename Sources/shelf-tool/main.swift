@@ -18,6 +18,15 @@ let usage = """
 
       synthesise <folder> [count]   write <count> synthetic EPUBs with real covers
       import <source> <library>     import a folder into a library, verified
+      calibre-synthesise <folder> [count]
+                                    write a synthetic Calibre library – the
+                                    folder layout and metadata.db Calibre has
+      calibre-dry <calibre folder> [destination]
+                                    read a Calibre library and print the
+                                    counting protocol – nothing is written
+      calibre-import <calibre folder> <library>
+                                    import a Calibre library, verified. The
+                                    Calibre folder is only ever read
       rebuild <library>             erase the index and rebuild it from the folders
       shelve <library> <path> <count> [offset]
                                     put <count> books on the shelf at <path>,
@@ -60,6 +69,9 @@ let arguments = Array(CommandLine.arguments.dropFirst())
 switch arguments.first {
 case "synthesise": try Commands.synthesise(Array(arguments.dropFirst()))
 case "import": try await Commands.importFolder(Array(arguments.dropFirst()))
+case "calibre-synthesise": try Commands.calibreSynthesise(Array(arguments.dropFirst()))
+case "calibre-dry": try Commands.calibreDry(Array(arguments.dropFirst()))
+case "calibre-import": try await Commands.calibreImport(Array(arguments.dropFirst()))
 case "rebuild": try await Commands.rebuild(Array(arguments.dropFirst()))
 case "unshelve": try await Commands.unshelve(Array(arguments.dropFirst()))
 case "shelve": try await Commands.shelve(Array(arguments.dropFirst()))
@@ -194,6 +206,171 @@ enum Commands {
         print("")
         print(outcome.report.rendered())
         print("index holds \(try await index.count()) books")
+        if !outcome.report.everythingVerified { exit(1) }
+    }
+
+    // MARK: calibre
+
+    /// Where the copy of `metadata.db` goes. Outside `~/Documents`, which is
+    /// synced, and inside the folder this project keeps its test material in.
+    static var calibreCacheDirectory: URL {
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: "Library/Caches/Shelf")
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    /// Writes a Calibre library nobody wrote, for the proof run to import.
+    ///
+    /// The quirks — a listed file that is not there, a book with no cover, an
+    /// unreadable OPF, an orphan on disk — are on for a small fixture and off
+    /// for a large measuring run, where a thousand of each would be noise
+    /// rather than evidence.
+    static func calibreSynthesise(_ arguments: [String]) throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool calibre-synthesise <folder> [count]")
+            exit(2)
+        }
+        let folder = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        let count = arguments.count > 1 ? (Int(arguments[1]) ?? 5) : 5
+        let started = Date()
+        let summary = try SyntheticCalibreLibrary.write(
+            to: folder, options: .init(count: count, includeQuirks: count <= 100))
+        print(
+            "wrote \(summary.books) books · \(summary.files) files · "
+                + "\(ByteCount.format(summary.totalBytes)) · "
+                + "\(ImportReport.duration(Date().timeIntervalSince(started)))")
+        print(
+            "  missing on disk: \(summary.missingFiles) · orphan on disk: \(summary.orphanFiles) · "
+                + "no cover: \(summary.booksWithoutCover) · unreadable OPF: \(summary.unreadableOPFs)")
+        print("  \(folder.path)")
+    }
+
+    /// The counting protocol, and nothing else. Writes nothing anywhere.
+    ///
+    /// This is what `ImportSheet` shows before "Import" can be clicked, printed
+    /// instead of drawn — the same `CalibreCensus` value, so the window and the
+    /// command line cannot disagree about how many books there are.
+    static func calibreDry(_ arguments: [String]) throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool calibre-dry <calibre folder> [destination]")
+            exit(2)
+        }
+        let folder = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        let destination =
+            arguments.count > 1
+            ? URL(fileURLWithPath: (arguments[1] as NSString).expandingTildeInPath, isDirectory: true)
+            : nil
+
+        let started = Date()
+        let library = try CalibreReader().read(folder: folder, cacheDirectory: calibreCacheDirectory)
+        let census = CalibreCensusTaker().take(of: library, destination: destination)
+
+        print("Calibre library: \(folder.path)")
+        print("Schema version:  \(library.schema.userVersion)\(library.schema.isKnown ? "" : "  (unknown)")")
+        print("")
+        for line in census.lines() { print("  " + line) }
+        if !census.missingFiles.isEmpty {
+            print("")
+            print("  Listed in metadata.db and not on the disk:")
+            for path in census.missingFiles.prefix(20) { print("    \(path)") }
+            if census.missingFiles.count > 20 { print("    \u{2026} and \(census.missingFiles.count - 20) more") }
+        }
+        if !census.orphanFiles.isEmpty {
+            print("")
+            print("  On the disk and not in metadata.db:")
+            for path in census.orphanFiles.prefix(20) { print("    \(path)") }
+            if census.orphanFiles.count > 20 { print("    \u{2026} and \(census.orphanFiles.count - 20) more") }
+        }
+        for warning in census.warnings {
+            print("")
+            print("  ! \(warning)")
+        }
+        print("")
+        print("read in \(ImportReport.duration(Date().timeIntervalSince(started)))")
+        print("Nothing was written. The Calibre folder was only read.")
+    }
+
+    /// The import itself, through the same planner and runner every other
+    /// import uses. The Calibre folder is only ever read.
+    static func calibreImport(_ arguments: [String]) async throws {
+        guard arguments.count >= 2 else {
+            print("usage: shelf-tool calibre-import <calibre folder> <library folder>")
+            exit(2)
+        }
+        let folder = URL(fileURLWithPath: (arguments[0] as NSString).expandingTildeInPath, isDirectory: true)
+        let libraryURL = URL(fileURLWithPath: (arguments[1] as NSString).expandingTildeInPath, isDirectory: true)
+
+        let readStarted = Date()
+        let calibre = try CalibreReader().read(folder: folder, cacheDirectory: calibreCacheDirectory)
+        print(
+            "read \(calibre.books.count) books from metadata.db in "
+                + ImportReport.duration(Date().timeIntervalSince(readStarted)))
+        for warning in calibre.warnings { print("  ! \(warning)") }
+
+        let (library, stored) = try openOrCreate(libraryURL)
+        var descriptor = stored
+        let index = try LibraryIndex(library: library)
+
+        let census = CalibreCensusTaker().take(of: calibre, destination: libraryURL)
+        for line in census.lines() { print("  " + line) }
+        guard census.hasRoom != false else {
+            print("Not enough room at the destination. Nothing was copied.")
+            exit(1)
+        }
+
+        // The columns' definitions before the books, for the same reason the
+        // shelf tree goes before the books (ADR 0008): a value whose column the
+        // index has never heard of has nowhere to go.
+        descriptor.customColumns = calibre.customColumns
+        try library.write(descriptor)
+        try await index.saveCustomColumns(calibre.customColumns)
+
+        let hashStarted = Date()
+        let source = CalibreImportSource(makeHasher: PortableSHA256Hasher.factory)
+        let read = source.read(calibre) { done, total in
+            if done > 0, done % 500 == 0 { print("  hashed \(done) / \(total)") }
+        }
+        print(
+            "hashed \(read.candidates.count) files in "
+                + ImportReport.duration(Date().timeIntervalSince(hashStarted)))
+        for (format, count) in read.skippedFormats.sorted(by: { $0.key < $1.key }) {
+            print("  \(count) \(format) file(s) Shelf does not import")
+        }
+        print("  \(read.missingFiles.count) file(s) listed in metadata.db and not on the disk")
+
+        let knowledge = ImportKnowledge(
+            digests: try await index.allFormatDigests(),
+            isbns: try await index.allISBNs(),
+            titleKeys: try await index.allTitleKeys(),
+            formatsByBook: try await formatsByBook(index),
+            foldersByBook: try await foldersByBook(index))
+        let plan = ImportPlanner.plan(
+            candidates: read.candidates, knowledge: knowledge,
+            startingNumber: descriptor.nextBookNumber, existingFolders: existingFolders(library))
+        print("plan: \(plan.summary())")
+
+        let runner = ImportRunner(makeHasher: PortableSHA256Hasher.factory)
+        let copyStarted = Date()
+        let outcome = try await runner.run(
+            ImportRunner.Options(
+                library: library, plan: plan, sourceDescription: "Calibre library \(folder.path)")
+        ) { progress in
+            if progress.filesDone > 0, progress.filesDone % 500 == 0 {
+                print("  copied \(progress.filesDone) / \(progress.filesTotal)")
+            }
+        }
+        print("copied and verified in \(ImportReport.duration(Date().timeIntervalSince(copyStarted)))")
+
+        for batch in outcome.entries.chunked(into: 500) { try await index.save(batch) }
+        descriptor.nextBookNumber = outcome.nextBookNumber
+        try library.write(descriptor)
+        try outcome.report.append(to: library)
+
+        print("")
+        print(outcome.report.rendered())
+        print("index holds \(try await index.count()) books")
+        print("Nothing in the Calibre library was changed, moved or deleted.")
         if !outcome.report.everythingVerified { exit(1) }
     }
 
