@@ -44,6 +44,7 @@ struct InspectorView: View {
                         duplicate(for: entry)
                         facts(for: entry)
                         identifiers(for: entry)
+                        customColumns(for: entry)
                         tags(for: entry).id(Self.tagsAnchor)
                         shelves(for: entry)
                         description(for: entry)
@@ -302,6 +303,36 @@ struct InspectorView: View {
                 // rather than claims about the book.
                 SlateValueRow(name: "Added", value: Self.day(entry.book.addedAt))
                 SlateValueRow(name: "Size", value: ByteCount.format(entry.totalBytes))
+            }
+        }
+    }
+
+    /// Calibre's own columns, shown and not editable (CONCEPT §4, "Should").
+    ///
+    /// **Read-only on purpose, and the reason is not laziness.** Shelf knows
+    /// what these columns are *called* and what kind Calibre said they were,
+    /// and nothing at all about what belongs in one. A field Shelf cannot
+    /// validate is a field Shelf should not let anybody type into — and a
+    /// library that goes back to Calibre must find them as it left them.
+    ///
+    /// The heading is the library's own word for them. Ordered by the column's
+    /// Calibre number, so the inspector lists them in the order Calibre does
+    /// rather than alphabetically, which is the order the person arranged.
+    @ViewBuilder
+    private func customColumns(for entry: LibraryEntry) -> some View {
+        let columns = model.descriptor?.customColumns ?? []
+        let shown = columns.filter { entry.book.customValues[$0.label] != nil }
+        if !shown.isEmpty, !model.hasMultipleSelection {
+            SlateInspectorSection("From Calibre") {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(shown.sorted { $0.number < $1.number }, id: \.label) { column in
+                        SlateValueRow(
+                            name: column.name,
+                            value: Self.shown(entry.book.customValues[column.label] ?? "", as: column.kind)
+                        )
+                        .help("\(column.hashLabel) · \(column.kind.label) · imported from Calibre, not editable")
+                    }
+                }
             }
         }
     }
@@ -613,6 +644,19 @@ struct InspectorView: View {
     }
 
     // MARK: Formatting
+
+    /// A custom value as a person reads it.
+    ///
+    /// What is *stored* is the canonical form — a date as a full ISO-8601
+    /// stamp — because that is what goes into `metadata.opf` and has to come
+    /// back out of it unchanged. What is *shown* is the same date in the
+    /// reader's own region. The first screenshot of this section had
+    /// `2023-11-01T00:00:00+00:00` in it, which is a value a machine is
+    /// pleased with.
+    private static func shown(_ value: String, as kind: CalibreCustomColumn.Kind) -> String {
+        guard kind == .datetime, let date = OPFDate.parse(value) else { return value }
+        return day(date)
+    }
 
     private static func day(_ date: Date) -> String {
         let formatter = DateFormatter()

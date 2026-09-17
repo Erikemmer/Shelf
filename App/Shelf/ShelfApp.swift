@@ -77,12 +77,10 @@ struct ShelfApp: App {
             Button("Add Books…") { model.presentAddBooksPanel() }
                 .keyboardShortcut("i", modifiers: .command)
                 .disabled(model.library == nil)
-            // Listed and disabled rather than hidden: it is the reason most
-            // people will open Shelf at all (CONCEPT §7), and a menu that grows
-            // between versions is harder to learn than one whose shape is fixed.
-            Button("Import from Calibre…") {}
+            // The reason most people will open Shelf at all (CONCEPT §7).
+            Button("Import from Calibre…") { model.presentCalibrePanel() }
                 .keyboardShortcut("i", modifiers: [.command, .option])
-                .disabled(true)
+                .disabled(model.library == nil)
             Divider()
             Button("Show in Finder") { model.revealSelectedInFinder() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])

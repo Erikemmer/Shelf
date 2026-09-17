@@ -1,0 +1,9 @@
+  AXSheet
+    AXGroup [AXHostingView]
+      AXStaticText value="Import from Calibre"
+      AXStaticText value="Calibre library calibre-fixture-3"
+      AXStaticText value="Verified · 4 files · 4 new books"
+      AXStaticText value="Copied, 23.8 KB"
+      AXStaticText value="Imported with something missing, 1"
+      AXStaticText value="The full report is in .shelf/Import-Report.txt."
+      AXButton desc="Done"

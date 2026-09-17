@@ -41,6 +41,16 @@ final class ImportModel {
     private(set) var nextBookNumber = 1
     /// The books the run added, for the model to put into the index.
     private(set) var imported: [LibraryEntry] = []
+    /// The counting protocol, when the source is a Calibre library.
+    ///
+    /// A folder of loose files has nothing like it: there is no database to
+    /// count against, so `ImportPlan.summary()` is the whole story there. A
+    /// Calibre library has two sources that can disagree, and the numbers the
+    /// person needs before pressing Import are what the disagreement looks like
+    /// (CONCEPT §7.3).
+    private(set) var calibreCensus: CalibreCensus?
+    /// Calibre's column definitions, to be stored before the books are.
+    @ObservationIgnored private(set) var calibreColumns: [CalibreCustomColumn] = []
 
     private let library: Library
     @ObservationIgnored private let index: LibraryIndex
@@ -51,6 +61,69 @@ final class ImportModel {
         self.library = library
         self.index = index
         nextBookNumber = (try? library.readDescriptor().nextBookNumber) ?? 1
+    }
+
+    // MARK: Examining a Calibre library
+
+    /// Reads a Calibre library and works out the plan. **Nothing is written**,
+    /// and the Calibre folder is only read — `metadata.db` through a copy
+    /// (ADR 0009).
+    func examineCalibre(_ folder: URL) async {
+        task?.cancel()
+        reset()
+        sourceDescription = "Calibre library \(folder.lastPathComponent)"
+        phase = .examining(done: 0, total: 0)
+
+        let destination = library.root
+        let cache = Self.calibreCacheDirectory
+        // Detached: reading the database and hashing every file is the slow
+        // part of a large library, and none of it belongs on the main actor.
+        let outcome = await Task.detached(priority: .userInitiated) {
+            () -> Result<(CalibreLibrary, CalibreCensus, [ImportCandidate]), any Error> in
+            do {
+                let calibre = try CalibreReader().read(folder: folder, cacheDirectory: cache)
+                let census = CalibreCensusTaker().take(of: calibre, destination: destination)
+                let read = CalibreImportSource(makeHasher: SHA256Hasher.factory).read(calibre)
+                return .success((calibre, census, read.candidates))
+            } catch {
+                return .failure(error)
+            }
+        }.value
+
+        switch outcome {
+        case .failure(let error):
+            phase = .idle
+            errorMessage = Self.describe(error, folder: folder)
+        case .success(let (calibre, census, found)):
+            calibreCensus = census
+            calibreColumns = calibre.customColumns
+            candidates = found
+            await buildPlan()
+        }
+    }
+
+    /// Where the copy of `metadata.db` goes. Never under `~/Documents`, which is
+    /// synced.
+    static var calibreCacheDirectory: URL {
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: "Library/Caches/Shelf")
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    /// A sentence somebody can act on, rather than the error's own words.
+    static func describe(_ error: any Error, folder: URL) -> String {
+        switch error as? CalibreReader.Failure {
+        case .noDatabase:
+            return "\(folder.lastPathComponent) holds no metadata.db, so it is not a Calibre library. "
+                + "Choose the folder that has metadata.db in it."
+        case .cannotCopy(let reason):
+            return "Shelf could not copy metadata.db in order to read it: \(reason)"
+        case .cannotOpen(let reason):
+            return "Shelf could not read metadata.db: \(reason)"
+        case nil:
+            return (error as NSError).localizedDescription
+        }
     }
 
     // MARK: Examining
@@ -95,7 +168,15 @@ final class ImportModel {
                 titleKeys: try await index.allTitleKeys(),
                 formatsByBook: try await formatsByBook(),
                 foldersByBook: try await foldersByBook())
-            let descriptor = try library.readDescriptor()
+            var descriptor = try library.readDescriptor()
+            // The columns' definitions before the books, for the same reason the
+            // shelf tree goes first (ADR 0008): a value whose column the index
+            // has never heard of has nowhere to go.
+            if !calibreColumns.isEmpty {
+                descriptor.customColumns = calibreColumns
+                try library.write(descriptor)
+                try await index.saveCustomColumns(calibreColumns)
+            }
             nextBookNumber = descriptor.nextBookNumber
             // The stored counter, or the highest number already on the disk if a
             // killed run got further than the descriptor did. It never goes
@@ -185,6 +266,8 @@ final class ImportModel {
         candidates = []
         imported = []
         errorMessage = nil
+        calibreCensus = nil
+        calibreColumns = []
     }
 
     // MARK: Reading files

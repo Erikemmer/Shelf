@@ -576,6 +576,26 @@ final class LibraryModel {
         Task { await importModel.examine(panel.urls) }
     }
 
+    /// Choose a Calibre library, count it, and show the counting protocol.
+    ///
+    /// The folder with `metadata.db` in it, which is what Calibre calls the
+    /// library. **Only ever read** — and the database only through a copy
+    /// (ADR 0009). Nothing is written anywhere until Import is pressed.
+    func presentCalibrePanel() {
+        guard let importModel else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.message =
+            "Choose your Calibre library – the folder that holds metadata.db. "
+            + "Shelf only reads it."
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        isImportSheetPresented = true
+        Task { await importModel.examineCalibre(folder) }
+    }
+
     /// Books dropped on the window. The same path as the panel, so the counting
     /// protocol appears either way – nothing is copied without being shown first.
     func handleDrop(_ urls: [URL]) {
@@ -593,11 +613,17 @@ final class LibraryModel {
     func runImport() async {
         guard let importModel, let library, let index else { return }
         await importModel.run()
-        // The descriptor's counter moved on, so it has to be written back.
-        if var descriptor {
-            descriptor.nextBookNumber = importModel.nextBookNumber
-            try? library.write(descriptor)
-            self.descriptor = descriptor
+        // **Re-read, do not write back what was cached.** The counter moved on
+        // and has to be stored, but an import can put things in `library.json`
+        // that this window's copy predates: a Calibre import writes the custom
+        // columns' definitions there before it copies a single file. Writing
+        // the cached copy back erased them — the import worked, the values were
+        // in every book's OPF, and the inspector showed nothing because the
+        // library no longer knew what the columns were called.
+        if var stored = try? library.readDescriptor() {
+            stored.nextBookNumber = max(stored.nextBookNumber, importModel.nextBookNumber)
+            try? library.write(stored)
+            self.descriptor = stored
         }
         if let loader { coversOnDisk = await loader.cachedBookIDs() }
         _ = index
