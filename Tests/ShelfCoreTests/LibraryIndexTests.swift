@@ -388,12 +388,59 @@ struct LibraryIndexTests {
         // key fails.
         try await index.saveShelves([scifi, fiction])
 
-        let book = entry(title: "A Book", number: 1)
-        try await index.save(book, shelfIDs: [scifi.id])
+        // The book carries the *path*; the index resolves it against the tree
+        // it has just been given. Nothing hands it an id.
+        var book = entry(title: "A Book", number: 1)
+        book.book.shelves = ["Fiction/Science Fiction"]
+        try await index.save(book)
         #expect(try await index.shelfFacets()[scifi.id] == 1)
 
         let totals = try await index.totals()
         #expect(totals.notOnAnyShelf == 0)
+    }
+
+    /// The path has to survive the round trip, or the grid filters on nothing
+    /// and "Not on any Shelf" swallows the whole library.
+    @Test("a book comes back out of the index standing on the same shelf")
+    func shelfPathsComeBack() async throws {
+        let index = try LibraryIndex(inMemory: "shelf-paths")
+        let fiction = Shelf(name: "Fiction")
+        let scifi = Shelf(name: "Science Fiction", parentID: fiction.id)
+        try await index.saveShelves([fiction, scifi])
+
+        var book = entry(title: "A Book", number: 1)
+        book.book.shelves = ["Fiction/Science Fiction", "Fiction"]
+        try await index.save(book)
+
+        let back = try #require(try await index.entry(id: book.id))
+        #expect(back.book.shelves == ["Fiction", "Fiction/Science Fiction"])
+    }
+
+    /// A path with no shelf behind it is skipped rather than invented: the tree
+    /// belongs to `library.json`, and a shelf conjured up in the index would be
+    /// one the file never hears about.
+    @Test("a shelf the index does not know is skipped, not invented")
+    func unknownShelfPath() async throws {
+        let index = try LibraryIndex(inMemory: "unknown-shelf")
+        var book = entry(title: "A Book", number: 1)
+        book.book.shelves = ["Nowhere/At All"]
+        try await index.save(book)
+
+        let back = try #require(try await index.entry(id: book.id))
+        #expect(back.book.shelves.isEmpty)
+        #expect(try await index.totals().notOnAnyShelf == 1)
+    }
+
+    /// Removing a shelf from `library.json` has to remove it here too, or the
+    /// sidebar keeps drawing a shelf that no longer exists.
+    @Test("saving the tree removes the shelves that are no longer in it")
+    func shelvesAreReplaced() async throws {
+        let index = try LibraryIndex(inMemory: "shelves-replaced")
+        let keep = Shelf(name: "Keep")
+        let drop = Shelf(name: "Drop")
+        try await index.saveShelves([keep, drop])
+        try await index.saveShelves([keep])
+        #expect(try await index.shelfIDs() == [keep.id])
     }
 
     // MARK: Erasing

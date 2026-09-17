@@ -41,6 +41,26 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
     /// had touched, and a rebuild would report changes that are not changes.
     /// Unlike `authors`, the order carries no information — no tag is "first".
     public var tags: [String]
+    /// The shelves the book stands on, as stored paths: `Fiction/Sci-Fi`.
+    ///
+    /// **In the book, not beside it.** A shelf is the one thing a library knows
+    /// that a book file does not, so Shelf mirrors it into each book's
+    /// `metadata.opf` as `shelf:shelves` — which makes it, like everything else
+    /// here, something a rebuild reads back off the disk (ADR 0001, ADR 0008).
+    /// Keeping it in `Book` rather than as a value carried alongside is what
+    /// gives shelf membership the same undo, the same "write the file, then the
+    /// index", and the same multiple-selection editing as every other field,
+    /// instead of a second mechanism that has to be kept in step with the first.
+    ///
+    /// The *paths* are here and the *tree* is in `library.json`: a book knows
+    /// which shelves it is on, the library knows what the shelves are and in
+    /// what order. An empty shelf therefore survives in `library.json` with no
+    /// book to remember it.
+    ///
+    /// Sorted, and for the same reason `tags` is: the OPF, the index and the
+    /// model must agree on one order or a round trip reports a change nobody
+    /// made.
+    public var shelves: [String]
     /// ISBN, ASIN, DOI, Google, Goodreads… keyed by scheme, lower-cased.
     public var identifiers: [String: String]
     /// When Shelf first saw the book. Calibre's `timestamp` on import.
@@ -62,6 +82,7 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
         language: String? = nil,
         description: String? = nil,
         tags: [String] = [],
+        shelves: [String] = [],
         identifiers: [String: String] = [:],
         addedAt: Date = Date(),
         modifiedAt: Date = Date()
@@ -78,6 +99,7 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
         self.language = language
         self.description = description
         self.tags = tags.sorted()
+        self.shelves = shelves.sorted()
         self.identifiers = identifiers
         self.addedAt = addedAt
         self.modifiedAt = modifiedAt

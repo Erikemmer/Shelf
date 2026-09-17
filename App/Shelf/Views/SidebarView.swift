@@ -41,7 +41,7 @@ struct SidebarView: View {
         Group {
             SlateSidebarSection("Library")
             ForEach(SmartCollection.allCases, id: \.self) { collection in
-                let available = SmartCollection.availableInSprintOne.contains(collection)
+                let available = !Self.stillToCome.contains(collection)
                 SlateSidebarRow(
                     collection.title,
                     icon: collection.icon,
@@ -55,7 +55,7 @@ struct SidebarView: View {
                         // Sprint 2, where it is not an answer. Duplicates needs
                         // the duplicate query and Not on any Shelf needs
                         // shelves; both are 2c.
-                        : "\(collection.title) arrives in Sprint 2c",
+                        : "\(collection.title) arrives later in Sprint 2c",
                     titleColor: available ? Slate.textPrimary : Slate.textSecondary,
                     // Named, not a trailing closure: SlateKit 0.2.0 gained an
                     // `accessory` view builder before `action`, so a trailing
@@ -68,6 +68,11 @@ struct SidebarView: View {
             }
         }
     }
+
+    /// The collections that cannot answer yet. Drawn and greyed rather than
+    /// hidden: a sidebar whose shape changes between versions is harder to
+    /// learn than one that is whole from the start.
+    private static let stillToCome: Set<SmartCollection> = [.duplicates]
 
     /// Whether anything beyond the collection is narrowing the view, which is
     /// what decides whether a collection row is drawn as active.

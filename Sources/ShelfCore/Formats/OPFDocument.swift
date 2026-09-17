@@ -23,21 +23,16 @@ public enum OPFDocument {
         /// Path of the cover image inside the EPUB, relative to the OPF.
         /// Only set when reading an EPUB's own OPF.
         public var coverPath: String?
-        /// Shelf names the book belonged to when it was last written. Read back
-        /// on a rebuild, which is what makes shelves survive a lost index.
-        public var shelfPaths: [String]
         /// Fields the file had that Shelf does not model yet – Calibre's custom
         /// columns among them. Kept so writing the file back does not drop
         /// them (Sprint 3 reads them properly).
         public var unmappedMetas: [String: String]
 
         public init(
-            book: Book, coverPath: String? = nil, shelfPaths: [String] = [],
-            unmappedMetas: [String: String] = [:]
+            book: Book, coverPath: String? = nil, unmappedMetas: [String: String] = [:]
         ) {
             self.book = book
             self.coverPath = coverPath
-            self.shelfPaths = shelfPaths
             self.unmappedMetas = unmappedMetas
         }
     }
@@ -106,10 +101,11 @@ public enum OPFDocument {
             book.modifiedAt = modified
         }
 
+        book.shelves = decodeShelves(metas["shelf:shelves"]).sorted()
+
         return Parsed(
             book: book,
             coverPath: readCoverPath(root),
-            shelfPaths: decodeShelves(metas["shelf:shelves"]),
             unmappedMetas: metas.unmapped)
     }
 
@@ -248,7 +244,7 @@ public enum OPFDocument {
     /// the file has to come out byte-identical for identical input, so a diff
     /// in a library folder means a real change and not a reordered attribute.
     public static func render(
-        _ book: Book, shelfPaths: [String] = [], unmappedMetas: [String: String] = [:]
+        _ book: Book, unmappedMetas: [String: String] = [:]
     ) -> String {
         var lines: [String] = []
         lines.append("<?xml version='1.0' encoding='utf-8'?>")
@@ -310,14 +306,15 @@ public enum OPFDocument {
         // Shelf's own fields. Calibre ignores metas it does not know, which is
         // what makes this safe to write into a library Calibre also reads.
         lines.append("    <meta name=\"shelf:read\" content=\"\(book.isRead)\"/>")
-        if !shelfPaths.isEmpty {
+        if !book.shelves.isEmpty {
             // A JSON array, not a joined string. A shelf name may contain any
             // printable character – a comma, a slash, a pipe – and the obvious
             // answer, an ASCII separator such as the unit separator, is *not
             // legal in XML 1.0*: the parser refuses the whole file. JSON is
             // lossless, legal, and still readable by eye in the file.
             lines.append(
-                "    <meta name=\"shelf:shelves\" content=\"\(escapedAttribute(encodeShelves(shelfPaths)))\"/>")
+                "    <meta name=\"shelf:shelves\" content=\"\(escapedAttribute(encodeShelves(book.shelves)))\"/>"
+            )
         }
         for name in unmappedMetas.keys.sorted() {
             guard let content = unmappedMetas[name] else { continue }
@@ -344,9 +341,9 @@ public enum OPFDocument {
     /// implemented in swift-corelibs-foundation, so every second write of an OPF
     /// failed on Linux. The Linux CI job found it; no Mac would have.
     public static func write(
-        _ book: Book, to folder: URL, shelfPaths: [String] = [], unmappedMetas: [String: String] = [:]
+        _ book: Book, to folder: URL, unmappedMetas: [String: String] = [:]
     ) throws {
-        let text = render(book, shelfPaths: shelfPaths, unmappedMetas: unmappedMetas)
+        let text = render(book, unmappedMetas: unmappedMetas)
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             try Data(text.utf8).write(to: folder.appendingPathComponent(fileName), options: .atomic)

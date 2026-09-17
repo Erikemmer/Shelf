@@ -21,21 +21,18 @@ public enum EPUBMetadata {
         /// What could not be read. Never fatal on its own – the book is still
         /// imported, and these lines end up in `Import-Report.txt`.
         public var warnings: [String]
-        /// Shelf names the file remembered, when it is Shelf's own
-        /// `metadata.opf` being read rather than an EPUB.
-        public var shelfPaths: [String]
+        /// Fields the OPF had that Shelf does not model yet.
         public var unmappedMetas: [String: String]
 
         public init(
             book: Book, cover: Data? = nil, coverName: String? = nil, drm: DRMKind? = nil,
-            warnings: [String] = [], shelfPaths: [String] = [], unmappedMetas: [String: String] = [:]
+            warnings: [String] = [], unmappedMetas: [String: String] = [:]
         ) {
             self.book = book
             self.cover = cover
             self.coverName = coverName
             self.drm = drm
             self.warnings = warnings
-            self.shelfPaths = shelfPaths
             self.unmappedMetas = unmappedMetas
         }
     }
@@ -104,7 +101,7 @@ public enum EPUBMetadata {
 
         return Result(
             book: book, cover: cover, coverName: coverName, drm: drm, warnings: warnings,
-            shelfPaths: parsed.shelfPaths, unmappedMetas: parsed.unmappedMetas)
+            unmappedMetas: parsed.unmappedMetas)
     }
 
     /// Where the OPF is.

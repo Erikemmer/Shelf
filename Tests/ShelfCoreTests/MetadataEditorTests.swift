@@ -140,9 +140,10 @@ struct MetadataEditorTests {
         try FileManager.default.createDirectory(
             at: temporary.url.appendingPathComponent(relative, isDirectory: true),
             withIntermediateDirectories: true)
+        var shelved = book
+        shelved.shelves = ["Fiction/Science Fiction", "To Read"]
         try OPFDocument.write(
-            book, to: temporary.url.appendingPathComponent(relative, isDirectory: true),
-            shelfPaths: ["Fiction ▸ Science Fiction", "To Read"],
+            shelved, to: temporary.url.appendingPathComponent(relative, isDirectory: true),
             unmappedMetas: ["calibre_custom:#shelf_location": "top left", "some:other": "kept"])
 
         let entry = LibraryEntry(book: book, number: 1, folder: relative)
@@ -168,7 +169,10 @@ struct MetadataEditorTests {
             fallbackTitle: "x")
 
         #expect(written.book.rating == 10)
-        #expect(written.shelfPaths == ["Fiction ▸ Science Fiction", "To Read"])
+        // The index this entry came back from knows nothing about these
+        // shelves – no tree was saved into it – and the edit still must not
+        // drop them, because the *file* is what a rebuild reads.
+        #expect(written.book.shelves == ["Fiction/Science Fiction", "To Read"])
         #expect(written.unmappedMetas["calibre_custom:#shelf_location"] == "top left")
         #expect(written.unmappedMetas["some:other"] == "kept")
         // The rest of the book is untouched by a rating change.

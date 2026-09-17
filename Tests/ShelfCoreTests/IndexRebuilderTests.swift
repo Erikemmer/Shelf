@@ -115,12 +115,17 @@ struct IndexRebuilderTests {
             Issue.record("nothing imported")
             return
         }
-        // What Sprint 2's editor will do: write the shelves into the OPF.
+        // What the editor does: the shelves go into the book's own OPF.
+        var shelved = entry.book
+        shelved.shelves = ["Fiction/Science Fiction"]
         let bookFolder = library.root.appendingPathComponent(entry.folder)
-        try OPFDocument.write(entry.book, to: bookFolder, shelfPaths: ["Fiction ▸ Science Fiction"])
+        try OPFDocument.write(shelved, to: bookFolder)
 
         let result = try rebuilder().rebuild(library)
-        #expect(result.shelfPathsByBook[entry.book.id] == ["Fiction ▸ Science Fiction"])
+        #expect(result.entries.first?.book.shelves == ["Fiction/Science Fiction"])
+        // And the walk reports the path, so the caller can make sure
+        // `library.json` holds a shelf to file it under.
+        #expect(result.shelfPathsSeen == ["Fiction/Science Fiction"])
     }
 
     // MARK: When the folder is not as expected

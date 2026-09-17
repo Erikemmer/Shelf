@@ -20,21 +20,27 @@ public struct IndexRebuilder: Sendable {
         /// Books whose OPF was missing or unreadable, so their metadata came
         /// from the file instead.
         public var withoutOPF: [String]
-        /// Shelf names read back out of the OPFs, per book: the one part of the
-        /// index the folders would otherwise not hold.
-        public var shelfPathsByBook: [UUID: [String]]
+        /// Every shelf path any book named, so the caller can make sure the
+        /// tree in `library.json` holds them before the entries are saved.
+        ///
+        /// The *membership* is not here: it is in each book (`Book.shelves`),
+        /// read back out of its `metadata.opf` like every other field. This is
+        /// only the list of names a rebuild has to be able to file them under —
+        /// a library restored without its `.shelf` folder has books that
+        /// remember their shelves and a `library.json` that does not.
+        public var shelfPathsSeen: Set<String>
         /// The highest folder number found, so the library's counter can be
         /// repaired if `library.json` was lost.
         public var highestNumber: Int
 
         public init(
             entries: [LibraryEntry] = [], unreadableFolders: [String] = [], withoutOPF: [String] = [],
-            shelfPathsByBook: [UUID: [String]] = [:], highestNumber: Int = 0
+            shelfPathsSeen: Set<String> = [], highestNumber: Int = 0
         ) {
             self.entries = entries
             self.unreadableFolders = unreadableFolders
             self.withoutOPF = withoutOPF
-            self.shelfPathsByBook = shelfPathsByBook
+            self.shelfPathsSeen = shelfPathsSeen
             self.highestNumber = highestNumber
         }
     }
@@ -90,9 +96,7 @@ public struct IndexRebuilder: Sendable {
                 }
                 result.entries.append(found.entry)
                 if !found.hadOPF { result.withoutOPF.append(relative) }
-                if !found.shelfPaths.isEmpty {
-                    result.shelfPathsByBook[found.entry.book.id] = found.shelfPaths
-                }
+                result.shelfPathsSeen.formUnion(found.entry.book.shelves)
                 result.highestNumber = max(result.highestNumber, found.entry.number)
             }
         }
@@ -102,7 +106,7 @@ public struct IndexRebuilder: Sendable {
     /// One book's folder.
     private func read(
         _ folder: URL, relative: String, knownDigests: [String: String]
-    ) throws -> (entry: LibraryEntry, hadOPF: Bool, shelfPaths: [String])? {
+    ) throws -> (entry: LibraryEntry, hadOPF: Bool)? {
         let manager = FileManager.default
         let names = (try? manager.contentsOfDirectory(atPath: folder.path)) ?? []
 
@@ -120,14 +124,12 @@ public struct IndexRebuilder: Sendable {
         // The OPF is the authority: it carries the UUID, and the UUID is the
         // book's identity across a rebuild (CONCEPT §5.3).
         var book: Book
-        var shelfPaths: [String] = []
         var hadOPF = false
         let opfURL = folder.appendingPathComponent(OPFDocument.fileName)
         if let data = try? Data(contentsOf: opfURL),
             let parsed = try? OPFDocument.read(data, fallbackTitle: Self.title(in: folder.lastPathComponent))
         {
             book = parsed.book
-            shelfPaths = parsed.shelfPaths
             hadOPF = true
         } else if let epub = bookFiles.first(where: { $0.1.hasReadableMetadata }),
             let read = try? EPUBMetadata.read(url: folder.appendingPathComponent(epub.0), readCover: false)
@@ -164,8 +166,7 @@ public struct IndexRebuilder: Sendable {
 
         return (
             LibraryEntry(book: book, number: number, folder: relative, formats: formats),
-            hadOPF,
-            shelfPaths
+            hadOPF
         )
     }
 

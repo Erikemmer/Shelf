@@ -107,9 +107,9 @@ public final class LibraryIndex: Sendable {
     /// An upsert, because the same call has to serve an import, an edit and a
     /// rebuild. The relations are replaced rather than merged: a book whose
     /// second author was removed must not keep them.
-    public func save(_ entry: LibraryEntry, shelfIDs: [UUID] = []) async throws {
+    public func save(_ entry: LibraryEntry) async throws {
         try await pool.write { database in
-            try Self.write(entry, shelfIDs: shelfIDs, in: database)
+            try Self.write(entry, in: database)
         }
     }
 
@@ -123,12 +123,12 @@ public final class LibraryIndex: Sendable {
         guard !entries.isEmpty else { return }
         try await pool.write { database in
             for entry in entries {
-                try Self.write(entry, shelfIDs: [], in: database)
+                try Self.write(entry, in: database)
             }
         }
     }
 
-    private static func write(_ entry: LibraryEntry, shelfIDs: [UUID], in database: Database) throws {
+    private static func write(_ entry: LibraryEntry, in database: Database) throws {
         let book = entry.book
         let id = book.id.uuidString
 
@@ -199,16 +199,51 @@ public final class LibraryIndex: Sendable {
                 ])
         }
 
-        if !shelfIDs.isEmpty {
-            try database.execute(sql: "DELETE FROM book_shelves WHERE book_id = ?", arguments: [id])
-            for (position, shelfID) in shelfIDs.enumerated() {
-                try database.execute(
-                    sql: "INSERT OR REPLACE INTO book_shelves (book_id, shelf_id, position) VALUES (?, ?, ?)",
-                    arguments: [id, shelfID.uuidString, position])
-            }
+        // The shelves come out of the book, like everything else: the book's
+        // `metadata.opf` is where membership lives (ADR 0008), so this table is
+        // a cache of it and is replaced wholesale.
+        //
+        // A path this index does not know is *skipped, not invented*. The tree
+        // belongs to `library.json` and is written before the books are, so a
+        // path with no shelf behind it means the caller has not saved the tree
+        // — and a shelf conjured up here would be one `library.json` never
+        // hears about, which is how two authorities start disagreeing.
+        try database.execute(sql: "DELETE FROM book_shelves WHERE book_id = ?", arguments: [id])
+        for (position, path) in book.shelves.enumerated() {
+            guard let shelfID = try shelfID(atPath: path, in: database) else { continue }
+            try database.execute(
+                sql: "INSERT OR REPLACE INTO book_shelves (book_id, shelf_id, position) VALUES (?, ?, ?)",
+                arguments: [id, shelfID, position])
         }
 
         try writeSearchRow(entry, in: database)
+    }
+
+    /// `Fiction/Sci-Fi` → the id of the shelf at the end of it, walking the
+    /// `shelves` table one level at a time.
+    ///
+    /// `NOCASE` so that a book filed under `fiction/sci-fi` by an OPF somebody
+    /// edited by hand still lands on `Fiction/Sci-Fi` – the same leniency
+    /// `ShelfTree.shelf(atPath:)` has, which is what keeps the index and the
+    /// tree answering the same question the same way.
+    private static func shelfID(atPath path: String, in database: Database) throws -> String? {
+        let names = path.components(separatedBy: ShelfTree.pathSeparator)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !names.isEmpty else { return nil }
+        var parent: String?
+        for name in names {
+            let found: String? =
+                try String.fetchOne(
+                    database,
+                    sql: parent == nil
+                        ? "SELECT id FROM shelves WHERE parent_id IS NULL AND name = ? COLLATE NOCASE"
+                        : "SELECT id FROM shelves WHERE parent_id = ? AND name = ? COLLATE NOCASE",
+                    arguments: parent == nil ? [name] : [parent, name])
+            guard let found else { return nil }
+            parent = found
+        }
+        return parent
     }
 
     /// The book's row in the search table.
@@ -339,6 +374,7 @@ public final class LibraryIndex: Sendable {
         let bookIDs = rows.map { $0["id"] as String }
         let authors = try authorNames(for: bookIDs, in: database)
         let tags = try tagNames(for: bookIDs, in: database)
+        let shelves = try shelfPaths(for: bookIDs, in: database)
         let formats = try formatRows(for: bookIDs, in: database)
         let identifiers = try identifierRows(for: bookIDs, in: database)
 
@@ -359,6 +395,7 @@ public final class LibraryIndex: Sendable {
                 language: row["language"],
                 description: row["description"],
                 tags: tags[id] ?? [],
+                shelves: shelves[id] ?? [],
                 identifiers: identifiers[id] ?? [:],
                 addedAt: row["added_at"],
                 modifiedAt: row["modified_at"])
@@ -393,6 +430,37 @@ public final class LibraryIndex: Sendable {
             arguments: StatementArguments(bookIDs))
         return Dictionary(grouping: rows) { $0["book_id"] as String }
             .mapValues { $0.map { $0["name"] as String } }
+    }
+
+    /// The stored path of every shelf each book stands on.
+    ///
+    /// Built back up from the tree in one query rather than one per level: a
+    /// recursive CTE walks from each shelf to the root and glues the names
+    /// together, so 5 000 books on 20 shelves cost one statement, not 5 000.
+    ///
+    /// It has to come back at all, and that is not a detail. `Book.shelves` is
+    /// what the grid filters on and what "Not on any Shelf" is answered from —
+    /// an index that returned books with no shelves would quietly file the
+    /// whole library under "not on any shelf" while every `metadata.opf` said
+    /// otherwise.
+    private static func shelfPaths(for bookIDs: [String], in database: Database) throws -> [String: [String]] {
+        let rows = try Row.fetchAll(
+            database,
+            sql: """
+                WITH RECURSIVE ancestry(id, path) AS (
+                    SELECT id, name FROM shelves WHERE parent_id IS NULL
+                    UNION ALL
+                    SELECT s.id, ancestry.path || '\(ShelfTree.pathSeparator)' || s.name
+                    FROM shelves s JOIN ancestry ON s.parent_id = ancestry.id
+                )
+                SELECT bs.book_id, ancestry.path AS path FROM book_shelves bs
+                JOIN ancestry ON ancestry.id = bs.shelf_id
+                WHERE bs.book_id IN (\(databaseQuestionMarks(count: bookIDs.count)))
+                ORDER BY ancestry.path
+                """,
+            arguments: StatementArguments(bookIDs))
+        return Dictionary(grouping: rows) { $0["book_id"] as String }
+            .mapValues { $0.map { $0["path"] as String } }
     }
 
     /// The identifiers of each book: ISBN, ASIN, Goodreads…
@@ -668,8 +736,23 @@ public final class LibraryIndex: Sendable {
 
     // MARK: Shelves
 
+    /// Writes the whole tree, and removes whatever is no longer in it.
+    ///
+    /// *The whole* tree, because `library.json` is the authority for the shape
+    /// of the shelves (ADR 0008) and this table is a cache of it. An upsert
+    /// that only added would leave a deleted shelf standing in the sidebar with
+    /// its books still on it — the index quietly disagreeing with the file,
+    /// which is the one thing a cache must never do.
     public func saveShelves(_ shelves: [Shelf]) async throws {
         try await pool.write { database in
+            let wanted = shelves.map(\.id.uuidString)
+            // `ON DELETE CASCADE` on `parent_id` takes the children with it, and
+            // on `book_shelves` it takes the memberships – which is right: a
+            // shelf that is gone holds no books. What the books' own OPFs say is
+            // untouched; the caller rewrites those, or does not.
+            try database.execute(
+                sql: "DELETE FROM shelves WHERE id NOT IN (\(databaseQuestionMarks(count: wanted.count)))",
+                arguments: StatementArguments(wanted.isEmpty ? [""] : wanted))
             // Children first would violate the foreign key; parents first is
             // the order a tree has to be written in.
             let ordered = shelves.sorted { ($0.parentID == nil ? 0 : 1) < ($1.parentID == nil ? 0 : 1) }
@@ -684,6 +767,14 @@ public final class LibraryIndex: Sendable {
                         shelf.id.uuidString, shelf.name, shelf.parentID?.uuidString, shelf.position,
                     ])
             }
+        }
+    }
+
+    /// Every shelf id the index holds – what a test asks to see that a removed
+    /// shelf is really gone.
+    public func shelfIDs() async throws -> Set<UUID> {
+        try await pool.read { database in
+            Set(try String.fetchAll(database, sql: "SELECT id FROM shelves").compactMap(UUID.init(uuidString:)))
         }
     }
 

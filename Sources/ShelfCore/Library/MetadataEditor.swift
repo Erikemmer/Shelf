@@ -72,7 +72,7 @@ public struct MetadataChange: Equatable, Sendable {
     /// change non-empty.
     public enum Field: String, CaseIterable, Sendable {
         case title, titleSort, authors, series, rating, isRead
-        case publisher, published, language, description, tags, identifiers
+        case publisher, published, language, description, tags, shelves, identifiers
 
         public var label: String {
             switch self {
@@ -87,6 +87,7 @@ public struct MetadataChange: Equatable, Sendable {
             case .language: return "Language"
             case .description: return "Description"
             case .tags: return "Tags"
+            case .shelves: return "Shelves"
             case .identifiers: return "Identifiers"
             }
         }
@@ -104,6 +105,7 @@ public struct MetadataChange: Equatable, Sendable {
             case .language: return one.language != other.language
             case .description: return one.description != other.description
             case .tags: return one.tags != other.tags
+            case .shelves: return one.shelves != other.shelves
             case .identifiers: return one.identifiers != other.identifiers
             }
         }
@@ -121,6 +123,7 @@ public struct MetadataChange: Equatable, Sendable {
             case .language: target.language = source.language
             case .description: target.description = source.description
             case .tags: target.tags = source.tags
+            case .shelves: target.shelves = source.shelves
             case .identifiers: target.identifiers = source.identifiers
             }
         }
@@ -163,13 +166,10 @@ public struct MetadataEditor: Sendable {
     ) async throws -> LibraryEntry {
         let merged = merged(change, in: entry.folder)
         try OPFDocument.write(
-            merged.book, to: folderURL(entry.folder),
-            shelfPaths: merged.shelfPaths, unmappedMetas: merged.unmappedMetas)
+            merged.book, to: folderURL(entry.folder), unmappedMetas: merged.unmappedMetas)
 
         var updated = entry
         updated.book = merged.book
-        // `shelfIDs: []` on purpose: an empty list leaves `book_shelves` alone,
-        // so editing a rating does not take a book off its shelves.
         try await index.save(updated)
         return updated
     }
@@ -178,15 +178,14 @@ public struct MetadataEditor: Sendable {
     /// proof run diffs and what a test can read.
     public func opfText(for change: MetadataChange, in folder: String) -> String {
         let merged = merged(change, in: folder)
-        return OPFDocument.render(
-            merged.book, shelfPaths: merged.shelfPaths, unmappedMetas: merged.unmappedMetas)
+        return OPFDocument.render(merged.book, unmappedMetas: merged.unmappedMetas)
     }
 
     /// The book as it will be written: what the file says, with the changed
     /// fields laid over it.
     private func merged(
         _ change: MetadataChange, in folder: String
-    ) -> (book: Book, shelfPaths: [String], unmappedMetas: [String: String]) {
+    ) -> (book: Book, unmappedMetas: [String: String]) {
         let url = folderURL(folder).appendingPathComponent(OPFDocument.fileName)
         guard let data = try? Data(contentsOf: url),
             let parsed = try? OPFDocument.read(data, fallbackTitle: change.after.title),
@@ -195,13 +194,13 @@ public struct MetadataEditor: Sendable {
             // own instead, and the folder gets a file that says what it is.
             parsed.book.id == change.after.id
         else {
-            return (change.after, [], [:])
+            return (change.after, [:])
         }
 
         var book = parsed.book
         for field in change.fields { field.copy(from: change.after, into: &book) }
         book.modifiedAt = change.after.modifiedAt
-        return (book, parsed.shelfPaths, parsed.unmappedMetas)
+        return (book, parsed.unmappedMetas)
     }
 
     private func folderURL(_ folder: String) -> URL {

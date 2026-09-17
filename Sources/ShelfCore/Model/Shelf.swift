@@ -28,7 +28,10 @@ public struct Shelf: Identifiable, Equatable, Hashable, Sendable, Codable {
 /// is what keeps "move this shelf into that one" a single field change, and it
 /// is why the cycle check below can exist at all.
 public struct ShelfTree: Equatable, Sendable {
-    public private(set) var shelves: [Shelf]
+    /// Settable inside the package so `ShelfEdit` can build a tree up; the
+    /// rules for *what* may be added live there, next to each other, rather
+    /// than as a set of mutating methods spread over this type.
+    public internal(set) var shelves: [Shelf]
 
     public init(_ shelves: [Shelf] = []) {
         self.shelves = shelves

@@ -56,18 +56,18 @@ struct OPFDocumentTests {
     @Test("the shelves a book is on survive, so a lost index costs nothing")
     func shelfPaths() throws {
         let text = OPFDocument.render(
-            Book(title: "A Book"), shelfPaths: ["Fiction ▸ Science Fiction", "To Read"])
+            Book(title: "A Book", shelves: ["Fiction/Science Fiction", "To Read"]))
         let parsed = try OPFDocument.read(Data(text.utf8), fallbackTitle: "x")
-        #expect(parsed.shelfPaths == ["Fiction ▸ Science Fiction", "To Read"])
+        #expect(parsed.book.shelves == ["Fiction/Science Fiction", "To Read"])
     }
 
-    /// A shelf name may contain a comma or a slash, which is why the separator
-    /// is the unit separator and not a comma.
+    /// A shelf name may contain a comma, which is why the paths are a JSON
+    /// array and not a joined string.
     @Test("a shelf name with a comma in it still survives")
     func shelfNameWithComma() throws {
-        let text = OPFDocument.render(Book(title: "x"), shelfPaths: ["Crime, Mystery & Thriller"])
+        let text = OPFDocument.render(Book(title: "x", shelves: ["Crime, Mystery & Thriller"]))
         let parsed = try OPFDocument.read(Data(text.utf8), fallbackTitle: "x")
-        #expect(parsed.shelfPaths == ["Crime, Mystery & Thriller"])
+        #expect(parsed.book.shelves == ["Crime, Mystery & Thriller"])
     }
 
     @Test("the five XML entities are escaped, in titles and in descriptions")

@@ -281,10 +281,9 @@ final class LibraryModel {
     }
 
     private func applyFilter(matching ids: Set<UUID>?) {
-        let shelved = Set<UUID>()
         visible = entries.filter { entry in
             if let ids, !ids.contains(entry.id) { return false }
-            return filter.matches(entry, coversOnDisk: coversOnDisk, shelvedBooks: shelved)
+            return filter.matches(entry, coversOnDisk: coversOnDisk)
         }
         // Narrowed to one series, the grid is in series order, whatever the
         // sort menu says. A series has exactly one order that means anything,

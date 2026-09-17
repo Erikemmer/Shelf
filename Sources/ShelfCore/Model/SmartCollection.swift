@@ -23,12 +23,6 @@ public enum SmartCollection: Equatable, Hashable, Sendable, CaseIterable {
         .all, .unread, .recentlyAdded, .notOnAnyShelf, .missingCover, .duplicates,
     ]
 
-    /// What Sprint 1 can actually show. The other two need the index questions
-    /// Sprint 2 adds; they are drawn, disabled, rather than hidden – a menu
-    /// that grows between versions is harder to learn than one that is whole
-    /// and partly greyed.
-    public static let availableInSprintOne: Set<SmartCollection> = [.all, .unread, .recentlyAdded, .missingCover]
-
     public var title: String {
         switch self {
         case .all: return "All Books"
@@ -64,7 +58,6 @@ public enum SmartCollection: Equatable, Hashable, Sendable, CaseIterable {
     public func contains(
         _ entry: LibraryEntry,
         coversOnDisk: Set<UUID> = [],
-        shelvedBooks: Set<UUID> = [],
         duplicateBooks: Set<UUID> = [],
         now: Date = Date()
     ) -> Bool {
@@ -76,7 +69,12 @@ public enum SmartCollection: Equatable, Hashable, Sendable, CaseIterable {
         case .recentlyAdded:
             return entry.book.addedAt >= now.addingTimeInterval(-Double(Self.recentDays) * 86_400)
         case .notOnAnyShelf:
-            return !shelvedBooks.contains(entry.id)
+            // Answered from the book itself, not from a list of shelved ids
+            // handed in: the book carries its shelves (`Book.shelves`), so
+            // "on no shelf" is a fact about the book and needs no second copy
+            // that can go stale between the sidebar's count and the grid's
+            // filter.
+            return entry.book.shelves.isEmpty
         case .missingCover:
             return !coversOnDisk.contains(entry.id)
         case .duplicates:
@@ -93,7 +91,13 @@ public enum SmartCollection: Equatable, Hashable, Sendable, CaseIterable {
 /// status bar cannot describe two different filters.
 public struct LibraryFilter: Equatable, Sendable {
     public var collection: SmartCollection
-    public var shelfID: UUID?
+    /// A stored shelf path, `Fiction/Sci-Fi` – not an id.
+    ///
+    /// The path is what the books hold, so filtering by it needs no lookup and
+    /// no second list. It also makes "show me this shelf" mean *this shelf and
+    /// everything in it*: a shelf whose books all live in its children would
+    /// otherwise read as empty, which is not what a bookcase does.
+    public var shelfPath: String?
     public var tag: String?
     public var author: String?
     public var series: String?
@@ -102,7 +106,7 @@ public struct LibraryFilter: Equatable, Sendable {
 
     public init(
         collection: SmartCollection = .all,
-        shelfID: UUID? = nil,
+        shelfPath: String? = nil,
         tag: String? = nil,
         author: String? = nil,
         series: String? = nil,
@@ -110,7 +114,7 @@ public struct LibraryFilter: Equatable, Sendable {
         searchText: String = ""
     ) {
         self.collection = collection
-        self.shelfID = shelfID
+        self.shelfPath = shelfPath
         self.tag = tag
         self.author = author
         self.series = series
@@ -123,14 +127,15 @@ public struct LibraryFilter: Equatable, Sendable {
     /// Whether anything beyond the collection is narrowing the view – what the
     /// status bar uses to decide between "8 412 books" and "312 of 8 412".
     public var isNarrowed: Bool {
-        shelfID != nil || tag != nil || author != nil || series != nil || format != nil
+        shelfPath != nil || tag != nil || author != nil || series != nil || format != nil
             || !searchText.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     /// What the window shows as its subject: "Science Fiction", "Jane Austen",
     /// or the collection's own name.
     public var title: String {
-        tag ?? author ?? series ?? format?.rawValue.uppercased() ?? collection.title
+        tag ?? author ?? series ?? shelfPath?.components(separatedBy: ShelfTree.pathSeparator).last
+            ?? format?.rawValue.uppercased() ?? collection.title
     }
 
     /// Applies everything except the search text, which the index answers.
@@ -141,21 +146,27 @@ public struct LibraryFilter: Equatable, Sendable {
     public func matches(
         _ entry: LibraryEntry,
         coversOnDisk: Set<UUID> = [],
-        shelvedBooks: Set<UUID> = [],
-        booksOnShelf: Set<UUID> = [],
         duplicateBooks: Set<UUID> = [],
         now: Date = Date()
     ) -> Bool {
         guard
             collection.contains(
-                entry, coversOnDisk: coversOnDisk, shelvedBooks: shelvedBooks,
-                duplicateBooks: duplicateBooks, now: now)
+                entry, coversOnDisk: coversOnDisk, duplicateBooks: duplicateBooks, now: now)
         else { return false }
-        if shelfID != nil, !booksOnShelf.contains(entry.id) { return false }
+        if let shelfPath, !Self.stands(entry.book, on: shelfPath) { return false }
         if let tag, !entry.book.tags.contains(tag) { return false }
         if let author, !entry.book.authors.contains(author) { return false }
         if let series, entry.book.series?.name != series { return false }
         if let format, !entry.formats.contains(where: { $0.format == format }) { return false }
         return true
+    }
+
+    /// Whether a book stands on a shelf or on one inside it.
+    ///
+    /// Whole segments, so `Fiction` catches `Fiction/Sci-Fi` and leaves
+    /// `Fictional Places` alone — the same prefix rule `ShelfEdit` uses when a
+    /// shelf is removed, because "what this shelf covers" has to mean one thing.
+    public static func stands(_ book: Book, on path: String) -> Bool {
+        book.shelves.contains { $0 == path || $0.hasPrefix(path + ShelfTree.pathSeparator) }
     }
 }
