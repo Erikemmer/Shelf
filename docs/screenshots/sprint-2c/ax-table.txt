@@ -1,0 +1,44 @@
+        AXRow [AXOutlineRow]
+          AXCell
+            AXGroup [AXHostingView]
+              AXStaticText value="Vol. 1/2: Gideon Called Peace and the Very Long Subtitle and the Very Long Subtitle and th…"
+--
+        AXRow [AXOutlineRow]
+          AXCell
+            AXGroup [AXHostingView]
+              AXStaticText value="The Ministry Justice #16"
+--
+        AXRow [AXOutlineRow]
+          AXCell
+            AXGroup [AXHostingView]
+              AXStaticText value="Piranesi #34"
+--
+        AXRow [AXOutlineRow]
+          AXCell
+            AXGroup [AXHostingView]
+              AXStaticText value="Gideon Tale #60"
+--
+        AXRow [AXOutlineRow]
+          AXCell
+            AXGroup [AXHostingView]
+              AXStaticText value="The Fifth Called Peace #15"
+--
+        AXRow [AXOutlineRow]
+          AXCell
+            AXGroup [AXHostingView]
+              AXStaticText value="The Player to a Small, Angry Planet #19"
+--
+        AXRow [AXOutlineRow]
+          AXCell
+            AXGroup [AXHostingView]
+              AXStaticText value="Small Season #12"
+--
+        AXRow [AXOutlineRow]
+          AXCell
+            AXGroup [AXHostingView]
+              AXStaticText value="The Fifth Eleven #85"
+--
+
+The sort menu above the table, which reads the same BookOrder the
+header arrow does:
+    AXMenuButton value="Author ↑" desc="Sort order" help="How the library is ordered — the same field again turns it round"
