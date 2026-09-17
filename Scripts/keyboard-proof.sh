@@ -28,7 +28,15 @@ ROUNDS="${2:-5}"
 QUERY="${KEYBOARD_PROOF_QUERY:-ancillary}"
 INDEX="$LIBRARY/.shelf/library.sqlite"
 
-fail() { echo "keyboard-proof: FAILED – $1" >&2; exit 1; }
+# Every failure here asks first whether the screen locked mid-run, because a
+# locked screen makes the app look as though it stopped answering. The check
+# is defined in screen-awake.sh, which is sourced below; `command -v` keeps
+# this working if a failure happens before that line.
+fail() {
+    command -v fail_if_locked_now >/dev/null 2>&1 && fail_if_locked_now
+    echo "keyboard-proof: FAILED – $1" >&2
+    exit 1
+}
 
 # A locked screen breaks everything below without failing any of it – see
 # `screen-awake.sh`, which also holds the display awake for the run.

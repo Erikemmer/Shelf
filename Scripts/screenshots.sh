@@ -26,7 +26,15 @@ WIDTH="${SHOT_WIDTH:-1440}"
 HEIGHT="${SHOT_HEIGHT:-900}"
 MAX_BYTES=$((500 * 1024))
 
-fail() { echo "screenshots: FAILED – $1" >&2; exit 1; }
+# Every failure here asks first whether the screen locked mid-run, because a
+# locked screen makes the app look as though it stopped answering. The check
+# is defined in screen-awake.sh, which is sourced below; `command -v` keeps
+# this working if a failure happens before that line.
+fail() {
+    command -v fail_if_locked_now >/dev/null 2>&1 && fail_if_locked_now
+    echo "screenshots: FAILED – $1" >&2
+    exit 1
+}
 
 mkdir -p "$OUT"
 

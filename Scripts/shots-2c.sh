@@ -25,7 +25,15 @@ WIDTH="${SHOT_WIDTH:-1440}"
 HEIGHT="${SHOT_HEIGHT:-900}"
 MAX_BYTES=$((500 * 1024))
 
-fail() { echo "shots-2c: FAILED – $1" >&2; exit 1; }
+# Every failure here asks first whether the screen locked mid-run, because a
+# locked screen makes the app look as though it stopped answering. The check
+# is defined in screen-awake.sh, which is sourced below; `command -v` keeps
+# this working if a failure happens before that line.
+fail() {
+    command -v fail_if_locked_now >/dev/null 2>&1 && fail_if_locked_now
+    echo "shots-2c: FAILED – $1" >&2
+    exit 1
+}
 say() { echo "shots-2c: $1"; }
 
 mkdir -p "$OUT"
@@ -128,6 +136,29 @@ shiftClick() {
 keys() { osascript -e "tell application \"System Events\" to keystroke \"$1\" using command down" >/dev/null 2>&1; }
 tree() { swift "$HERE/ax-dump.swift" "$PID" 14 2>/dev/null; }
 
+# Wait for the window to show something, rather than asking once and believing
+# the answer. A fixed `sleep` is a guess about a machine's mood: the first run
+# of this script with the screen awake read the tree 2.5 s after ⌘2 and found no
+# table, and the very same ⌘2 sent by hand a moment later showed one with 120
+# rows in it. The keystroke was not lost; the question was asked too early.
+#
+# Dumping the tree takes about a second on its own, so this is a handful of
+# attempts rather than a tight loop.
+#
+#   await_tree <pattern> <seconds> <what was expected>
+await_tree() {
+    local pattern="$1" seconds="$2" what="$3" waited=0
+    while [ "$waited" -lt "$seconds" ]; do
+        tree | grep -q "$pattern" && return 0
+        sleep 1
+        waited=$((waited + 1))
+    done
+    tree > "/tmp/shots-2c-tree-$$.txt" 2>&1
+    fail "$what
+       Waited ${seconds}s for something matching: $pattern
+       What the window did show is in /tmp/shots-2c-tree-$$.txt"
+}
+
 # Every picture this script has taken, so the same one cannot be written twice
 # under two names. Sprint 2b shipped a `sidebar.png` that was a byte-for-byte
 # copy of `library.png`, because the scroll that was supposed to happen between
@@ -187,12 +218,11 @@ shoot shelves
 
 # ── 2: the table, sorted by a column ─────────────────────────────────────────
 front; sleep 0.4
-keys "2"; sleep 2.5
-tree | grep -q "AXOutline" || fail "⌘2 did not show the table"
+keys "2"
+await_tree "AXOutlineRow" 15 "⌘2 did not show the table"
 P=$(point "text=Author") || fail "the table has no Author column header"
 swift "$HERE/click-at.swift" ${P% *} ${P#* }
-sleep 2
-tree | grep -q 'value="Author ' || fail "clicking the Author header did not change the sort order"
+await_tree 'value="Author ' 15 "clicking the Author header did not change the sort order"
 shoot table
 tree | grep -E "AXSortButton|AXOutlineRow" -A3 | head -40 > "$OUT/ax-table.txt"
 {
@@ -205,12 +235,12 @@ say "ax-table.txt"
 
 # ── 3: several books selected, and the inspector saying Mixed ────────────────
 front; sleep 0.4
-keys "1"; sleep 2
-tree | grep -q "AXOpaqueProviderGrid" || fail "⌘1 did not show the grid"
+keys "1"
+await_tree "AXOpaqueProviderGrid" 15 "⌘1 did not show the grid"
 click "cell" 0; sleep 0.8
-shiftClick "cell" 7; sleep 1.5
-tree | grep -q "books selected" || fail "⇧-click did not extend the selection"
-tree | grep -q "Mixed" || fail "the inspector shows no Mixed value for the selection"
+shiftClick "cell" 7
+await_tree "books selected" 15 "⇧-click did not extend the selection"
+await_tree "Mixed" 15 "the inspector shows no Mixed value for the selection"
 shoot selection
 {
     echo "The inspector with several books selected."
@@ -222,8 +252,7 @@ say "ax-selection.txt"
 # ── 4: the context menu on a book ────────────────────────────────────────────
 front; sleep 0.4
 P=$(point "cell" 0) && swift "$HERE/click-at.swift" ${P% *} ${P#* } right
-sleep 1.5
-tree | grep -q "Add to Shelf" || fail "the context menu did not open"
+await_tree "Add to Shelf" 15 "the context menu did not open"
 # The menu is its own window, so the whole screen is photographed rather than
 # the app's window: a menu is drawn outside it.
 screencapture -o -x "$OUT/menu-full.png" 2>/dev/null
