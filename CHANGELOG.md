@@ -50,6 +50,10 @@ file is opened for writing anywhere in the chain.
 4. **The status bar and the sidebar wrote the same number two ways** — "4996
    books" under "4.996". Found by reading the accessibility tree, which is the
    only way anybody was going to notice two formats a few pixels apart.
+5. **`make proof` and `make synthetic-clean` could not run at all.** Neither
+   script had its executable bit, and both targets call the script directly.
+   `make proof` has been broken since Sprint 1; it went unnoticed because the
+   script was always run as `bash Scripts/proof-run.sh` while it was written.
 
 ### Measured
 
