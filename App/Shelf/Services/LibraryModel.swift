@@ -121,6 +121,11 @@ final class LibraryModel {
     private(set) var authorFacets: [LibraryIndex.Facet] = []
     private(set) var seriesFacets: [LibraryIndex.Facet] = []
     private(set) var formatFacets: [LibraryIndex.Facet] = []
+    /// Which books look like copies of another, and by which of the three
+    /// rules. Asked of the index once per reload rather than per filter: it is
+    /// three queries and a fold over every title, which is worth doing once for
+    /// 5 000 books and not once per click.
+    private(set) var duplicateReasons: [UUID: Set<DuplicateReason>] = [:]
 
     // MARK: Messages
 
@@ -252,6 +257,7 @@ final class LibraryModel {
         authorFacets = []
         seriesFacets = []
         formatFacets = []
+        duplicateReasons = [:]
         warmer.reset()
     }
 
@@ -267,6 +273,8 @@ final class LibraryModel {
             authorFacets = try await index.authorFacets()
             seriesFacets = try await index.seriesFacets()
             formatFacets = try await index.formatFacets()
+            duplicateReasons = try await index.duplicates()
+            totals.duplicates = duplicateReasons.count
             refilter()
         } catch {
             show(error, doing: "read the library index")
@@ -301,9 +309,10 @@ final class LibraryModel {
     }
 
     private func applyFilter(matching ids: Set<UUID>?) {
+        let duplicates = filter.collection == .duplicates ? Set(duplicateReasons.keys) : []
         visible = entries.filter { entry in
             if let ids, !ids.contains(entry.id) { return false }
-            return filter.matches(entry, coversOnDisk: coversOnDisk)
+            return filter.matches(entry, coversOnDisk: coversOnDisk, duplicateBooks: duplicates)
         }
         // Narrowed to one series, the grid is in series order, whatever the
         // sort menu says. A series has exactly one order that means anything,
@@ -976,6 +985,14 @@ final class LibraryModel {
         undoManager?.setActionName(
             changes.count > 1 ? "\(actionName) (\(changes.count) books)" : actionName)
         undoManager?.endUndoGrouping()
+    }
+
+    /// Why this book is in *Duplicates*, in one line — or nothing when it is
+    /// not. The best-founded rule when several matched: identical bytes is a
+    /// fact and identical title-and-author is a guess, and the guess is the one
+    /// somebody might act on by deleting a book.
+    func duplicateReason(for id: UUID) -> DuplicateReason? {
+        DuplicateReason.strongest(of: duplicateReasons[id] ?? [])
     }
 
     /// How many books the selected book's series holds – the "of 7" in

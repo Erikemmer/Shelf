@@ -615,6 +615,7 @@ public final class LibraryIndex: Sendable {
         public var recentlyAdded = 0
         public var missingCover = 0
         public var notOnAnyShelf = 0
+        public var duplicates = 0
 
         public init() {}
     }
@@ -638,6 +639,62 @@ public final class LibraryIndex: Sendable {
             totals.missingCover = max(0, totals.all - coversOnDisk.count)
             return totals
         }
+    }
+
+    /// Every book that looks like a copy of another, and why.
+    ///
+    /// The three rules are the importer's own (`ImportPlanner`), asked of the
+    /// whole library instead of of one incoming file. That they are the same
+    /// three is the point: a book the importer would have called a duplicate on
+    /// the way in is a book this collection shows once it is in, and two
+    /// different answers to "is this the same book" would be a defect nobody
+    /// could see.
+    ///
+    /// **Why the books say which rule found them.** Same bytes is a fact; same
+    /// ISBN is nearly one; same title and author is a guess — two editions, a
+    /// translation, an abridgement. Shown together with no distinction, the
+    /// honest matches and the guesses would be one undifferentiated list, and
+    /// the guesses are the ones somebody might act on by deleting a book.
+    public func duplicates() async throws -> [UUID: Set<DuplicateReason>] {
+        // The two SQL rules first, as lists of groups, because a closure that
+        // writes into a dictionary cannot be captured by the `@Sendable` read.
+        let groups: [(ids: [UUID], reason: DuplicateReason)] = try await pool.read { database in
+            // Same bytes. `DISTINCT` because one book may hold the same file
+            // twice under two names, and a book is not a copy of itself.
+            let byContent = try Row.fetchAll(
+                database,
+                sql: """
+                    SELECT sha256, GROUP_CONCAT(DISTINCT book_id) AS ids FROM formats
+                    GROUP BY sha256 HAVING COUNT(DISTINCT book_id) > 1
+                    """)
+            let byISBN = try Row.fetchAll(
+                database,
+                sql: """
+                    SELECT value, GROUP_CONCAT(DISTINCT book_id) AS ids FROM identifiers
+                    WHERE scheme = 'isbn_normalised'
+                    GROUP BY value HAVING COUNT(DISTINCT book_id) > 1
+                    """)
+            return byContent.map { (Self.uuids($0["ids"]), DuplicateReason.content) }
+                + byISBN.map { (Self.uuids($0["ids"]), DuplicateReason.isbn) }
+        }
+
+        // Title and author is folded in Swift, not in SQL: the folding drops
+        // accents, punctuation and runs of space, and `DuplicateKey` is where
+        // that rule lives. A second spelling of it in a `WHERE` clause is a
+        // second rule.
+        let byTitle = try await allTitleKeys().values.map { ($0, DuplicateReason.titleAuthor) }
+
+        var found: [UUID: Set<DuplicateReason>] = [:]
+        for group in groups + byTitle where group.0.count > 1 {
+            for id in group.0 { found[id, default: []].insert(group.1) }
+        }
+        return found
+    }
+
+    /// `GROUP_CONCAT` gives a comma-separated list; UUID strings never contain
+    /// a comma, so splitting on one is safe here and nowhere else.
+    private static func uuids(_ list: String) -> [UUID] {
+        list.split(separator: ",").compactMap { UUID(uuidString: String($0)) }
     }
 
     // MARK: Duplicate detection

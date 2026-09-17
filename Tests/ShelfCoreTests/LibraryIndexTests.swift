@@ -377,6 +377,76 @@ struct LibraryIndexTests {
         #expect(DuplicateKey.fold("The  Left-Hand   of Darkness") == "the left hand of darkness")
     }
 
+    // MARK: Duplicates
+
+    /// The collection has to use the importer's three rules and say which one
+    /// matched, because they are not equally trustworthy: identical bytes is a
+    /// fact, an identical ISBN is nearly one, and an identical title and author
+    /// is a guess that fits two editions and a translation too.
+    @Test("each of the three rules finds its own kind of duplicate, and says so")
+    func duplicatesByEachRule() async throws {
+        let index = try LibraryIndex(inMemory: "duplicates")
+
+        // Same bytes, different titles and no ISBN: only the content rule.
+        var one = entry(title: "Alpha", number: 1)
+        var two = entry(title: "Beta", number: 2)
+        one.formats = [
+            BookFormat(bookID: one.id, format: .epub, fileName: "a.epub", byteSize: 10, sha256: "same-bytes")
+        ]
+        two.formats = [
+            BookFormat(bookID: two.id, format: .epub, fileName: "b.epub", byteSize: 10, sha256: "same-bytes")
+        ]
+
+        // Same ISBN, different files and different titles.
+        var three = entry(title: "Gamma", number: 3)
+        var four = entry(title: "Delta", number: 4)
+        three.book.identifiers = ["isbn": "9780306406157"]
+        four.book.identifiers = ["isbn": "978-0-306-40615-7"]
+
+        // Same title and first author, spelt differently – the guess.
+        var five = entry(title: "The Left-Hand of Darkness", number: 5)
+        var six = entry(title: "the  left hand of darkness!", number: 6)
+        five.book.authors = ["Ursula K. Le Guin"]
+        six.book.authors = ["Ursula K. Lé Guin"]
+
+        for entry in [one, two, three, four, five, six] { try await index.save(entry) }
+
+        let found = try await index.duplicates()
+        #expect(found[one.id] == [.content])
+        #expect(found[two.id] == [.content])
+        // Both spellings of one ISBN are one book – that is what
+        // `isbn_normalised` is for.
+        #expect(found[three.id] == [.isbn])
+        #expect(found[four.id] == [.isbn])
+        #expect(found[five.id] == [.titleAuthor])
+        #expect(found[six.id] == [.titleAuthor])
+        #expect(found.count == 6)
+        #expect(try await index.totals().duplicates == 0, "totals does not count duplicates itself")
+    }
+
+    /// A book that holds the same file twice under two names is not a copy of
+    /// itself, and a library with nothing wrong with it must report nothing.
+    @Test("a book is not a duplicate of itself")
+    func noFalseDuplicates() async throws {
+        let index = try LibraryIndex(inMemory: "no-duplicates")
+        var alone = entry(title: "Alone", number: 1)
+        alone.book.identifiers = ["isbn": "9780306406157"]
+        alone.formats = [
+            BookFormat(bookID: alone.id, format: .epub, fileName: "a.epub", byteSize: 1, sha256: "d"),
+            BookFormat(bookID: alone.id, format: .pdf, fileName: "a.pdf", byteSize: 1, sha256: "d"),
+        ]
+        try await index.save(alone)
+        #expect(try await index.duplicates().isEmpty)
+    }
+
+    /// The strongest reason is what one line in the inspector says.
+    @Test("a book matched by two rules is described by the better one")
+    func strongestReason() {
+        #expect(DuplicateReason.strongest(of: [.titleAuthor, .content]) == .content)
+        #expect(DuplicateReason.strongest(of: [.titleAuthor, .isbn]) == .isbn)
+        #expect(DuplicateReason.strongest(of: []) == nil)
+    }
+
     // MARK: Shelves
 
     @Test("shelves are written parents first, and counted")

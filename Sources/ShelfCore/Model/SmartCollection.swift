@@ -1,5 +1,49 @@
 import Foundation
 
+/// Why two books look like the same book.
+///
+/// Three rules, in the order they can be trusted: identical bytes is a fact,
+/// an identical ISBN is nearly one, and an identical title and author is a
+/// guess — two editions, a translation, an abridgement. The inspector says
+/// which one matched, because the guess is the one somebody might act on by
+/// deleting a book.
+public enum DuplicateReason: String, Equatable, Hashable, Sendable, CaseIterable {
+    case content
+    case isbn
+    case titleAuthor
+
+    /// Most trustworthy first, so a book matched by two rules is described by
+    /// the better one.
+    public static let allCases: [DuplicateReason] = [.content, .isbn, .titleAuthor]
+
+    public var label: String {
+        switch self {
+        case .content: return "Same file"
+        case .isbn: return "Same ISBN"
+        case .titleAuthor: return "Same title and author"
+        }
+    }
+
+    public var detail: String {
+        switch self {
+        case .content:
+            return "Another book in this library holds a file with the same contents, byte for byte."
+        case .isbn:
+            return "Another book carries the same ISBN."
+        case .titleAuthor:
+            return "Another book has the same title and first author, ignoring case, accents and "
+                + "punctuation. This one is a guess: two editions of the same book look like this, "
+                + "and so do a book and its translation."
+        }
+    }
+
+    /// The best-founded of a set of reasons – what one line in the inspector
+    /// says when several rules matched.
+    public static func strongest(of reasons: Set<DuplicateReason>) -> DuplicateReason? {
+        allCases.first { reasons.contains($0) }
+    }
+}
+
 /// A view of the library that is a rule, not a list.
 ///
 /// The sidebar's top section. Rules rather than stored lists, so they are

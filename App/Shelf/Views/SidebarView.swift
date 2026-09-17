@@ -56,13 +56,7 @@ struct SidebarView: View {
                     isActive: model.filter.collection == collection && !isNarrowed,
                     help: available
                         ? "Show \(collection.title.lowercased())"
-                        // Named by the sprint that brings it, and that sprint is
-                        // no longer this one: "needs the metadata editor –
-                        // Sprint 2" was written in Sprint 1 and read during
-                        // Sprint 2, where it is not an answer. Duplicates needs
-                        // the duplicate query and Not on any Shelf needs
-                        // shelves; both are 2c.
-                        : "\(collection.title) arrives later in Sprint 2c",
+                        : "\(collection.title) is not available yet",
                     titleColor: available ? Slate.textPrimary : Slate.textSecondary,
                     // Named, not a trailing closure: SlateKit 0.2.0 gained an
                     // `accessory` view builder before `action`, so a trailing
@@ -76,10 +70,11 @@ struct SidebarView: View {
         }
     }
 
-    /// The collections that cannot answer yet. Drawn and greyed rather than
-    /// hidden: a sidebar whose shape changes between versions is harder to
-    /// learn than one that is whole from the start.
-    private static let stillToCome: Set<SmartCollection> = [.duplicates]
+    /// Every collection can answer now. Kept as a named, empty set rather than
+    /// deleted: the sidebar has drawn greyed rows for two sprints, and the next
+    /// collection that arrives half-built belongs here rather than in a new
+    /// mechanism invented for it.
+    private static let stillToCome: Set<SmartCollection> = []
 
     /// Whether anything beyond the collection is narrowing the view, which is
     /// what decides whether a collection row is drawn as active.
@@ -92,9 +87,7 @@ struct SidebarView: View {
         case .recentlyAdded: return model.totals.recentlyAdded
         case .missingCover: return model.totals.missingCover
         case .notOnAnyShelf: return model.totals.notOnAnyShelf
-        // Needs the duplicate query Sprint 2 adds; a wrong number would be
-        // worse than none.
-        case .duplicates: return nil
+        case .duplicates: return model.totals.duplicates
         }
     }
 

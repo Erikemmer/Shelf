@@ -40,6 +40,7 @@ struct InspectorView: View {
                         cover(for: entry)
                         title(for: entry)
                         rating(for: entry)
+                        duplicate(for: entry)
                         facts(for: entry)
                         identifiers(for: entry)
                         tags(for: entry).id(Self.tagsAnchor)
@@ -169,6 +170,32 @@ struct InspectorView: View {
             .foregroundStyle(Slate.textSecondary)
             .font(.callout)
             .help("Whether the book has been read (R)")
+        }
+    }
+
+    /// Why the book is in *Duplicates*, when it is.
+    ///
+    /// Drawn where it can be seen rather than only as a filter, and it names
+    /// the rule: "same file" is a fact, "same title and author" is a guess that
+    /// fits two editions and a translation as well as a real copy. Somebody
+    /// acting on this line might delete a book, so the line has to say how
+    /// sure it is.
+    @ViewBuilder
+    private func duplicate(for entry: LibraryEntry) -> some View {
+        if let reason = model.duplicateReason(for: entry.id) {
+            SlateInspectorSection("Duplicate") {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(reason.label)
+                        .font(.callout)
+                        .foregroundStyle(Slate.textPrimary)
+                    Text(reason.detail)
+                        .font(.caption2)
+                        .foregroundStyle(Slate.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+                .help("Nothing has been done about it – Shelf never removes a book")
+            }
         }
     }
 
