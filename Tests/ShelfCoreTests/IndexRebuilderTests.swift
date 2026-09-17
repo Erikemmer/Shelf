@@ -407,3 +407,51 @@ struct IndexRebuilderTests {
         #expect(IndexRebuilder.title(in: "Emma (Annotated)") == "Emma (Annotated)")
     }
 }
+
+/// Two folders carrying the same number. A library gets into this state when an
+/// import is killed: the files it had already copied stay, the counter it never
+/// stored starts again, and the next run hands the same numbers out a second
+/// time. It is also one Finder duplication away.
+///
+/// A rebuild is the operation the whole project rests on — the index is a cache
+/// precisely because it can always be built again (ADR 0001). A rebuild that
+/// *dies* on a library somebody actually has is the one failure that claim
+/// cannot survive, and this is what it looked like:
+///
+///     Fatal error: SQLite error 19: UNIQUE constraint failed: books.number
+@Suite("A library whose folder numbers collide")
+struct DuplicateFolderNumberTests {
+    private func entry(_ title: String, number: Int, folder: String) -> LibraryEntry {
+        LibraryEntry(
+            book: Book(title: title), number: number, folder: folder,
+            formats: [])
+    }
+
+    @Test("two books with one number can both be indexed, and the rebuild says so")
+    func twoBooksOneNumber() async throws {
+        let index = try LibraryIndex(inMemory: UUID().uuidString)
+        let first = entry("Emma", number: 7, folder: "Austen, Jane/Emma (7)")
+        let second = entry("Persuasion", number: 7, folder: "Austen, Jane/Persuasion (7)")
+
+        try await index.save([first, second])
+
+        let back = try await index.allEntries()
+        #expect(back.count == 2, "a rebuild must not lose a book to a number clash")
+        #expect(Set(back.map(\.folder)) == [first.folder, second.folder])
+        // The folders on disk are untouched, so the *number* is what gives:
+        // one of them keeps 7 and the other takes a free one. Which is which is
+        // not worth promising; that they are different is.
+        #expect(Set(back.map(\.number)).count == 2)
+    }
+
+    @Test("a number already taken does not stop the books that follow")
+    func laterBooksStillArrive() async throws {
+        let index = try LibraryIndex(inMemory: UUID().uuidString)
+        try await index.save([
+            entry("One", number: 1, folder: "A/One (1)"),
+            entry("Two", number: 1, folder: "A/Two (1)"),
+            entry("Three", number: 3, folder: "A/Three (3)"),
+        ])
+        #expect(try await index.count() == 3)
+    }
+}

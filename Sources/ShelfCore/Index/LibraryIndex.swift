@@ -128,11 +128,39 @@ public final class LibraryIndex: Sendable {
         }
     }
 
+    /// `entry.number`, or the next free one when another book already has it.
+    ///
+    /// **A rebuild must never fail on a library somebody actually has.** The
+    /// index is a cache exactly because it can always be built again
+    /// (ADR 0001), and `books.number` is unique because two books in one folder
+    /// would overwrite each other — a rule about *folders*, which the importer
+    /// keeps, not an invariant the cache may die over. It died over it:
+    ///
+    ///     Fatal error: SQLite error 19: UNIQUE constraint failed: books.number
+    ///
+    /// on a library whose import had been killed, leaving files with numbers
+    /// the resumed run handed out again. One Finder duplication does it too.
+    ///
+    /// The **folder on disk is not renamed** (ADR 0007): only the index's idea
+    /// of the number moves, and the number is bookkeeping for handing out the
+    /// next one. Which of two colliding books keeps the original is not worth
+    /// promising — that both are there, and findable, is.
+    ///
+    /// One indexed lookup per book, on a column that already has a unique index.
+    private static func freeNumber(_ wanted: Int, for id: String, in database: Database) throws -> Int {
+        let taken = try String.fetchOne(
+            database, sql: "SELECT id FROM books WHERE number = ? AND id <> ?", arguments: [wanted, id])
+        guard taken != nil else { return wanted }
+        let highest = try Int.fetchOne(database, sql: "SELECT MAX(number) FROM books") ?? 0
+        return highest + 1
+    }
+
     private static func write(_ entry: LibraryEntry, in database: Database) throws {
         let book = entry.book
         let id = book.id.uuidString
 
         let seriesID = try book.series.map { try upsertSeries($0.name, in: database) }
+        let number = try freeNumber(entry.number, for: id, in: database)
         try database.execute(
             sql: """
                 INSERT INTO books
@@ -149,7 +177,7 @@ public final class LibraryIndex: Sendable {
                     modified_at = excluded.modified_at, last_seen_at = excluded.last_seen_at
                 """,
             arguments: [
-                id, entry.number, entry.folder, book.title, book.titleSort, seriesID, book.series?.index,
+                id, number, entry.folder, book.title, book.titleSort, seriesID, book.series?.index,
                 book.rating, book.isRead, book.publisher, book.published, book.language, book.description,
                 book.addedAt, book.modifiedAt, Date(),
             ])
@@ -861,6 +889,24 @@ public final class LibraryIndex: Sendable {
     /// Calibre library, and Shelf offers no way to put them back. A column
     /// nobody has a definition for keeps the one `upsertCustomColumn` gave it —
     /// its own label — which is worse than a name and better than a loss.
+    /// The highest folder number any book in this library actually has.
+    ///
+    /// A **floor** for the next import's counter, not a replacement for it.
+    /// `library.json` stays the authority (ADR 0001, decision 6): deriving the
+    /// counter from what exists would let a book deleted in the Finder hand its
+    /// number to the next import. But the stored counter is written when a run
+    /// *finishes*, and a run that was killed has already put books on the disk
+    /// — so the next run began at 1 again and collided with them.
+    ///
+    /// Measured, before this existed: an import of 2 000 books killed after 400
+    /// left 400 in the index, and the resumed run died on
+    /// `UNIQUE constraint failed: books.number`.
+    public func highestBookNumber() async throws -> Int {
+        try await pool.read { database in
+            try Int.fetchOne(database, sql: "SELECT MAX(number) FROM books") ?? 0
+        }
+    }
+
     public func saveCustomColumns(_ columns: [CalibreCustomColumn]) async throws {
         try await pool.write { database in
             for column in columns {
