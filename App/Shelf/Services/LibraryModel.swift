@@ -48,9 +48,29 @@ final class LibraryModel {
     }
     /// The books the grid shows: `entries` after the filter and the search.
     private(set) var visible: [LibraryEntry] = []
+    /// The book the inspector shows and the arrow keys move from.
+    ///
+    /// Also the *anchor* of a multiple selection: ⇧-click selects from here to
+    /// there, and every selection has exactly one of these, so "the book being
+    /// looked at" is never ambiguous even when twelve are highlighted.
     var selectedBookID: UUID? {
-        didSet { if selectedBookID != oldValue { selectionChanged() } }
+        didSet {
+            guard selectedBookID != oldValue else { return }
+            // A plain move of the anchor — arrow keys, a filter hiding the old
+            // one — is a selection of one. Anything that means otherwise goes
+            // through `select(_:extending:toggling:)` and sets both.
+            selection = selectedBookID.map { [$0] } ?? []
+            selectionChanged()
+        }
     }
+
+    /// Every selected book, the anchor included.
+    ///
+    /// A set and not an array: the order of a selection carries no meaning —
+    /// what carries meaning is the order of the grid, which `selectedEntries`
+    /// reads back off `visible`. Keeping an order here would invent a second
+    /// one that only the selection knows about.
+    private(set) var selection: Set<UUID> = []
 
     /// Cover size in points, driven by the slider and ⌘±.
     var coverSide: CGFloat = 160 {
@@ -322,8 +342,81 @@ final class LibraryModel {
         return visible.firstIndex { $0.id == selectedBookID }
     }
 
+    /// The books an action applies to, in the order they are on screen.
+    ///
+    /// `visible` first so a rating applied to twelve books happens in the order
+    /// somebody sees them, and `entries` afterwards for a book the filter has
+    /// since hidden — a selection outliving a filter change is better than an
+    /// action silently skipping part of it.
+    var selectedEntries: [LibraryEntry] {
+        guard !selection.isEmpty else { return [] }
+        var found = visible.filter { selection.contains($0.id) }
+        if found.count < selection.count {
+            let missing = selection.subtracting(found.map(\.id))
+            found += entries.filter { missing.contains($0.id) }
+        }
+        return found
+    }
+
+    /// Whether more than one book is selected — what the inspector asks before
+    /// it decides between a value and "Mixed".
+    var hasMultipleSelection: Bool { selection.count > 1 }
+
     func select(_ entry: LibraryEntry) {
         selectedBookID = entry.id
+    }
+
+    /// A click, with whatever was held down.
+    ///
+    /// ⇧ extends from the anchor, ⌘ adds or removes one, neither replaces the
+    /// selection — the three gestures every list on this platform has. The
+    /// anchor moves to the clicked book in all three cases: it is the book the
+    /// inspector shows, and clicking a book while holding ⌘ is still a
+    /// statement about which book you mean.
+    func select(_ entry: LibraryEntry, extending: Bool, toggling: Bool) {
+        if extending, let anchor = selectedBookID,
+            let from = visible.firstIndex(where: { $0.id == anchor }),
+            let to = visible.firstIndex(where: { $0.id == entry.id })
+        {
+            let range = from <= to ? from...to : to...from
+            selection = Set(visible[range].map(\.id))
+            // Set directly: going through `selectedBookID` would reset the
+            // selection to one book, because that is what a plain move means.
+            setAnchorKeepingSelection(entry.id)
+            return
+        }
+        if toggling {
+            if selection.contains(entry.id), selection.count > 1 {
+                selection.remove(entry.id)
+                if selectedBookID == entry.id {
+                    setAnchorKeepingSelection(selection.first)
+                }
+                return
+            }
+            selection.insert(entry.id)
+            setAnchorKeepingSelection(entry.id)
+            return
+        }
+        selectedBookID = entry.id
+    }
+
+    func selectAll() {
+        guard !visible.isEmpty else { return }
+        selection = Set(visible.map(\.id))
+        if selectedBookID == nil || !selection.contains(selectedBookID ?? UUID()) {
+            setAnchorKeepingSelection(visible.first?.id)
+        }
+    }
+
+    /// Moves the anchor without collapsing the selection to it.
+    ///
+    /// `selectedBookID`'s own `didSet` means "one book is selected now", which
+    /// is right for an arrow key and wrong for a ⇧-click. Both are needed, so
+    /// the selection is put back after the anchor moves.
+    private func setAnchorKeepingSelection(_ id: UUID?) {
+        let keep = selection
+        selectedBookID = id
+        selection = keep.isEmpty ? (id.map { [$0] } ?? []) : keep
     }
 
     func selectNext() {
