@@ -29,6 +29,13 @@ builds on Linux), UI in `App/Shelf` (SwiftUI + AppKit) on top of the shared
   goes into this repository.
 - Cache and test-output path: `~/Library/Caches/Shelf/` – **never** under
   `~/Documents`, which is synced.
+- **In `~/Library/Caches/Shelf/` a session deletes only what it created itself
+  and named as created in its own report.** Everything else stays, however much
+  it looks like leftovers: measurements from an earlier sprint, a library
+  somebody is comparing against, a half-finished proof run. In doubt, a new
+  folder name with the sprint or the date in it – `measure-library-2b/` – rather
+  than `rm -rf`. The path is outside the synced folder so that large test
+  material is *allowed* there, not so that it is disposable.
 - The former company name appears nowhere in this project.
 
 ## Stack & conventions
