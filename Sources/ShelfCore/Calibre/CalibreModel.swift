@@ -8,7 +8,7 @@ import Foundation
 /// possibly getting three answers.
 
 /// One of Calibre's own columns, as its `custom_columns` table describes it.
-public struct CalibreCustomColumn: Equatable, Sendable {
+public struct CalibreCustomColumn: Equatable, Sendable, Codable {
     /// Calibre's row id. It is what the `custom_column_<id>` tables are named
     /// after, so it is carried rather than discarded.
     public var number: Int
@@ -30,7 +30,7 @@ public struct CalibreCustomColumn: Equatable, Sendable {
     /// A `String` behind a known set rather than a bare enum, because a Calibre
     /// version may add one and an unknown datatype is a line in the report, not
     /// a failed import (CONCEPT §13).
-    public enum Kind: String, Sendable, CaseIterable {
+    public enum Kind: String, Sendable, CaseIterable, Codable {
         case text
         case comments
         case series
@@ -139,23 +139,31 @@ public struct CalibreBook: Equatable, Sendable {
     /// `books.has_cover`. Whether `cover.jpg` is actually there is a question
     /// for the file system, and the census asks it.
     public var claimsCover: Bool
-    /// Custom column values by label (`read_date`), already turned into text.
-    /// Read-only in v1.0.
-    public var customValues: [String: String]
     /// What could not be read cleanly. Never a reason to skip the book.
     public var warnings: [String]
 
     public init(
         number: Int, book: Book, folder: String, files: [CalibreFile] = [],
-        claimsCover: Bool = false, customValues: [String: String] = [:], warnings: [String] = []
+        claimsCover: Bool = false, warnings: [String] = []
     ) {
         self.number = number
         self.book = book
         self.folder = folder
         self.files = files
         self.claimsCover = claimsCover
-        self.customValues = customValues
         self.warnings = warnings
+    }
+
+    /// Custom column values by label (`read_date`), already turned into text.
+    ///
+    /// Stored **in the book**, not beside it. The first version kept them here
+    /// as a field of their own and the import quietly dropped every one: the
+    /// candidate handed to the planner is `book`, so anything not in `book` is
+    /// not in the library afterwards. It cost a proof run to notice, because
+    /// nothing fails when a dictionary is empty.
+    public var customValues: [String: String] {
+        get { book.customValues }
+        set { book.customValues = newValue }
     }
 }
 

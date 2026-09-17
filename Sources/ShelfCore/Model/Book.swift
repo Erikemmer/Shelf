@@ -63,6 +63,20 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
     public var shelves: [String]
     /// ISBN, ASIN, DOI, Google, Goodreads… keyed by scheme, lower-cased.
     public var identifiers: [String: String]
+    /// Calibre's own columns, by label without the `#`, already rendered as the
+    /// text the inspector shows: `["read_date": "2023-10-01T00:00:00+00:00"]`.
+    ///
+    /// **Read-only in v1.0** (CONCEPT §4, "Should"). Shelf takes them over on
+    /// import, carries them through every edit and writes them back, and offers
+    /// no way to change them — a field Shelf cannot validate is a field Shelf
+    /// should not let anybody type into.
+    ///
+    /// In the book, for the same reason the shelves are (ADR 0008): the folder
+    /// is the truth, so anything the folders cannot hold is mirrored into each
+    /// book's `metadata.opf` and comes back from a rebuild. *What the columns
+    /// are* — their names and their kinds — belongs to the library and lives
+    /// in `library.json`, exactly as the shelf tree does (ADR 0010).
+    public var customValues: [String: String]
     /// When Shelf first saw the book. Calibre's `timestamp` on import.
     public var addedAt: Date
     /// Last time any metadata field changed. Drives "Recently Added"'s sibling
@@ -84,6 +98,7 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
         tags: [String] = [],
         shelves: [String] = [],
         identifiers: [String: String] = [:],
+        customValues: [String: String] = [:],
         addedAt: Date = Date(),
         modifiedAt: Date = Date()
     ) {
@@ -101,6 +116,7 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
         self.tags = tags.sorted()
         self.shelves = shelves.sorted()
         self.identifiers = identifiers
+        self.customValues = customValues
         self.addedAt = addedAt
         self.modifiedAt = modifiedAt
     }

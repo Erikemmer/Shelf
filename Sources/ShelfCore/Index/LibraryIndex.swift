@@ -186,6 +186,20 @@ public final class LibraryIndex: Sendable {
                 arguments: [id, isbn])
         }
 
+        // Calibre's custom columns. Read-only in v1.0, and still written on
+        // every save: an entry that came back from the index and was saved
+        // again would otherwise lose them, which is exactly how the identifiers
+        // were lost in Sprint 2 — twice, because nothing draws attention to a
+        // dictionary that is always empty.
+        try database.execute(sql: "DELETE FROM custom_values WHERE book_id = ?", arguments: [id])
+        for label in book.customValues.keys.sorted() {
+            guard let value = book.customValues[label], !value.isEmpty else { continue }
+            let columnID = try upsertCustomColumn(label: label, in: database)
+            try database.execute(
+                sql: "INSERT OR REPLACE INTO custom_values (book_id, column_id, value) VALUES (?, ?, ?)",
+                arguments: [id, columnID, value])
+        }
+
         try database.execute(sql: "DELETE FROM formats WHERE book_id = ?", arguments: [id])
         for format in entry.formats {
             try database.execute(
@@ -377,6 +391,7 @@ public final class LibraryIndex: Sendable {
         let shelves = try shelfPaths(for: bookIDs, in: database)
         let formats = try formatRows(for: bookIDs, in: database)
         let identifiers = try identifierRows(for: bookIDs, in: database)
+        let customValues = try customValueRows(for: bookIDs, in: database)
 
         return rows.map { row in
             let id: String = row["id"]
@@ -397,6 +412,7 @@ public final class LibraryIndex: Sendable {
                 tags: tags[id] ?? [],
                 shelves: shelves[id] ?? [],
                 identifiers: identifiers[id] ?? [:],
+                customValues: customValues[id] ?? [:],
                 addedAt: row["added_at"],
                 modifiedAt: row["modified_at"])
             return LibraryEntry(
@@ -490,6 +506,42 @@ public final class LibraryIndex: Sendable {
             .mapValues { group in
                 Dictionary(group.map { ($0["scheme"] as String, $0["value"] as String) }) { _, last in last }
             }
+    }
+
+    /// Calibre's custom columns per book, by label.
+    private static func customValueRows(
+        for bookIDs: [String], in database: Database
+    ) throws -> [String: [String: String]] {
+        let rows = try Row.fetchAll(
+            database,
+            sql: """
+                SELECT v.book_id AS book_id, c.label AS label, v.value AS value
+                FROM custom_values v JOIN custom_columns c ON c.id = v.column_id
+                WHERE v.book_id IN (\(databaseQuestionMarks(count: bookIDs.count)))
+                """,
+            arguments: StatementArguments(bookIDs))
+        return Dictionary(grouping: rows) { $0["book_id"] as String }
+            .mapValues { group in
+                Dictionary(group.map { ($0["label"] as String, $0["value"] as String) }) { _, last in last }
+            }
+    }
+
+    /// The column a value belongs to, made if it is not there.
+    ///
+    /// A book read back from its own OPF knows its columns' *labels* and
+    /// nothing else — what they are called and what kind they are belongs to
+    /// the library and lives in `library.json`. So a rebuild that has only the
+    /// folders to go on creates the column named after its label, and
+    /// `saveCustomColumns` fills in the rest when the descriptor is read.
+    /// A column standing in for itself is better than a value with nowhere to go.
+    private static func upsertCustomColumn(label: String, in database: Database) throws -> String {
+        try database.execute(
+            sql: """
+                INSERT INTO custom_columns (id, label, name, kind) VALUES (?, ?, ?, 'text')
+                ON CONFLICT(id) DO NOTHING
+                """,
+            arguments: [label, label, label])
+        return label
     }
 
     private static func formatRows(for bookIDs: [String], in database: Database) throws -> [String: [BookFormat]] {
@@ -800,6 +852,28 @@ public final class LibraryIndex: Sendable {
     /// that only added would leave a deleted shelf standing in the sidebar with
     /// its books still on it — the index quietly disagreeing with the file,
     /// which is the one thing a cache must never do.
+    /// What the library's custom columns are called and what kind each one is.
+    ///
+    /// The definitions live in `library.json` (ADR 0010) and this table is a
+    /// cache of them, exactly as `shelves` is a cache of the shelf tree. Unlike
+    /// the shelves, a column is **not** deleted when the descriptor stops
+    /// mentioning it: the values still hang off it, they came out of somebody's
+    /// Calibre library, and Shelf offers no way to put them back. A column
+    /// nobody has a definition for keeps the one `upsertCustomColumn` gave it —
+    /// its own label — which is worse than a name and better than a loss.
+    public func saveCustomColumns(_ columns: [CalibreCustomColumn]) async throws {
+        try await pool.write { database in
+            for column in columns {
+                try database.execute(
+                    sql: """
+                        INSERT INTO custom_columns (id, label, name, kind) VALUES (?, ?, ?, ?)
+                        ON CONFLICT(id) DO UPDATE SET name = excluded.name, kind = excluded.kind
+                        """,
+                    arguments: [column.label, column.label, column.name, column.kind.rawValue])
+            }
+        }
+    }
+
     public func saveShelves(_ shelves: [Shelf]) async throws {
         try await pool.write { database in
             let wanted = shelves.map(\.id.uuidString)

@@ -102,6 +102,7 @@ public enum OPFDocument {
         }
 
         book.shelves = decodeShelves(metas["shelf:shelves"]).sorted()
+        book.customValues = decodeCustomValues(metas["shelf:custom"])
 
         return Parsed(
             book: book,
@@ -129,6 +130,34 @@ public enum OPFDocument {
     static func decodeShelves(_ content: String?) -> [String] {
         guard let content, !content.isEmpty, let data = content.data(using: .utf8) else { return [] }
         return (try? JSONDecoder().decode([String].self, from: data)) ?? []
+    }
+
+    /// Calibre's custom columns for this book, as a JSON object.
+    ///
+    /// One meta holding an object rather than one meta per column, and for the
+    /// same two reasons the shelves are one meta holding an array: `<meta
+    /// name=…>` is looked up by name, so a column called `shelves` and a
+    /// column called `read` would collide with Shelf's own; and a label is
+    /// free-form text, which a joined string cannot carry back.
+    ///
+    /// It is *not* written into `calibre:user_metadata:#label`, which is where
+    /// Calibre keeps these. That meta carries Calibre's own JSON — the
+    /// column's whole definition, display options and all — and writing a bare
+    /// value into it would be a Shelf library claiming to be a Calibre one and
+    /// then lying about the shape. Calibre's own metas are preserved untouched
+    /// where an OPF already has them, as every unknown meta is.
+    static func encodeCustomValues(_ values: [String: String]) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.withoutEscapingSlashes, .sortedKeys]
+        guard let data = try? encoder.encode(values), let text = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        return text
+    }
+
+    static func decodeCustomValues(_ content: String?) -> [String: String] {
+        guard let content, !content.isEmpty, let data = content.data(using: .utf8) else { return [:] }
+        return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
     }
 
     /// `dc:creator` elements: the names, and the sort forms where the file gave
@@ -224,16 +253,32 @@ public enum OPFDocument {
         /// until Sprint 3.
         var unmapped: [String: String] = [:]
 
-        /// The prefixes this type claims to understand; anything else is kept
-        /// verbatim rather than thrown away.
-        static let known = ["calibre:", "shelf:"]
+        /// The metas this type claims to understand, **by name**; everything
+        /// else is kept verbatim rather than thrown away.
+        ///
+        /// It used to be two *prefixes*, `calibre:` and `shelf:`, and that was
+        /// wrong in a way the documentation had already promised it was not:
+        /// `calibre:user_metadata:#read_date` starts with `calibre:`, so it
+        /// counted as understood and was dropped on the next write — exactly the
+        /// custom-column definition that DATA-MODEL said would survive. A
+        /// prefix says "everything in this namespace", and Shelf reads five
+        /// metas out of a namespace Calibre has a dozen in.
+        ///
+        /// Named individually, so adding a meta to the reader and adding it
+        /// here are the same edit, and anything nobody has thought about is
+        /// carried rather than lost.
+        static let known: Set<String> = [
+            "calibre:title_sort", "calibre:series", "calibre:series_index",
+            "calibre:rating", "calibre:timestamp",
+            "shelf:read", "shelf:shelves", "shelf:custom",
+        ]
 
         init(_ root: XMLTree.Element) {
             for element in root.descendants(named: "meta") {
                 guard let name = element.attribute("name") else { continue }
                 let content = element.attribute("content") ?? element.text
                 values[name] = content
-                if !Self.known.contains(where: { name.hasPrefix($0) }) {
+                if !Self.known.contains(name) {
                     unmapped[name] = content
                 }
             }
@@ -320,6 +365,13 @@ public enum OPFDocument {
             // lossless, legal, and still readable by eye in the file.
             lines.append(
                 "    <meta name=\"shelf:shelves\" content=\"\(escapedAttribute(encodeShelves(book.shelves)))\"/>"
+            )
+        }
+        if !book.customValues.isEmpty {
+            // Sorted keys, so the same book renders byte for byte the same way
+            // twice — a diff in a library folder has to mean a real change.
+            lines.append(
+                "    <meta name=\"shelf:custom\" content=\"\(escapedAttribute(encodeCustomValues(book.customValues)))\"/>"
             )
         }
         for name in unmappedMetas.keys.sorted() {

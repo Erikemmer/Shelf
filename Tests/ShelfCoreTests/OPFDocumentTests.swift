@@ -479,3 +479,35 @@ struct XMLTreeTests {
         #expect(throws: (any Error).self) { try XMLTree.parse("") }
     }
 }
+
+/// Calibre's custom columns, in the file. Read-only in v1.0, which makes the
+/// round trip the whole of what has to be right: Shelf takes them over on
+/// import, carries them through every edit, and a rebuilt index has only the
+/// folder to get them back from (ADR 0001, ADR 0010).
+@Suite("Custom columns in an OPF")
+struct OPFCustomColumnTests {
+    @Test("a custom value survives a round trip through metadata.opf")
+    func customValuesSurviveTheOPF() throws {
+        var book = Book(title: "The Dispossessed", authors: ["Ursula K. Le Guin"])
+        book.customValues = ["read_date": "2023-10-01T00:00:00+00:00", "pages": "341"]
+        let rendered = OPFDocument.render(book)
+        let parsed = try OPFDocument.read(Data(rendered.utf8), fallbackTitle: "x")
+        #expect(parsed.book.customValues == book.customValues)
+    }
+
+    /// Calibre keeps its own custom columns in `calibre:user_metadata:#label`,
+    /// whose content is Calibre's JSON definition and not a bare value. Shelf
+    /// writes its own meta and leaves Calibre's exactly where it found it.
+    @Test("Calibre's own user_metadata meta is preserved, not overwritten")
+    func calibreMetaIsLeftAlone() throws {
+        var book = Book(title: "Emma")
+        book.customValues = ["pages": "474"]
+        let rendered = OPFDocument.render(
+            book, unmappedMetas: ["calibre:user_metadata:#pages": "{\"datatype\": \"int\"}"])
+        #expect(rendered.contains("calibre:user_metadata:#pages"))
+        #expect(rendered.contains("shelf:custom"))
+        let parsed = try OPFDocument.read(Data(rendered.utf8), fallbackTitle: "x")
+        #expect(parsed.book.customValues == ["pages": "474"])
+        #expect(parsed.unmappedMetas["calibre:user_metadata:#pages"] != nil)
+    }
+}

@@ -310,6 +310,12 @@ enum Commands {
         var tree = ShelfTree(descriptor.shelves)
         for path in result.shelfPathsSeen.sorted() { _ = tree.ensure(path: path) }
         try await index.saveShelves(tree.shelves)
+        // The columns' definitions travel with the tree and for the same
+        // reason: `library.json` is the authority for both shapes, and the
+        // index is a cache of them. Without this a rebuild leaves every column
+        // named after its own label, because a book's OPF carries the values
+        // and never the names — which is what a proof run found.
+        try await index.saveCustomColumns(descriptor.customColumns)
         descriptor.shelves = tree.shelves
 
         for batch in result.entries.chunked(into: 500) {

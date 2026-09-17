@@ -207,6 +207,7 @@ public enum SyntheticCalibreLibrary {
 
         for number in 1...options.count {
             try writeBook(db, number: number, folder: folder, options: options, summary: &summary)
+            summary.books += 1
         }
 
         if options.includeQuirks {

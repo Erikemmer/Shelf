@@ -162,6 +162,15 @@ public struct LibraryDescriptor: Codable, Equatable, Sendable {
     /// of novels, and a person who sorts one by date added has not said
     /// anything about the other.
     public var view: LibraryViewSettings
+    /// Calibre's custom columns as this library knows them: what each one is
+    /// called and what kind it is.
+    ///
+    /// The *shape*, exactly as the shelves are: which columns exist belongs to
+    /// the library, and which values a book has belongs to the book
+    /// (`Book.customValues`, ADR 0010). An imported column with nothing in it
+    /// survives here for the same reason an empty shelf does — no book can
+    /// remember it.
+    public var customColumns: [CalibreCustomColumn]
 
     public init(
         schemaVersion: Int = currentSchemaVersion,
@@ -169,7 +178,8 @@ public struct LibraryDescriptor: Codable, Equatable, Sendable {
         createdAt: Date = Date(),
         nextBookNumber: Int = 1,
         shelves: [Shelf] = [],
-        view: LibraryViewSettings = LibraryViewSettings()
+        view: LibraryViewSettings = LibraryViewSettings(),
+        customColumns: [CalibreCustomColumn] = []
     ) {
         self.schemaVersion = schemaVersion
         self.name = name
@@ -177,6 +187,7 @@ public struct LibraryDescriptor: Codable, Equatable, Sendable {
         self.nextBookNumber = nextBookNumber
         self.shelves = shelves
         self.view = view
+        self.customColumns = customColumns
     }
 
     /// Decoded by hand so that a field added later can be missing.
@@ -194,6 +205,7 @@ public struct LibraryDescriptor: Codable, Equatable, Sendable {
         nextBookNumber = try values.decodeIfPresent(Int.self, forKey: .nextBookNumber) ?? 1
         shelves = try values.decodeIfPresent([Shelf].self, forKey: .shelves) ?? []
         view = try values.decodeIfPresent(LibraryViewSettings.self, forKey: .view) ?? LibraryViewSettings()
+        customColumns = try values.decodeIfPresent([CalibreCustomColumn].self, forKey: .customColumns) ?? []
     }
 
     public var shelfTree: ShelfTree { ShelfTree(shelves) }
