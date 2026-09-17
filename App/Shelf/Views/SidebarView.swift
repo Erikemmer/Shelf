@@ -49,12 +49,22 @@ struct SidebarView: View {
                     isActive: model.filter.collection == collection && !isNarrowed,
                     help: available
                         ? "Show \(collection.title.lowercased())"
-                        : "\(collection.title) needs the metadata editor – Sprint 2",
-                    titleColor: available ? Slate.textPrimary : Slate.textSecondary
-                ) { _ in
-                    guard available else { return }
-                    model.filter = LibraryFilter(collection: collection)
-                }
+                        // Named by the sprint that brings it, and that sprint is
+                        // no longer this one: "needs the metadata editor –
+                        // Sprint 2" was written in Sprint 1 and read during
+                        // Sprint 2, where it is not an answer. Duplicates needs
+                        // the duplicate query and Not on any Shelf needs
+                        // shelves; both are 2c.
+                        : "\(collection.title) arrives in Sprint 2c",
+                    titleColor: available ? Slate.textPrimary : Slate.textSecondary,
+                    // Named, not a trailing closure: SlateKit 0.2.0 gained an
+                    // `accessory` view builder before `action`, so a trailing
+                    // closure now binds to the accessory instead.
+                    action: { _ in
+                        guard available else { return }
+                        model.filter = LibraryFilter(collection: collection)
+                    }
+                )
             }
         }
     }
@@ -97,10 +107,9 @@ struct SidebarView: View {
                     icon: Theme.icon(for: section),
                     count: facet.count,
                     isActive: isActive(facet, in: section),
-                    help: "Show only \(displayName(facet, in: section))"
-                ) { _ in
-                    apply(facet, from: section)
-                }
+                    help: "Show only \(displayName(facet, in: section))",
+                    action: { _ in apply(facet, from: section) }
+                )
             }
             if facets.count > Self.maximumRowsPerSection {
                 Text("+ \(facets.count - Self.maximumRowsPerSection) more — use ⌘F")
