@@ -12,9 +12,9 @@ import SwiftUI
 struct CoverGridView: View {
     @Environment(LibraryModel.self) private var model
     @Environment(\.undoManager) private var undoManager
-    /// The grid has to hold focus to see key presses at all. It takes focus
-    /// when it appears and takes it back whenever a cell is clicked.
-    @FocusState private var isFocused: Bool
+    /// The window's one focus binding. The grid has to hold it to see key
+    /// presses at all, and a click on a cell asks the model for it back.
+    @FocusState.Binding var focus: WindowFocus?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,7 +42,7 @@ struct CoverGridView: View {
                         spacing: 20
                     ) {
                         ForEach(model.visible) { entry in
-                            BookCell(entry: entry, side: model.coverSide) { takeFocus() }
+                            BookCell(entry: entry, side: model.coverSide)
                                 .id(entry.id)
                         }
                     }
@@ -74,36 +74,9 @@ struct CoverGridView: View {
                 // slots) is enough on its own here.
                 .focusable()
                 .focusEffectDisabled()
-                .focused($isFocused)
-                .onAppear { isFocused = true }
+                .focused($focus, equals: .grid)
             }
         }
-    }
-
-    /// Takes the keyboard back after a click on a cover.
-    ///
-    /// Two steps, because SwiftUI's focus and AppKit's first responder are two
-    /// things and only one of them decides where a key press goes.
-    ///
-    /// **`makeFirstResponder(nil)`** is the one that matters. Without it the
-    /// search field – or any inspector field – keeps the keyboard after a cover
-    /// is clicked, so pressing 3 types a "3" into the search box instead of
-    /// rating the book. Measured: click a cover, press 1, and the library
-    /// filters to "21". Handing the window itself the keyboard is what the
-    /// editing keys watch for (`EditingKeyMonitor` refuses to act while text is
-    /// being typed into, which is exactly right and exactly the problem when
-    /// the text field will not let go).
-    ///
-    /// **The `@FocusState` dance** is for the arrow keys, which are SwiftUI's.
-    /// Assigning `true` to a state that already holds `true` is not a change,
-    /// and after a field has held focus the grid's state says `true` while the
-    /// keyboard is elsewhere; clearing it first, and setting it on the next turn
-    /// of the run loop, is what makes it a change.
-    private func takeFocus() {
-        model.releaseSearchFocus()
-        NSApp.keyWindow?.makeFirstResponder(nil)
-        isFocused = false
-        DispatchQueue.main.async { isFocused = true }
     }
 
     /// How many cells fit, at least one. The padding and spacing are the ones
@@ -141,7 +114,7 @@ struct CoverGridView: View {
             .frame(width: 110)
             .help("Cover size (⌘+ / ⌘−)")
 
-            SearchField()
+            SearchField(focus: $focus)
                 .frame(width: 200)
         }
         .padding(.horizontal, 12)
@@ -176,7 +149,7 @@ struct CoverGridView: View {
 /// whole grid.
 struct SearchField: View {
     @Environment(LibraryModel.self) private var model
-    @FocusState private var isFocused: Bool
+    @FocusState.Binding var focus: WindowFocus?
 
     var body: some View {
         HStack(spacing: 4) {
@@ -188,12 +161,19 @@ struct SearchField: View {
                     set: { model.filter.searchText = $0 })
             )
             .textFieldStyle(.plain)
-            .focused($isFocused)
-            .onSubmit { isFocused = false }
-            // Escape gives the keyboard up as well as ⏎ does. Without it the
-            // search field keeps it, and the editing keys – which stay out of
-            // text on purpose – have nowhere to go.
-            .onExitCommand { isFocused = false }
+            .focused($focus, equals: .search)
+            // ⏎ and Escape both hand the keyboard to the grid rather than
+            // merely dropping it. Dropping it leaves the window with no focused
+            // view, and then the arrow keys move nothing: the person is out of
+            // the search box and still cannot reach their books.
+            .onSubmit { model.focusGrid() }
+            // Escape also empties the field, which is what every search box on
+            // this platform does and what makes it the reliable way back to the
+            // whole library.
+            .onExitCommand {
+                model.filter.searchText = ""
+                model.focusGrid()
+            }
             if !model.filter.searchText.isEmpty {
                 Button {
                     model.filter.searchText = ""
@@ -207,17 +187,7 @@ struct SearchField: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
         .background(Slate.contentBackground, in: RoundedRectangle(cornerRadius: Slate.cornerRadius))
-        .help("Search titles, authors, series, tags and descriptions (⌘F)")
-        .onReceive(of: model.focusSearchRequest) { isFocused = true }
-        // Kept in step with the model in both directions. The model has to be
-        // able to *take* the keyboard away – clicking a cover does – and a
-        // one-way binding cannot do that: SwiftUI would put the focus straight
-        // back and the next digit would be typed into the search box instead
-        // of rating the book.
-        .onChange(of: isFocused) { _, focused in model.isSearchFocused = focused }
-        .onChange(of: model.isSearchFocused) { _, wanted in
-            if isFocused != wanted { isFocused = wanted }
-        }
+        .help("Search titles, authors, series, tags and descriptions (⌘F); Escape clears it")
     }
 }
 
@@ -229,9 +199,6 @@ struct BookCell: View {
     @Environment(LibraryModel.self) private var model
     let entry: LibraryEntry
     let side: CGFloat
-    /// Called after a click, so the grid can take focus back from the search
-    /// field – otherwise clicking a book and pressing 3 does nothing.
-    var onSelect: () -> Void = {}
 
     @State private var cover: NSImage?
 
@@ -256,7 +223,11 @@ struct BookCell: View {
         .contentShape(Rectangle())
         .onTapGesture {
             model.select(entry)
-            onSelect()
+            // A click on a book is a statement about where the keyboard belongs.
+            // Without this the search field keeps it and pressing 3 types a "3"
+            // into the box instead of rating the book — measured in Sprint 2b,
+            // where the library filtered to "anc1".
+            model.focusGrid()
         }
         .help(help)
         .task(id: TaskKey(book: entry.id, size: size)) {
@@ -319,14 +290,5 @@ struct BookCell: View {
             return
         }
         cover = await loader.cover(for: entry, size: size, priority: .interactive)
-    }
-}
-
-extension View {
-    /// Runs `action` whenever `value` changes, for the model's one-shot
-    /// requests (focus the search field). A counter rather than a Bool, so two
-    /// presses in a row both arrive.
-    func onReceive(of value: Int, perform action: @escaping () -> Void) -> some View {
-        onChange(of: value) { _, _ in action() }
     }
 }

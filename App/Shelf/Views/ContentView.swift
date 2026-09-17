@@ -14,6 +14,10 @@ struct ContentView: View {
     /// 1–5, 0, R and T, watched at the window. See `EditingKeyMonitor` for why
     /// they are neither menu shortcuts nor a view's `.onKeyPress`.
     @State private var editingKeys = EditingKeyMonitor()
+    /// **The** focus of this window, handed down to the grid and to the search
+    /// field. One binding, so moving the keyboard to one of them is by
+    /// construction taking it off the other — see `LibraryModel.focusTarget`.
+    @FocusState private var focus: WindowFocus?
 
     var body: some View {
         Group {
@@ -36,8 +40,21 @@ struct ContentView: View {
         ) {
             ImportSheet().environment(model)
         }
-        .onAppear { editingKeys.start(handleEditingKey) }
+        .onAppear {
+            editingKeys.start(handleEditingKey)
+            focus = model.focusTarget
+        }
         .onDisappear { editingKeys.stop() }
+        // The model asks; the window moves the keyboard. Driven by the counter
+        // rather than by the value, because ⌘F pressed twice in a row is two
+        // requests and the value does not change between them.
+        .onChange(of: model.focusRequest) { _, _ in
+            // `.elsewhere` means something outside this binding has asked for
+            // the keyboard — the inspector's tag field. Letting go is the whole
+            // of what is wanted; claiming `nil`'s opposite would be a second
+            // view asking to be focused.
+            focus = model.focusTarget == .elsewhere ? nil : model.focusTarget
+        }
     }
 
     /// The editing keys. Returns true when the key was used, which is what
@@ -72,7 +89,7 @@ struct ContentView: View {
             SidebarView()
                 .frame(width: Theme.sidebarWidth)
             Rectangle().fill(Slate.separator).frame(width: 1)
-            CoverGridView()
+            CoverGridView(focus: $focus)
             if model.isInspectorShown {
                 Rectangle().fill(Slate.separator).frame(width: 1)
                 InspectorView()

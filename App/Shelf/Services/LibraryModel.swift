@@ -3,6 +3,19 @@ import Observation
 import ShelfCore
 import os
 
+/// What in the window has the keyboard.
+///
+/// One value for the whole window rather than a `Bool` per control: see
+/// `LibraryModel.focusTarget`.
+enum WindowFocus: Hashable {
+    case grid
+    case search
+    /// Something that owns its own focus — the inspector's fields and its tag
+    /// field. Naming it is what lets the window's binding step aside instead of
+    /// claiming a focus it is not holding.
+    case elsewhere
+}
+
 /// What the window is looking at, and every action it can take.
 ///
 /// `@MainActor` throughout, with the work handed to actors (`LibraryIndex`,
@@ -47,28 +60,38 @@ final class LibraryModel {
     static let coverSideStep: CGFloat = 30
 
     var isInspectorShown = true
-    /// Bumped by ⌘F. A counter rather than a Bool, so pressing ⌘F twice in a
-    /// row focuses the field twice instead of once.
-    private(set) var focusSearchRequest = 0
 
-    /// Whether the search field holds the keyboard.
+    // MARK: Who has the keyboard
+
+    /// Where the keyboard should go. The window keeps *one* focus state and
+    /// this is how anything asks it to move.
     ///
-    /// The model owns it because something *else* has to be able to take it
-    /// away: clicking a cover. AppKit's `makeFirstResponder(nil)` is not enough
-    /// on its own — SwiftUI still believes the field is focused and puts the
-    /// keyboard straight back, so the next digit is typed into the search box
-    /// instead of rating the book. Measured: click a cover, press 1, and the
-    /// library filters to "anc1".
-    var isSearchFocused = false
+    /// Two independent `@FocusState` bindings — one on the grid, one on the
+    /// search field — cannot hand the keyboard to each other: setting the
+    /// grid's to `true` while the field's is still `true` asks SwiftUI to
+    /// focus two things, and which one wins is a race. Sprint 2b lost that
+    /// race often enough to ship with "clicking a cover does not reliably take
+    /// the keyboard from the search field" in the backlog. One binding with an
+    /// enum value has no such state: `.grid` is not `.search`, so moving to one
+    /// *is* leaving the other.
+    ///
+    /// A counter beside it, because "focus the search field" has to work twice
+    /// in a row — pressing ⌘F while the field already holds the keyboard is a
+    /// request, not a no-op, and a value that is already what it should be
+    /// produces no `onChange`.
+    private(set) var focusTarget: WindowFocus = .grid
+    private(set) var focusRequest = 0
 
     func focusSearch() {
-        focusSearchRequest += 1
-        isSearchFocused = true
+        focusTarget = .search
+        focusRequest += 1
     }
 
-    /// Called when the grid takes the keyboard back.
-    func releaseSearchFocus() {
-        isSearchFocused = false
+    /// Clicking a cover, Escape in the search field, ⏎ in the search field.
+    /// After this the editing keys land on the book rather than in the box.
+    func focusGrid() {
+        focusTarget = .grid
+        focusRequest += 1
     }
 
     // MARK: The sidebar's contents
@@ -179,6 +202,11 @@ final class LibraryModel {
 
             coversOnDisk = await loader.cachedBookIDs()
             await reload()
+            // A library that has just opened should answer the arrow keys. The
+            // grid only becomes focusable once it exists, which is after this
+            // load, so the request is made here rather than in an `onAppear`
+            // the welcome screen would have swallowed.
+            focusGrid()
             TimingLog.shared.entriesReady(entries.count)
             recents.record(library, bookCount: entries.count)
 
@@ -611,6 +639,11 @@ final class LibraryModel {
         // The inspector has to be open for its tag field to take focus, and T
         // is a reasonable way to ask for both at once.
         isInspectorShown = true
+        // The tag field lives in the inspector and owns its own focus state,
+        // so the window's binding has to let go or SwiftUI is being asked for
+        // two focused fields again.
+        focusTarget = .elsewhere
+        focusRequest += 1
         focusTagFieldRequest += 1
     }
 
