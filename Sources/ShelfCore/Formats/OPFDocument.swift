@@ -449,7 +449,15 @@ public enum OPFDate {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
-        for format in ["yyyy-MM-dd'T'HH:mm:ssZZZZZ", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd", "yyyy-MM", "yyyy"] {
+        // The two with a space instead of the `T` are how **Calibre's SQLite**
+        // writes `timestamp`, `pubdate` and `last_modified`: "2019-04-01
+        // 12:00:00+00:00". The same loose reading serves both files and the
+        // database, so a date does not mean two things in one program.
+        for format in [
+            "yyyy-MM-dd'T'HH:mm:ssZZZZZ", "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ssZZZZZ", "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd", "yyyy-MM", "yyyy",
+        ] {
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "en_US_POSIX")
             formatter.calendar = Calendar(identifier: .gregorian)
