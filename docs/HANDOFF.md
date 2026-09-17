@@ -50,7 +50,7 @@ die Entscheidungen in `docs/adr/`.
   Secrets ins Repo. Testdaten nach `~/Library/Caches/Shelf/`, nie unter
   `~/Documents` (iCloud).
 - UI-Texte Englisch (Deutsch in Sprint 7), Bezeichner Englisch, Kommentare
-  erklären das *Warum*. Der Name „Lithothek" kommt in diesem Projekt nirgends vor.
+  erklären das *Warum*. Der frühere Firmenname kommt in diesem Projekt nirgends vor.
 
 ---
 

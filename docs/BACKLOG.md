@@ -110,6 +110,17 @@ change of controls, not of layout.
 - [ ] Accessibility: keyboard, contrast, labels
 - [ ] Signing, notarisation, direct download, runbook → **v1.0**
 
+## Housekeeping, when it is next convenient
+
+- [ ] **`ZipWriter` and `MinimalPNG` belong in their own target, `ShelfFixtures`.**
+      They exist so the tests and `shelf-tool synthesise` can *build* test
+      material; nothing the app does needs to write a ZIP or encode a PNG. In
+      `ShelfCore` they are 385 lines of production surface that production never
+      calls, and every one of them is code the Linux CI job has to keep
+      compiling. A separate target that the tests and `shelf-tool` depend on –
+      and the app does not – says what they are for. It is a move, not a
+      rewrite: no caller outside the tests and the tool changes.
+
 ## Wishes, after v1.0
 
 Conversion through an installed Calibre's `ebook-convert`; an integrated reader;
@@ -125,13 +136,16 @@ than claimed:
       sections, the inspector and the import sheet were written against
       SlateKit's components and they compile and run, but every judgement about
       spacing, wrapping and whether it actually resembles Selector needs eyes.
-- [ ] **Is there more than one window?** `Scripts/window-count.swift` reports
-      **six** layer-0 windows for a single process, stable across launches, all
-      at the same position and size. Six backing windows for one SwiftUI
-      `WindowGroup` is plausible on this macOS, but it is not established.
-      Launching Selector once and running the same script against it settles it
-      in a minute – that was not done because Selector was running and this
-      session does not end processes it did not start.
+- [x] **Is there more than one window?** Settled: **no.** Shelf reports
+      `5 1` – five layer-0 windows, one of them on screen – and the
+      accessibility API, which counts real windows, reports **one**. Selector,
+      read while it was running and never touched, reports **five** layer-0
+      windows too: four of them are 1512 × 33 at (0, 0), exactly the four Shelf
+      also has, and they belong to the system's menu bar rather than to either
+      app. Three quit-and-relaunch rounds and three kill-and-relaunch rounds
+      stayed at one window; the "six, growing by one per launch" of Sprint 1 was
+      restored window state from a saved-state folder that no longer exists and
+      did not come back. `window-count.swift` and `smoke.sh` say so now.
 - [ ] Time from opening a 5 000-book library until every *visible* cover is on
       screen, cold and warm (CONCEPT §11 target: warm cache under 2 s). What was
       measured instead is when the process settles (≈3–6 s cold, CPU at 0 % from

@@ -29,7 +29,7 @@ builds on Linux), UI in `App/Shelf` (SwiftUI + AppKit) on top of the shared
   goes into this repository.
 - Cache and test-output path: `~/Library/Caches/Shelf/` – **never** under
   `~/Documents`, which is synced.
-- The name "Lithothek" appears nowhere in this project.
+- The former company name appears nowhere in this project.
 
 ## Stack & conventions
 - Swift 6, strict concurrency. `@MainActor` view models, `actor` for background

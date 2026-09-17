@@ -236,6 +236,8 @@ Shelf/
 
 Wiederverwendung aus Selector (kopieren, nicht koppeln, weil fachlich verschieden): `DecodeGate`, `LoadPriority`, `WarmOrder`, `InteractionWindow`, das Loader-Koordinator-Muster, `ContentHasher`/`SHA256Hasher`, das Runner-Muster mit `.part`-Dateien und Manifest, `IngestReport`-Wortlaut („verified“ / „NOT VERIFIED“), `smoke.sh`.
 
+**Abweichung vom Selector-Verhalten, bewusst:** Das Warmen der Cover pausiert bei Auswahlwechsel, am Größen-Slider und beim Tippen in der Suche – beim Trackpad-Scrollen dagegen nicht. `onScrollPhaseChange` braucht macOS 15, Shelf zielt auf 14; der naheliegende Ersatz (Zellerscheinen als Scroll-Signal) war eine Rückkopplung und hat das Warmen um den Faktor 20 verlangsamt ([ADR 0005](adr/0005-cover-pipeline.md)). Ein Cover-Decode dauert hier ~3 ms statt Selectors ~600 ms für ein RAW, deshalb reicht die Hintergrund-Grenze des `DecodeGate` allein. Sobald das Deployment-Ziel auf macOS 15 steigt, kommt das Scrollen wieder dazu.
+
 ## 11. Sprints
 
 **Sprint 0 – SlateKit (in Selector).** Farben, Typografie, Sidebar-Zeilen, Inspector-Gerüst, Grid-Zelle, Statusleiste, Overlay-Container, Shortcut-Fenster, Welcome-Gerüst aus Selector in ein eigenes Paket `SlateKit` verschieben; Selector baut, alle Tests grün, `make smoke` grün, Screenshot vor/nach identisch. Erst dann startet Shelf.
@@ -267,7 +269,7 @@ Kein Nachbau der Calibre-Oberfläche. Keine Plugins. Kein Server, keine Web-Ober
 | MOBI/AZW3-Varianten und KFX | Parser gegen Fixture-Sammlung testen; KFX nur als Datei führen; Fehler pro Datei sammeln, nie den Import abbrechen |
 | CBR ohne RAR5-Unterstützung | libarchive-Version zur Laufzeit prüfen; Fallback Dateiname; klar im Inspector anzeigen |
 | Calibre-Schema-Änderungen | Reader gegen Schema-Version in `metadata.db` (`library_id`, `user_version`) prüfen; unbekannte Version = Warnung, nicht Abbruch |
-| Große Bibliothek, Grid ruckelt | Ladepipeline aus Selector 6a, Cover-Cache auf Platte ab Sprint 1 (nicht wie bei Selector nachgereicht) |
+| Große Bibliothek, Grid ruckelt | Ladepipeline aus Selector 6a, Cover-Cache auf Platte ab Sprint 1 (nicht wie bei Selector nachgereicht); der Cache schreibt **JPEG**, nicht HEIC: gemessen 1,05 ms gegen 38,4 ms je Cover, weil HEIC pro Bild eine HEVC-Sitzung über den Hardware-Encoder aufsetzt – 19,9 KB statt 8,2 KB je Bild ist der Preis dafür ([ADR 0005](adr/0005-cover-pipeline.md)) |
 | Geräte-Marker treffen nicht | Profile als Daten; „Treat this volume as device…“ als manueller Weg |
 | FAT32-Dateinamen, 4-GB-Grenze | Bereinigungsregel in Core mit Tests; Größenprüfung vor Kopie |
 | SQLite-Sperren bei Absturz | WAL-Modus, Index ist rebuildbar, Ordner bleibt Wahrheit |
@@ -279,19 +281,8 @@ Es gilt `Programmier-Leitlinie.md`. Zusätzlich die in Selector erarbeiteten Pro
 
 ## 15. Offene Entscheidungen (bewusst offen gelassen)
 
-1. Bundle-ID-Präfix und Namensraum ohne Firmenbezug (siehe Anhang A) – Vorschlag `de.erikemmer`.
+1. Bundle-ID-Präfix und Namensraum ohne Firmenbezug – Vorschlag `de.erikemmer`.
 2. ZIP-Lesen: libarchive (System, auch für RAR) oder eigene ZIP-Implementierung im Core (Linux-CI-fähig)? Vorschlag: eigener minimaler ZIP-Reader im Core für EPUB/CBZ (testbar auf Linux), libarchive nur für CBR in der App-Schicht.
 3. Regale hierarchisch (Ordner in Ordnern) oder flach mit Präfix? Vorschlag: hierarchisch, weil die Sidebar es ohnehin kann.
 
----
-
-## Anhang A – Namensbereinigung in Selector
-
-Selector trägt heute an vier Stellen den Firmennamen; Shelf startet ohne ihn, und Selector soll ihn ebenfalls verlieren. Konkrete Fundstellen:
-
-- `project.yml`: `bundleIdPrefix: de.die-lithothek`, `PRODUCT_BUNDLE_IDENTIFIER: de.die-lithothek.selector` → `de.erikemmer` / `de.erikemmer.selector`. **Achtung:** Bundle-ID-Wechsel setzt `UserDefaults` und Sandbox-Container zurück (Recent Sessions, Overlay-Schalter). Migration: beim ersten Start alte Defaults-Domain lesen und übernehmen, oder bewusst hinnehmen – Entscheidung im Selector-Repo dokumentieren.
-- `Sources/SelectorCore/Persistence/XMPSidecar.swift`: `selectorNamespace = "https://die-lithothek.de/ns/selector/1.0/"` → z. B. `https://erikemmer.github.io/selector/ns/1.0/`. **Achtung:** Bereits geschriebene XMP-Sidecars tragen den alten Namensraum; der Leser muss beide akzeptieren (alt lesen, neu schreiben), sonst verlieren bestehende Sessions ihre Flags. Test dafür.
-- `docs/APP-STORE-CHECKLIST.md` Zeilen 24, 25, 49 und `docs/CONCEPT.md` Zeile 204 (Namensdiskussion „Auslese“) → Textstellen anpassen.
-- `docs/DATA-MODEL.md` Zeile 79 → Namensraum nachziehen.
-
-Ein Prompt für die Selector-Sitzung dafür steht in `SHELF-BUILDER-PROMPT.md`, Abschnitt „Vorarbeit in Selector“.
+Punkt 1 entschieden: `de.erikemmer`, keine Migration alter Defaults nötig, weil die ID von Anfang an stimmt.
