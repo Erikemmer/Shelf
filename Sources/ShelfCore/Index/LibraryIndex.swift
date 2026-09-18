@@ -706,7 +706,11 @@ public final class LibraryIndex: Sendable {
         public var recentlyAdded = 0
         public var missingCover = 0
         public var notOnAnyShelf = 0
+        /// Same file or same ISBN. Filled in by the caller from
+        /// `duplicates()`, which is why `totals()` alone leaves it at zero.
         public var duplicates = 0
+        /// Same title and first author, and nothing stronger.
+        public var possibleDuplicates = 0
 
         public init() {}
     }

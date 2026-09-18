@@ -3,6 +3,57 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 6 – online metadata · 18 September 2026
+
+Measured on Erik's Mac (M-series, macOS 15.6) against
+`~/Library/Caches/Shelf/measure-library-6/`.
+
+### Fixed — "Duplicates" said 396 of 413 books, and meant nothing by it
+
+The Sprint 5 screenshot showed a sidebar claiming **396 duplicates in a library
+of 413 books**. The collection asked all three of the importer's rules and put
+every answer in one heap, so the one rule that fires constantly — same title and
+same first author — drowned the two that state a fact.
+
+The rules are now told apart by what they *claim*, which is a property of the
+rule and lives on it (`DuplicateReason.isCertain`):
+
+| Rule | Claim | Collection |
+|---|---|---|
+| Same file, byte for byte | a fact | **Duplicates** |
+| Same ISBN | a fact | **Duplicates** |
+| Same title and first author | a suspicion | **Possible Duplicates** |
+
+`DuplicateGroups` sorts the books into the two, and the two sets are
+**disjoint — certainty wins**: a book matched by its bytes *and* by its title is
+counted once, under the better reason. The two numbers therefore add up to the
+number of books any rule flagged, and neither collection is a subset of the
+other. The sidebar has a second row; the inspector's heading reads `Duplicate`
+or `Possible Duplicate` and now lists *every* rule that matched rather than only
+the strongest; `shelf-tool duplicates` prints the two groups apart.
+
+**Measured on `measure-library-6/library`**, the same generator and the same
+count as the library in the Sprint 5 screenshot:
+
+| | books | Duplicates | Possible Duplicates |
+|---|---|---|---|
+| before, as shipped in Sprint 5 | 413 | 396 (one heap) | — |
+| after | 413 | **0** | **396** |
+| after, with two book folders copied in the Finder and the index rebuilt | 415 | **4** | **394** |
+
+The first row of the "after" is the finding, and it is worse than a bad number:
+in a library of 413 books there was **not one actual duplicate**, and the
+sidebar said 396. The third row is the check that the strong rules still fire —
+two book folders duplicated the way a person duplicates them, each given a fresh
+UUID, and all four books (the two copies and the two originals) land under
+`Duplicates` and *not* also under `Possible Duplicates`, although their titles
+match as well.
+
+A book with several formats is not a duplicate of itself under any of the three
+rules — an EPUB and an AZW3 of one book share a `book_id`, and the SQL counts
+distinct books. There is now a test that says so in as many words, because it is
+the commonest shape in any library and the one a rewrite would break silently.
+
 ## Sprint 5 – devices · 18 September 2026
 
 Measured on Erik's Mac (M-series, macOS 15.6) against

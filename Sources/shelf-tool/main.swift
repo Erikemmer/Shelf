@@ -502,16 +502,27 @@ enum Commands {
         let (library, _) = try Library.open(libraryURL)
         let index = try LibraryIndex(library: library)
         let found = try await index.duplicates()
+        let groups = DuplicateGroups(reasons: found)
         let entries = try await index.allEntries()
 
-        print("books: \(entries.count) · duplicates: \(found.count)")
-        for entry in entries.sorted(by: { $0.book.title < $1.book.title }) {
-            guard let reasons = found[entry.id], let strongest = DuplicateReason.strongest(of: reasons) else {
-                continue
+        // The two numbers the sidebar shows, said apart: a byte-for-byte match
+        // and a shared title are not the same claim, and a single total made
+        // the second one drown the first.
+        print(
+            "books: \(entries.count) · duplicates: \(groups.certain.count)"
+                + " · possible duplicates: \(groups.possible.count)")
+        for (heading, ids) in [("Duplicates", groups.certain), ("Possible duplicates", groups.possible)] {
+            print("\(heading): \(ids.count)")
+            for entry in entries.sorted(by: { $0.book.title < $1.book.title }) where ids.contains(entry.id) {
+                guard let reasons = found[entry.id], let strongest = DuplicateReason.strongest(of: reasons) else {
+                    continue
+                }
+                print(
+                    "  \(strongest.label): \(entry.book.title) — \(entry.book.primaryAuthor)"
+                        + " [\(entry.formatLine)]")
             }
-            print("  \(strongest.label): \(entry.book.title) — \(entry.book.primaryAuthor) [\(entry.formatLine)]")
+            if ids.isEmpty { print("  (none)") }
         }
-        if found.isEmpty { print("  (no book in this library looks like a copy of another)") }
     }
 
     // MARK: devices

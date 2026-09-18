@@ -59,7 +59,7 @@ struct SidebarView: View {
                     count: count(of: collection),
                     isActive: model.filter.collection == collection && !isNarrowed,
                     help: available
-                        ? "Show \(collection.title.lowercased())"
+                        ? Self.help(for: collection)
                         : "\(collection.title) is not available yet",
                     titleColor: available ? Slate.textPrimary : Slate.textSecondary,
                     // Named, not a trailing closure: SlateKit 0.2.0 gained an
@@ -71,6 +71,23 @@ struct SidebarView: View {
                     }
                 )
             }
+        }
+    }
+
+    /// What a collection row says when the pointer rests on it.
+    ///
+    /// The two duplicate rows name their rule rather than repeating their own
+    /// title: side by side, "Duplicates" and "Possible Duplicates" are only
+    /// distinguishable by what found them.
+    private static func help(for collection: SmartCollection) -> String {
+        switch collection {
+        case .duplicates:
+            return "Books that share a file, byte for byte, or an ISBN with another book"
+        case .possibleDuplicates:
+            return "Books that share only a title and a first author — editions, "
+                + "translations and namesakes look like this too"
+        default:
+            return "Show \(collection.title.lowercased())"
         }
     }
 
@@ -92,6 +109,7 @@ struct SidebarView: View {
         case .missingCover: return model.totals.missingCover
         case .notOnAnyShelf: return model.totals.notOnAnyShelf
         case .duplicates: return model.totals.duplicates
+        case .possibleDuplicates: return model.totals.possibleDuplicates
         }
     }
 

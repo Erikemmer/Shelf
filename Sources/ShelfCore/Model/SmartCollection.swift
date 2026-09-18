@@ -42,6 +42,55 @@ public enum DuplicateReason: String, Equatable, Hashable, Sendable, CaseIterable
     public static func strongest(of reasons: Set<DuplicateReason>) -> DuplicateReason? {
         allCases.first { reasons.contains($0) }
     }
+
+    /// Whether this rule states a fact or raises a suspicion.
+    ///
+    /// The distinction is what separates the two collections. Identical bytes
+    /// and an identical ISBN answer "this is the same book"; an identical title
+    /// and first author answers "these two are worth looking at", and a library
+    /// of series volumes, editions and translations answers it a great many
+    /// times. Counting the two together gave the Sprint 5 library 396 duplicates
+    /// out of 413 books — a number so large it says nothing at all.
+    public var isCertain: Bool {
+        switch self {
+        case .content, .isbn: return true
+        case .titleAuthor: return false
+        }
+    }
+}
+
+/// Which of the two duplicate collections each book belongs in.
+///
+/// Built once from `LibraryIndex.duplicates()` and handed to the filter, so the
+/// sidebar's two counts and the grid's two collections cannot disagree about
+/// what a duplicate is.
+///
+/// **The two sets are disjoint, and certainty wins.** A book matched by its
+/// bytes *and* by its title belongs under `Duplicates`; listing it under
+/// `Possible Duplicates` as well would count it twice and would invite somebody
+/// to weigh the weaker reason against the stronger one. The two numbers
+/// therefore add up to the number of books any rule flagged.
+public struct DuplicateGroups: Equatable, Sendable {
+    /// Same bytes, or the same ISBN. A fact.
+    public private(set) var certain: Set<UUID> = []
+    /// The same title and first author, and nothing stronger. A suspicion.
+    public private(set) var possible: Set<UUID> = []
+
+    public static let none = DuplicateGroups()
+
+    public init() {}
+
+    public init(reasons: [UUID: Set<DuplicateReason>]) {
+        for (id, why) in reasons where !why.isEmpty {
+            if why.contains(where: \.isCertain) {
+                certain.insert(id)
+            } else {
+                possible.insert(id)
+            }
+        }
+    }
+
+    public var isEmpty: Bool { certain.isEmpty && possible.isEmpty }
 }
 
 /// A view of the library that is a rule, not a list.
@@ -60,11 +109,15 @@ public enum SmartCollection: Equatable, Hashable, Sendable, CaseIterable {
     case notOnAnyShelf
     case missingCover
     case duplicates
+    /// Same title and first author, and nothing stronger — a suspicion, kept
+    /// apart from the facts above it (`DuplicateGroups`).
+    case possibleDuplicates
 
     /// The order they appear in the sidebar. `allCases` gives this order, and
     /// the sidebar reads it rather than listing them again.
     public static let allCases: [SmartCollection] = [
         .all, .unread, .recentlyAdded, .notOnAnyShelf, .missingCover, .duplicates,
+        .possibleDuplicates,
     ]
 
     public var title: String {
@@ -75,6 +128,7 @@ public enum SmartCollection: Equatable, Hashable, Sendable, CaseIterable {
         case .notOnAnyShelf: return "Not on any Shelf"
         case .missingCover: return "Missing Cover"
         case .duplicates: return "Duplicates"
+        case .possibleDuplicates: return "Possible Duplicates"
         }
     }
 
@@ -87,6 +141,7 @@ public enum SmartCollection: Equatable, Hashable, Sendable, CaseIterable {
         case .notOnAnyShelf: return "tray"
         case .missingCover: return "photo.badge.exclamationmark"
         case .duplicates: return "doc.on.doc"
+        case .possibleDuplicates: return "questionmark.circle"
         }
     }
 
@@ -102,7 +157,7 @@ public enum SmartCollection: Equatable, Hashable, Sendable, CaseIterable {
     public func contains(
         _ entry: LibraryEntry,
         coversOnDisk: Set<UUID> = [],
-        duplicateBooks: Set<UUID> = [],
+        duplicates: DuplicateGroups = .none,
         now: Date = Date()
     ) -> Bool {
         switch self {
@@ -122,7 +177,9 @@ public enum SmartCollection: Equatable, Hashable, Sendable, CaseIterable {
         case .missingCover:
             return !coversOnDisk.contains(entry.id)
         case .duplicates:
-            return duplicateBooks.contains(entry.id)
+            return duplicates.certain.contains(entry.id)
+        case .possibleDuplicates:
+            return duplicates.possible.contains(entry.id)
         }
     }
 }
@@ -190,12 +247,12 @@ public struct LibraryFilter: Equatable, Sendable {
     public func matches(
         _ entry: LibraryEntry,
         coversOnDisk: Set<UUID> = [],
-        duplicateBooks: Set<UUID> = [],
+        duplicates: DuplicateGroups = .none,
         now: Date = Date()
     ) -> Bool {
         guard
             collection.contains(
-                entry, coversOnDisk: coversOnDisk, duplicateBooks: duplicateBooks, now: now)
+                entry, coversOnDisk: coversOnDisk, duplicates: duplicates, now: now)
         else { return false }
         if let shelfPath, !Self.stands(entry.book, on: shelfPath) { return false }
         if let tag, !entry.book.tags.contains(tag) { return false }

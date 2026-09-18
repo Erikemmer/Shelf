@@ -444,6 +444,27 @@ struct SmartCollectionTests {
         #expect(!SmartCollection.missingCover.contains(book, coversOnDisk: [book.id]))
     }
 
+    /// The two duplicate collections are two rules, and a book is in one of
+    /// them or in neither — never in both.
+    @Test("the two duplicate collections hold two different things")
+    func duplicateCollections() {
+        let copy = entry()
+        let lookalike = entry()
+        let groups = DuplicateGroups(reasons: [
+            copy.id: [.content],
+            lookalike.id: [.titleAuthor],
+        ])
+
+        #expect(SmartCollection.duplicates.contains(copy, duplicates: groups))
+        #expect(!SmartCollection.duplicates.contains(lookalike, duplicates: groups))
+        #expect(SmartCollection.possibleDuplicates.contains(lookalike, duplicates: groups))
+        #expect(!SmartCollection.possibleDuplicates.contains(copy, duplicates: groups))
+        // Nothing handed in means neither collection holds anything, which is
+        // what the grid shows before the index has been asked.
+        #expect(!SmartCollection.duplicates.contains(copy))
+        #expect(!SmartCollection.possibleDuplicates.contains(lookalike))
+    }
+
     @Test("a filter narrows the collection by tag, author, series and format")
     func filtering() {
         let book = entry(tags: ["science fiction"])
@@ -477,6 +498,6 @@ struct SmartCollectionTests {
             #expect(!collection.title.isEmpty)
             #expect(!collection.icon.isEmpty)
         }
-        #expect(SmartCollection.allCases.count == 6)
+        #expect(SmartCollection.allCases.count == 7)
     }
 }

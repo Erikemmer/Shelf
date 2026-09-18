@@ -160,6 +160,12 @@ final class LibraryModel {
     /// 5 000 books and not once per click.
     private(set) var duplicateReasons: [UUID: Set<DuplicateReason>] = [:]
 
+    /// The same books, sorted into the two collections the sidebar shows:
+    /// what is certainly a copy and what only looks like one
+    /// (`DuplicateGroups`). Derived from `duplicateReasons` in one place so the
+    /// counts and the filter cannot drift apart.
+    private(set) var duplicateGroups = DuplicateGroups.none
+
     // MARK: Messages
 
     /// Shown as a banner over the content. Cleared by the next successful action.
@@ -404,6 +410,7 @@ final class LibraryModel {
         seriesFacets = []
         formatFacets = []
         duplicateReasons = [:]
+        duplicateGroups = .none
         warmer.reset()
     }
 
@@ -420,7 +427,9 @@ final class LibraryModel {
             seriesFacets = try await index.seriesFacets()
             formatFacets = try await index.formatFacets()
             duplicateReasons = try await index.duplicates()
-            totals.duplicates = duplicateReasons.count
+            duplicateGroups = DuplicateGroups(reasons: duplicateReasons)
+            totals.duplicates = duplicateGroups.certain.count
+            totals.possibleDuplicates = duplicateGroups.possible.count
             refilter()
             // Which books are on a device depends on the library's books, so
             // the match is made again whenever those change. It reads the
@@ -459,10 +468,9 @@ final class LibraryModel {
     }
 
     private func applyFilter(matching ids: Set<UUID>?) {
-        let duplicates = filter.collection == .duplicates ? Set(duplicateReasons.keys) : []
         visible = entries.filter { entry in
             if let ids, !ids.contains(entry.id) { return false }
-            return filter.matches(entry, coversOnDisk: coversOnDisk, duplicateBooks: duplicates)
+            return filter.matches(entry, coversOnDisk: coversOnDisk, duplicates: duplicateGroups)
         }
         // Narrowed to one series, the grid is in series order, whatever the
         // sort menu says. A series has exactly one order that means anything,
@@ -1287,6 +1295,14 @@ final class LibraryModel {
     /// somebody might act on by deleting a book.
     func duplicateReason(for id: UUID) -> DuplicateReason? {
         DuplicateReason.strongest(of: duplicateReasons[id] ?? [])
+    }
+
+    /// Every rule that flagged this book, best-founded first — what the
+    /// inspector lists when a book is both a byte-for-byte copy and a
+    /// title match.
+    func duplicateReasons(for id: UUID) -> [DuplicateReason] {
+        let found = duplicateReasons[id] ?? []
+        return DuplicateReason.allCases.filter { found.contains($0) }
     }
 
     /// How many books the selected book's series holds – the "of 7" in

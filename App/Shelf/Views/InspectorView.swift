@@ -269,27 +269,32 @@ struct InspectorView: View {
         }
     }
 
-    /// Why the book is in *Duplicates*, when it is.
+    /// Why the book is in *Duplicates* or in *Possible Duplicates*, when it is.
     ///
     /// Drawn where it can be seen rather than only as a filter, and it names
-    /// the rule: "same file" is a fact, "same title and author" is a guess that
-    /// fits two editions and a translation as well as a real copy. Somebody
-    /// acting on this line might delete a book, so the line has to say how
-    /// sure it is.
+    /// every rule that matched: "same file" is a fact, "same title and author"
+    /// is a guess that fits two editions and a translation as well as a real
+    /// copy. Somebody acting on this line might delete a book, so the heading
+    /// says which of the two it is and the lines say how sure each one is.
     @ViewBuilder
     private func duplicate(for entry: LibraryEntry) -> some View {
-        if let reason = model.duplicateReason(for: entry.id) {
-            SlateInspectorSection("Duplicate") {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(reason.label)
-                        .font(.callout)
-                        .foregroundStyle(Slate.textPrimary)
-                    Text(reason.detail)
-                        .font(.caption2)
-                        .foregroundStyle(Slate.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+        let reasons = model.duplicateReasons(for: entry.id)
+        if let strongest = reasons.first {
+            SlateInspectorSection(strongest.isCertain ? "Duplicate" : "Possible Duplicate") {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(reasons, id: \.self) { reason in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(reason.label)
+                                .font(.callout)
+                                .foregroundStyle(Slate.textPrimary)
+                            Text(reason.detail)
+                                .font(.caption2)
+                                .foregroundStyle(Slate.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
                 }
-                .accessibilityElement(children: .combine)
                 .help("Nothing has been done about it – Shelf never removes a book")
             }
         }

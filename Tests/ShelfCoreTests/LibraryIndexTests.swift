@@ -543,6 +543,75 @@ struct LibraryIndexTests {
         #expect(DuplicateReason.strongest(of: []) == nil)
     }
 
+    /// One book, several formats, different files. The commonest shape in any
+    /// library — an EPUB and an AZW3 of the same book — and it must not be a
+    /// duplicate of itself under any of the three rules.
+    @Test("a book with several formats is not a duplicate of itself")
+    func severalFormatsAreOneBook() async throws {
+        let index = try LibraryIndex(inMemory: "several-formats")
+        var book = entry(title: "Pride and Prejudice", number: 1)
+        book.book.authors = ["Jane Austen"]
+        book.book.identifiers = ["isbn": "9780306406157"]
+        book.formats = [
+            BookFormat(bookID: book.id, format: .epub, fileName: "p.epub", byteSize: 10, sha256: "one"),
+            BookFormat(bookID: book.id, format: .azw3, fileName: "p.azw3", byteSize: 20, sha256: "two"),
+            BookFormat(bookID: book.id, format: .pdf, fileName: "p.pdf", byteSize: 30, sha256: "three"),
+        ]
+        try await index.save(book)
+
+        #expect(try await index.duplicates().isEmpty)
+        #expect(DuplicateGroups(reasons: try await index.duplicates()).isEmpty)
+    }
+
+    /// The split the sidebar shows: what is certainly a copy, and what only
+    /// looks like one.
+    @Test("the certain rules and the guess go into two collections")
+    func duplicatesSplitIntoTwoGroups() async throws {
+        let index = try LibraryIndex(inMemory: "duplicate-groups")
+
+        var one = entry(title: "Alpha", number: 1)
+        var two = entry(title: "Beta", number: 2)
+        one.formats = [
+            BookFormat(bookID: one.id, format: .epub, fileName: "a.epub", byteSize: 10, sha256: "same")
+        ]
+        two.formats = [
+            BookFormat(bookID: two.id, format: .epub, fileName: "b.epub", byteSize: 10, sha256: "same")
+        ]
+
+        var three = entry(title: "Emma", number: 3)
+        var four = entry(title: "emma", number: 4)
+        three.book.authors = ["Jane Austen"]
+        four.book.authors = ["Jane Austen"]
+
+        try await index.save([one, two, three, four])
+
+        let groups = DuplicateGroups(reasons: try await index.duplicates())
+        #expect(groups.certain == [one.id, two.id])
+        #expect(groups.possible == [three.id, four.id])
+    }
+
+    /// Certainty wins, and the two sets stay disjoint: a book matched by its
+    /// bytes *and* by its title is counted once, under the better reason.
+    @Test("a book matched by both rules is counted only as a certain duplicate")
+    func certaintyWins() {
+        let sure = UUID()
+        let guessed = UUID()
+        let groups = DuplicateGroups(reasons: [
+            sure: [.content, .titleAuthor],
+            guessed: [.titleAuthor],
+        ])
+        #expect(groups.certain == [sure])
+        #expect(groups.possible == [guessed])
+        #expect(groups.certain.isDisjoint(with: groups.possible))
+    }
+
+    @Test("an ISBN match is a fact and a title match is a guess")
+    func whichRulesAreCertain() {
+        #expect(DuplicateReason.content.isCertain)
+        #expect(DuplicateReason.isbn.isCertain)
+        #expect(!DuplicateReason.titleAuthor.isCertain)
+    }
+
     // MARK: Shelves
 
     @Test("shelves are written parents first, and counted")
