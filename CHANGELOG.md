@@ -54,6 +54,30 @@ rules — an EPUB and an AZW3 of one book share a `book_id`, and the SQL counts
 distinct books. There is now a test that says so in as many words, because it is
 the commonest shape in any library and the one a rewrite would break silently.
 
+### Fixed — three bare "Mixed" where the title, the author and the series stand
+
+With several books selected, the inspector drew its title block as usual: three
+values in three type sizes, one under the other. For one book the type size *is*
+the label — headline is the title, callout the author, caption the series. For
+twelve books all three read `Mixed`, in three sizes, with nothing at all to say
+which was which. The accessibility tree named them; the window did not
+(`docs/BACKLOG.md`, carried since Sprint 3).
+
+The title block is now drawn **only for one book**. A selection of several gets
+the count line it already had — "413 books selected" — and Title, Authors and
+Series move down into *Details*, where every row has its name beside it and
+`Mixed` is unambiguous. Nothing is lost and nothing became editable: the three
+are read-only across a selection for the same reason as before.
+
+Two neighbours in that block were wrong in a quieter way and are fixed with it:
+
+- **Added** showed the anchor book's date, which is a fact about one book
+  dressed up as a fact about all of them. It now reads `Mixed` unless every
+  selected book was added on the same day.
+- **Size** showed the anchor book's bytes. It is now the sum over the selection,
+  which is the question a selection is actually holding — how much this is going
+  to cost on a card.
+
 ## Sprint 5 – devices · 18 September 2026
 
 Measured on Erik's Mac (M-series, macOS 15.6) against

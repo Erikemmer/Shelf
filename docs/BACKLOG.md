@@ -212,12 +212,15 @@ change of controls, not of layout.
       (one directory read, which is what makes it cheap) and a cache nobody has
       filled is empty. It corrects itself as covers are drawn, which is worse
       than being wrong — it is wrong and then quietly right
-- [ ] **The inspector's `Mixed` values carry no visible label.** On one book
-      those positions are the title, the series and the description; three bare
-      `Mixed` in three sizes is not obvious. The accessibility tree *does* name
-      them, so this is a visual gap, not an accessibility one
+- [x] **The inspector's `Mixed` values carry no visible label.** Fixed in
+      Sprint 6: the title block is drawn only for one book, where the type size
+      is the label. A selection of several shows Title, Authors and Series as
+      named rows in *Details* instead
 - [ ] **`Published` reads blank across a selection** where its neighbours read
-      `Mixed`. Blank says neither "they differ" nor "none of them has one"
+      `Mixed`. Blank says neither "they differ" nor "none of them has one".
+      Still open: `BookField.sharedText` returns the shared empty string, which
+      is *correct* and unreadable. The row needs to tell "none of them has one"
+      from "they differ", which is a change to the field rule and not to the view
 - [ ] **`ZipWriter`, `MinimalPNG` and now `SyntheticCalibreLibrary` still live
       in `ShelfCore`.** The move to a `ShelfFixtures` target is **not** the
       drag-and-drop the entry below assumes: `OPFDocument.escaped` is internal
@@ -322,6 +325,11 @@ is currently assumed.
 
 ## Sprint 6 – Online metadata
 
+- [x] **Duplicates split into what is certain and what is only likely.** Two
+      collections, two counts, disjoint; `shelf-tool duplicates` prints both.
+      Measured: 413 books, 0 certain, 396 suspicions
+- [x] **The inspector names what is `Mixed`** across a selection, and `Added`
+      and `Size` stop reporting the anchor book's values as the selection's
 - [ ] Open Library and Google Books, no API key, by ISBN then title + author
 - [ ] Candidate list, then field-by-field old/new with a checkbox each
 - [ ] Cover fetched from the net when the file has none

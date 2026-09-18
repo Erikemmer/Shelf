@@ -122,13 +122,24 @@ struct InspectorView: View {
 
     // MARK: Title, authors, series
 
+    /// The title block — the book's identity in three type sizes.
+    ///
+    /// **Only for one book.** Headline, callout and caption are how a *name*
+    /// is drawn; across a selection those three positions held three bare
+    /// `Mixed` in three sizes, with nothing to say which was the title, which
+    /// the author and which the series. The values are not dropped: for a
+    /// selection they move into the Details block, where every row carries its
+    /// label (`mixedIdentity`).
+    @ViewBuilder
     private func title(for entry: LibraryEntry) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            field(.title, of: entry, font: .headline)
-            field(.authors, of: entry, font: .callout)
-            series(for: entry)
+        if !model.hasMultipleSelection {
+            VStack(alignment: .leading, spacing: 6) {
+                editableField(.title, of: entry, font: .headline)
+                editableField(.authors, of: entry, font: .callout)
+                editableSeries(for: entry)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// A field's value across the selection, drawn rather than edited.
@@ -137,18 +148,19 @@ struct InspectorView: View {
     /// a series or a description typed once and written to twelve books is not
     /// an edit but a mistake with twelve copies; a publisher across a selection
     /// is a reasonable thing to want and is in the backlog, not in this sprint.
-    private func locked(_ which: BookField, font: Font = .callout) -> some View {
-        Text(model.sharedText(which) ?? Self.mixed)
-            .font(font)
-            .foregroundStyle(
-                model.sharedText(which) == nil ? Slate.textSecondary : Slate.textPrimary
-            )
-            .lineLimit(which.isMultiline ? 6 : 1)
+    /// The same, for the one field that has a section heading of its own and so
+    /// needs no label beside it.
+    private func lockedBlock(_ which: BookField) -> some View {
+        let shared = model.sharedText(which)
+        return Text(shared ?? Self.mixed)
+            .font(.caption)
+            .foregroundStyle(shared == nil ? Slate.textSecondary : Slate.textPrimary)
+            .lineLimit(6)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
             .accessibilityLabel(which.label)
-            .accessibilityValue(model.sharedText(which) ?? Self.mixed)
+            .accessibilityValue(shared ?? Self.mixed)
             .help("\(which.label) — edited one book at a time")
     }
 
@@ -163,15 +175,6 @@ struct InspectorView: View {
     /// has already loaded — so it is the number of books *in this library*, and
     /// says so in the help rather than pretending to know how long the series
     /// really is.
-    @ViewBuilder
-    private func series(for entry: LibraryEntry) -> some View {
-        if model.hasMultipleSelection {
-            locked(.seriesName, font: .caption)
-        } else {
-            editableSeries(for: entry)
-        }
-    }
-
     private func editableSeries(for entry: LibraryEntry) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -305,15 +308,54 @@ struct InspectorView: View {
     private func facts(for entry: LibraryEntry) -> some View {
         SlateInspectorSection("Details") {
             VStack(alignment: .leading, spacing: 4) {
+                mixedIdentity
                 row(.publisher, of: entry)
                 row(.published, of: entry)
                 row(.language, of: entry)
                 // Not editable, and not a field: both are facts about the disk
                 // rather than claims about the book.
-                SlateValueRow(name: "Added", value: Self.day(entry.book.addedAt))
-                SlateValueRow(name: "Size", value: ByteCount.format(entry.totalBytes))
+                SlateValueRow(name: "Added", value: added)
+                SlateValueRow(name: "Size", value: ByteCount.format(totalBytes))
+                    .help(
+                        model.hasMultipleSelection
+                            ? "Every file of all \(model.selection.count) books together"
+                            : "Every file of this book together")
             }
         }
+    }
+
+    /// Title, authors and series for a selection of several — with their names
+    /// beside them.
+    ///
+    /// These three are the ones the title block draws for one book, where the
+    /// type size *is* the label. Across a selection there is nothing to name
+    /// them, so they come down here and are drawn like every other detail. They
+    /// are read-only for the same reason they were before: a title typed once
+    /// into twelve books is a mistake with twelve copies.
+    @ViewBuilder
+    private var mixedIdentity: some View {
+        if model.hasMultipleSelection {
+            lockedRow(.title)
+            lockedRow(.authors)
+            lockedRow(.seriesName)
+        }
+    }
+
+    /// When the book was added, or the day they were all added.
+    ///
+    /// `Mixed` rather than the anchor book's date: with twelve books selected
+    /// the anchor's date is a fact about one of them dressed up as a fact about
+    /// all of them.
+    private var added: String {
+        let days = Set(model.selectedEntries.map { Self.day($0.book.addedAt) })
+        return days.count == 1 ? (days.first ?? "") : Self.mixed
+    }
+
+    /// The bytes of every file of every selected book. A sum, not the anchor's
+    /// size — "how much is this going to cost me on the card" is the question
+    /// this row is asked with a selection in hand.
+    private var totalBytes: Int64 {
+        model.selectedEntries.reduce(0) { $0 + $1.totalBytes }
     }
 
     /// Calibre's own columns, shown and not editable (CONCEPT §4, "Should").
@@ -526,7 +568,7 @@ struct InspectorView: View {
     @ViewBuilder
     private func description(for entry: LibraryEntry) -> some View {
         if model.hasMultipleSelection {
-            SlateInspectorSection("Description") { locked(.description, font: .caption) }
+            SlateInspectorSection("Description") { lockedBlock(.description) }
         } else {
             editableDescription(for: entry)
         }
@@ -644,18 +686,6 @@ struct InspectorView: View {
     }
 
     // MARK: One field
-
-    /// A field with no name beside it, for the title block.
-    @ViewBuilder
-    private func field(
-        _ which: BookField, of entry: LibraryEntry, font: Font
-    ) -> some View {
-        if model.hasMultipleSelection {
-            locked(which, font: font)
-        } else {
-            editableField(which, of: entry, font: font)
-        }
-    }
 
     private func editableField(
         _ which: BookField, of entry: LibraryEntry, font: Font
