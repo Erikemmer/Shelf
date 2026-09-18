@@ -84,6 +84,56 @@ the two services' full sentences came to 130 characters and the footer showed
 "…hostname could not be foun…", which tells nobody anything. The full text is
 still in the sheet and in the row's tooltip.
 
+## The other two fixes of this sprint
+
+Three more pictures, taken by `Scripts/duplicates-shot.sh` against
+`~/Library/Caches/Shelf/measure-library-6/library` — 415 books, of which four
+really are copies (two book folders duplicated the way a person duplicates them
+and given fresh UUIDs) and 394 only share a title with something.
+
+### `duplicates-certain.jpg` — what is certainly a copy
+
+The sidebar reads **Duplicates 4 · Possible Duplicates 394**. Before this
+sprint it read a single **Duplicates 396**, in a library of 413 books, and
+*none* of those 396 was an actual duplicate.
+
+The grid holds exactly the four, in two pairs. The inspector lists **all three**
+rules that matched the selected one — same file, same ISBN, same title and
+author — which is the other half of the change: a book matched by several rules
+now says so instead of being described by the best one alone.
+
+**My reading:** this is what the collection is for. Four is a number somebody
+acts on; 396 was a number somebody switches off. And the pair being listed under
+`Duplicates` *only*, although its titles match too, is the disjointness rule
+visible.
+
+### `duplicates-possible.jpg` — what only looks like one
+
+The same library, the other row. 394 books, every one of them a suspicion, and
+the inspector's heading reads **Possible Duplicate** rather than Duplicate.
+
+**My reading:** the grid is full of pairs that share a title — which is exactly
+what a library of generated series volumes looks like, and exactly why the rule
+had to be separated rather than sharpened. The heading doing the work is the
+point: the same panel says "Duplicate" in the other collection.
+
+### `selection-details.jpg` — what is `Mixed`, with its name beside it
+
+415 books selected. The title block is gone — for one book its three type sizes
+*are* the labels, and for 415 they were three bare "Mixed" one under the other.
+Title, Authors and Series are now named rows in *Details*, beside Publisher,
+Published and Language, which always had names.
+
+Two neighbours in that block are fixed with them: **Added** reads a day only
+because every book here was added on the same day (it says `Mixed` otherwise
+rather than the anchor book's date), and **Size** reads **78.2 MB**, the sum
+over the selection rather than the one book's size.
+
+**My reading:** nothing is lost and nothing is ambiguous. The one thing I would
+still change is that six rows reading `Mixed` in a column is visually flat —
+`Mixed` could be dimmer than a real value — but that is taste, and the defect
+was that they had no names.
+
 ## What is not here
 
 - **A Google Books candidate.** Its shared anonymous quota was exhausted all
