@@ -25,6 +25,10 @@ struct SidebarView: View {
                         // own view rather than a fifth case in `rows(for:)`.
                         if section == .shelves {
                             ShelvesSection()
+                        } else if section == .devices {
+                            // Not a facet list and not a filter: a device row
+                            // is a drop target and a thing to eject.
+                            DevicesSection()
                         } else {
                             SlateSidebarSection(section.rawValue)
                             rows(for: section)

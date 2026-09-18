@@ -47,11 +47,38 @@ struct ContentView: View {
         ) {
             OrphanSheet().environment(model)
         }
+        .sheet(
+            isPresented: Binding(
+                get: { model.devices.isSendSheetPresented },
+                set: { model.devices.isSendSheetPresented = $0 })
+        ) {
+            SendToDeviceSheet().environment(model)
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { model.isDeviceContentsSheetPresented },
+                set: { model.isDeviceContentsSheetPresented = $0 })
+        ) {
+            DeviceContentsSheet().environment(model)
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { model.devices.isDeleteSheetPresented },
+                set: { model.devices.isDeleteSheetPresented = $0 })
+        ) {
+            DeleteFromDeviceSheet().environment(model)
+        }
         .onAppear {
             editingKeys.start(handleEditingKey)
             focus = model.focusTarget
+            // A reader plugged in before a library is open still belongs in
+            // the sidebar, so this does not wait for one.
+            model.startWatchingDevices()
         }
-        .onDisappear { editingKeys.stop() }
+        .onDisappear {
+            editingKeys.stop()
+            model.stopWatchingDevices()
+        }
         // The model asks; the window moves the keyboard. Driven by the counter
         // rather than by the value, because ⌘F pressed twice in a row is two
         // requests and the value does not change between them.

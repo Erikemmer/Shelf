@@ -46,6 +46,13 @@ targets:
         # never a book file (CONCEPT §1).
         com.apple.security.files.user-selected.read-write: true
         com.apple.security.files.bookmarks.app-scope: true
+        # Devices (Sprint 5, CONCEPT §8). A sandboxed app cannot see a
+        # mounted Kobo or Kindle at all without this, however much the user
+        # plugged it in themselves — there is no open panel in the way and
+        # nothing to hang a bookmark on. Read *and* write, because sending a
+        # book to a reader is the feature; the library is what is never
+        # written to from here.
+        com.apple.security.files.removable-volumes.read-write: true
     info:
       path: App/Shelf/Resources/Info.plist
       properties:

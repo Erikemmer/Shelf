@@ -176,6 +176,17 @@ final class LibraryModel {
 
     /// `Library ▸ Find Orphaned Folders…`. The list is what the sheet shows and
     /// what a confirmation names; it is never acted on by itself.
+    // MARK: Devices
+
+    /// What is plugged in, what is on it, and how far a transfer has got.
+    ///
+    /// Its own model, like `ImportModel`: a device appearing has nothing to do
+    /// with the library's state, and a transfer has to survive the sheet being
+    /// closed. What this model adds is the joining — a transfer needs the
+    /// library's entries and its root, and those are here.
+    let devices = DeviceModel()
+    var isDeviceContentsSheetPresented = false
+
     var isOrphanSheetPresented = false
     private(set) var orphanedFolders: [OrphanedFolder] = []
     private(set) var isScanningForOrphans = false
@@ -289,6 +300,68 @@ final class LibraryModel {
         }
     }
 
+    /// Starts watching for devices. Called once, when the window appears: a
+    /// reader plugged in before a library is open still belongs in the
+    /// sidebar, and the section says so whether or not there is a library.
+    func startWatchingDevices() {
+        devices.start()
+    }
+
+    func stopWatchingDevices() {
+        devices.stop()
+    }
+
+    // MARK: Sending books to a device
+
+    /// The books the grid dragged onto a device.
+    func sendToDevice(bookIDs: Set<UUID>, device: ConnectedDevice) {
+        send(entries.filter { bookIDs.contains($0.id) }, to: device)
+    }
+
+    /// ⌘⇧S, and the device row's context menu.
+    func sendSelectionToDevice(_ device: ConnectedDevice?) {
+        guard let device = device ?? devices.selectedDevice else { return }
+        send(selectedEntries, to: device)
+    }
+
+    private func send(_ books: [LibraryEntry], to device: ConnectedDevice) {
+        guard let library, !books.isEmpty else { return }
+        devices.selectedDeviceID = device.id
+        Task { await devices.prepareTransfer(of: books, to: device, libraryRoot: library.root) }
+    }
+
+    /// Runs the transfer the sheet is showing.
+    func runTransfer() {
+        guard let device = devices.selectedDevice else { return }
+        devices.runTransfer(to: device, entries: entries)
+    }
+
+    /// "Treat this volume as device…" — remembered for this session only.
+    func treatVolumeAsDevice(_ volume: MountedVolume, as profileID: String) {
+        devices.treat(volume, as: profileID, entries: entries)
+    }
+
+    func showDeviceContents(_ device: ConnectedDevice?) {
+        guard let device = device ?? devices.selectedDevice else { return }
+        devices.selectedDeviceID = device.id
+        isDeviceContentsSheetPresented = true
+    }
+
+    /// Opens the confirmation. Nothing is deleted until its own button is
+    /// pressed (ADR 0014).
+    func askToDeleteFromDevice(_ files: [DeviceFile], on device: ConnectedDevice) {
+        isDeviceContentsSheetPresented = false
+        devices.askToDelete(files, on: device, entries: entries)
+    }
+
+    func confirmDeleteFromDevice() {
+        guard let device = devices.selectedDevice else { return }
+        devices.confirmDelete(on: device, entries: entries)
+    }
+
+    /// Books that are on a connected device — the grid's badge.
+    var booksOnDevice: Set<UUID> { devices.booksOnDevice }
+
     func closeLibrary() {
         library = nil
         descriptor = nil
@@ -322,6 +395,10 @@ final class LibraryModel {
             duplicateReasons = try await index.duplicates()
             totals.duplicates = duplicateReasons.count
             refilter()
+            // Which books are on a device depends on the library's books, so
+            // the match is made again whenever those change. It reads the
+            // devices and never writes to them.
+            await devices.refresh(entries: entries)
         } catch {
             show(error, doing: "read the library index")
         }

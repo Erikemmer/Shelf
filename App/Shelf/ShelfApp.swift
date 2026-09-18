@@ -44,6 +44,7 @@ struct ShelfApp: App {
             }
             fileMenu
             libraryMenu
+            deviceMenu
             viewMenu
             CommandGroup(replacing: .help) {
                 Button("Keyboard Shortcuts") { isShowingShortcuts = true }
@@ -155,6 +156,66 @@ struct ShelfApp: App {
             Button("Close Library") { model.closeLibrary() }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
                 .disabled(model.library == nil)
+        }
+    }
+
+    /// Everything that touches a reader. Its own menu rather than items in
+    /// Library, because one of them is the only destructive thing Shelf does
+    /// and it must not sit next to "Rebuild Index".
+    private var deviceMenu: some Commands {
+        CommandMenu("Device") {
+            Button(sendLabel) { model.sendSelectionToDevice(nil) }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+                .disabled(model.devices.selectedDevice == nil || model.selection.isEmpty)
+            Button("Show What Is on the Device…") { model.showDeviceContents(nil) }
+                .disabled(model.devices.selectedDevice == nil)
+            Divider()
+            // Deleting on a device is reached only through the contents sheet,
+            // where the files are chosen, and then only through a confirmation
+            // that names every one of them (ADR 0014). This item opens that
+            // sheet; it deletes nothing itself, and the menu says so.
+            Button("Delete from Device…") { model.showDeviceContents(nil) }
+                .disabled(model.devices.selectedDevice == nil)
+            Divider()
+            treatVolumeMenu
+            Divider()
+            Button(ejectLabel) {
+                if let device = model.devices.selectedDevice { model.devices.eject(device) }
+            }
+            .disabled(model.devices.selectedDevice == nil || model.devices.phase.isRunning)
+        }
+    }
+
+    private var sendLabel: String {
+        guard let device = model.devices.selectedDevice else { return "Send to Device" }
+        return "Send to “\(device.name)”"
+    }
+
+    private var ejectLabel: String {
+        guard let device = model.devices.selectedDevice else { return "Eject" }
+        return "Eject “\(device.name)”"
+    }
+
+    /// The way in when no marker matches — a reader Shelf has never heard of,
+    /// or a card taken out of one (CONCEPT §8.1).
+    ///
+    /// A submenu of the volumes that are mounted and not recognised, each with
+    /// the profiles to treat it as, rather than a sheet: the two things that
+    /// have to be picked are a volume and a profile, and a menu picks two
+    /// things without a window.
+    private var treatVolumeMenu: some View {
+        Menu("Treat Volume as Device") {
+            let volumes = model.devices.unrecognisedVolumes
+            if volumes.isEmpty {
+                Text("No other volume is mounted")
+            }
+            ForEach(volumes, id: \.url) { volume in
+                Menu(volume.name) {
+                    ForEach(DeviceProfiles.all) { profile in
+                        Button(profile.name) { model.treatVolumeAsDevice(volume, as: profile.id) }
+                    }
+                }
+            }
         }
     }
 

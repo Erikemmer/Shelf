@@ -179,7 +179,13 @@ struct BookCell: View {
         ) {
             coverImage
         } topLeading: {
-            EmptyView()
+            // On a reader that is plugged in right now. A badge rather than a
+            // column, because it is true of the moment and not of the book —
+            // and in the one corner `SlateGridCell` leaves free, so the shared
+            // package keeps the shape both apps already draw.
+            if model.booksOnDevice.contains(entry.id) {
+                SlateBadgePlate { Image(systemName: "ipad.and.iphone").font(.caption2) }
+            }
         } topTrailing: {
             if entry.book.isRead {
                 SlateBadgePlate { Image(systemName: "checkmark").font(.caption2) }
