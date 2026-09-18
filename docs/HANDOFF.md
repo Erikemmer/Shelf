@@ -10,7 +10,9 @@ Du arbeitest mit mir (Erik Emmer) an **Shelf**, einem Mac-only eBook-Manager im
 Look & Feel von Selector. Repo: https://github.com/Erikemmer/Shelf (lokal
 `~/Documents/Shelf`). Shelf ist ein modern aussehendes Calibre: Bibliothek,
 Metadaten, Calibre-Import, Geräte – kein Reader, keine Konvertierung in v1.0.
-Stand: Sprints 1–6 fertig, `main` grün, 588 Kern-Tests, SlateKit-Pin 0.3.1.
+Stand: Sprints 1–6 fertig, Sprint 7 **angefangen** (Deutsch und der
+Release-Weg stehen, Barrierefreiheit und Runbook nicht), `main` grün,
+606 Kern-Tests, SlateKit-Pin 0.3.1.
 
 **Lies zuerst, in dieser Reihenfolge:** `Programmier-Leitlinie.md` (bindend),
 `CLAUDE.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG.md`, `CHANGELOG.md` (oben
@@ -50,175 +52,111 @@ die Entscheidungen in `docs/adr/`.
   nach Bestätigung mit Namensliste gelöscht. DRM wird nie angefasst. Keine
   Secrets ins Repo. Testdaten nach `~/Library/Caches/Shelf/`, nie unter
   `~/Documents` (iCloud).
-- UI-Texte Englisch (Deutsch in Sprint 7), Bezeichner Englisch, Kommentare
-  erklären das *Warum*. Der frühere Firmenname kommt in diesem Projekt nirgends vor.
+- UI-Texte Englisch **und Deutsch**: jedes gezeichnete Wort geht durch `Loc`
+  und steht in `App/Shelf/Resources/Localizable.xcstrings`, sonst wird ein Test
+  rot (ADR 0016). Bezeichner Englisch, Kommentare erklären das *Warum*. Der frühere Firmenname kommt in diesem Projekt nirgends vor.
 
 ---
 
-## Nächster Schritt: Sprint 7 – Deutsch, Barrierefreiheit, Signierung → v1.0
+## Nächster Schritt: Sprint 7 zu Ende bringen → v1.0
 
-**Sprint 6 ist fertig.** ⌘E fragt Open Library und Google Books, ohne
-API-Schlüssel, über die ISBN wenn es eine gültige gibt und sonst über Titel und
-Autor. Was zurückkommt, ist eine Kandidatenliste mit einer Trefferzahl von 0 bis
-100; der gewählte Kandidat steht danach Feld für Feld neben dem Buch, alt über
-neu, ein Kästchen je Feld. **Angehakt ist nur, was eine Lücke füllt** – und das
-auch nicht immer, siehe unten. Übernehmen geht durch dieselbe Kette wie jede
-Änderung im Inspector: Undo zuerst, dann `metadata.opf`, dann der Index
-([ADR 0015](adr/0015-online-metadata-two-sources-field-by-field.md)). 588
-Kern-Tests, Zahlen im `CHANGELOG.md`, Bilder in
-`docs/screenshots/sprint-6/README.md`.
+**Sprint 7 ist angefangen, nicht fertig.** Drei Dinge sind erledigt und
+gepusht; vier stehen aus. Was steht, steht vollständig — es gibt keinen
+halbdeutschen Zustand und keinen halben Release-Weg.
 
-**Die Einschränkung, und sie ist wieder keine Formalie.** Google Books hat an
-diesem Tag auf **alle zehn ISBNs mit HTTP 429** geantwortet – das gemeinsame
-Kontingent für Anfragen ohne Schlüssel war aufgebraucht, bevor Shelf überhaupt
-gefragt hat, und zwar von beiden Hostnamen und mit jedem `country`-Parameter.
-Open Library kannte neun von zehn. Das heißt: **Shelf hat noch nie eine Antwort
-von Google Books gelesen.** Der Leser ist gegen *eine handgeschriebene* Datei
-geprüft, die nach Googles dokumentierter Form gebaut und in
-`Tests/ShelfCoreTests/Fixtures/online/README.md` genau so benannt ist. Ein
-erneuter Lauf von `Scripts/online-proof.sh` überschreibt sie mit einer echten
-Antwort, sobald das Kontingent es zulässt. Das ist die erste Zeile für Sprint 7.
+### Fertig
 
-**Drei Dinge, die weiter auf Erik warten** (die ersten beiden seit Sprint 3
-bzw. 4):
+1. **Deutsch, vollständig.** `App/Shelf/Resources/Localizable.xcstrings`, 429
+   Einträge, Englisch und Deutsch, acht mit Pluralformen. Jedes gezeichnete Wort
+   geht durch `Loc` (`App/Shelf/Views/Strings.swift`); Zahlen, Daten und Größen
+   über `FormatStyle`; fünf Tests, darunter einer, der **jeden** Satz in
+   `App/Shelf` ablehnt, der nicht durch den Katalog geht
+   ([ADR 0016](adr/0016-the-core-answers-in-english-the-window-translates.md)).
+   Bilder und was das Ansehen gefunden hat: `docs/screenshots/sprint-7/README.md`.
+2. **`make release`** – archivieren, signieren, notarisieren, stapeln, prüfen
+   ([docs/RELEASE.md](RELEASE.md)). `make release-dry` beweist den Weg bis zur
+   Notarisierung mit Ad-hoc-Signatur; **notarisiert wurde noch nie etwas**,
+   weil kein Developer-ID-Zertifikat auf diesem Mac liegt.
+3. **Die zwei Befunde aus dem Sprint-6-Screenshot**: „Unbekannt" war
+   Fixture-Text, und `Book.authorLine` zeigt bei fehlendem Autor jetzt nichts;
+   jede Zeile des Vergleichsdialogs nennt ihren Dienst, und wo die beiden
+   Dienste sich widersprechen, sind es zwei Zeilen mit je einem Kästchen.
 
-1. **Eine echte Calibre-Bibliothek.** `~/Downloads/Calibre Library Erik` enthält
-   nur `metadata.db` ohne Buchordner. **Erik muss den Pfad nennen.**
-2. **Echte Bücher.** Ein gekauftes MOBI oder AZW3, ein echtes CBR, eine wirklich
-   DRM-geschützte Datei. **Vier Dateien würden reichen.**
-3. **Ein echtes Lesegerät.** Siehe „Die Sandbox-Frage" weiter unten – sie ist
-   nach wie vor offen, weil in diesem Lauf kein Wechselmedium angesteckt war.
+### Offen, in dieser Reihenfolge
 
-Was als Nächstes ansteht (CONCEPT §11, Sprint 7):
+1. **Barrierefreiheit.** Nichts davon ist angefasst worden. Die zwei bekannten
+   Löcher stehen unter „Housekeeping": Seitenleisten-Zeilen haben keine Rolle,
+   die eine Tastatur aktivieren kann (`AXImage` + zwei `AXStaticText`, kein
+   `AXButton`), und die Pfeiltasten hängen an der Menüleiste (31 % der Zeit in
+   `NSMENU_IS_THROTTLING_…`). Dazu fehlen: VoiceOver-Beschriftungen für Raster,
+   Seitenleiste, Inspector, Tabelle und **alle Blätter**, eine sinnvolle
+   Vorlesereihenfolge, ein Kontrast-Skript gegen WCAG AA über die
+   Paletten-Werte, sichtbare Fokusringe, und ein AX-Baum je Ansicht als Beleg.
+   `Scripts/ax-dump.swift` gibt es schon.
+2. **Die Kürzel-Übersicht und die Menüs lesen *nicht* dieselbe Tabelle.**
+   `ShortcutReference` speist den Willkommens-Einzeiler und das ⌘?-Blatt; die
+   Menüleiste in `ShelfApp.swift` deklariert ihre Kürzel von Hand. Die beiden
+   *können* auseinanderlaufen. Ein Test, der die Tabelle gegen die
+   `.keyboardShortcut(…)`-Deklarationen in `ShelfApp.swift` hält, wäre der
+   billige Weg; die Menüs aus der Tabelle zu bauen der gründliche.
+3. **`docs/RUNBOOK.md` fehlt ganz.** Sichern und Wiederherstellen, Index neu
+   bauen, Umzug auf eine andere Platte, Rückweg nach Calibre, Absturz mitten im
+   Import oder Transfer, wo die Logs liegen — jeder Weg einmal ausgeführt und
+   die Ausgabe zitiert.
+4. **Die Liste aus `docs/BACKLOG.md`**, die v1.0 nicht mitschleppen soll: der
+   Klick aufs Cover und das Suchfeld, „Missing Cover" nach frischem Import,
+   „Published" über einer Auswahl, das nackte „Undo" nach einer
+   Online-Übernahme, Sortierung nach Tags/Format/Gelesen/Größe, und
+   `ZipWriter`/`MinimalPNG`/`SyntheticCalibreLibrary` in ein eigenes
+   `ShelfFixtures`-Target.
+5. **Abschlusslauf**: `make proof` vollständig gegen 5 000 Bücher, Kalt- und
+   Warmstart, Speicher, eine Stunde offen für Lecks, `make release-dry`,
+   CHANGELOG mit allen Zahlen, Version auf 1.0.0 in `project.yml`. **Tag
+   `v1.0.0` erst, wenn Erik es sagt.**
 
-1. **Deutsch.** Jede UI-Zeichenkette in `Localizable.xcstrings`, mit einem Test,
-   der eine fehlende Fassung rot macht – so wie SlateKit es schon hat.
-2. **Barrierefreiheit.** Die zwei bekannten Löcher stehen in `docs/BACKLOG.md`
-   unter „Housekeeping": Seitenleisten-Zeilen haben keine Rolle, die eine
-   Tastatur aktivieren kann, und die Pfeiltasten hängen an der Menüleiste.
-3. **Signierung, Notarisierung, Direkt-Download, Runbook.**
+### Was aus diesem Sprint mitzunehmen ist
 
-### Was dabei aus Sprint 6 mitzunehmen ist
+- **Ein Satz, den SwiftUI nicht übersetzt, sieht aus wie einer, den es
+  übersetzt.** `Text("eins " + "zwei")` ist ein `String` und wird wörtlich
+  gezeichnet; ein interpolierter Schlüssel wird vom Compiler aus den *Typen*
+  gebaut (`%1$lld of %2$lld`) und ist deshalb für keinen Test lesbar. Beides
+  ist der Grund, warum **alles** durch `Loc` geht.
+- **Der erste deutsche Lauf hatte eine englische Seitenleiste.**
+  `SlateSidebarRow` nimmt den Titel als erstes Argument — auf keiner Liste von
+  Aufrufformen. Der stumpfe Test („kein Satz in `App/Shelf` ohne `Loc`") hat
+  sechs weitere Stellen gleich mitgefunden. **Ein Test, der nur prüft, was man
+  ihm zeigt, prüft zu wenig.**
+- **Ein Kernsatz mit einem Wert darin kann nicht übersetzt werden.** „„2,5x" ist
+  keine Zahl" hat keinen Katalogschlüssel. Der Kern sagt jetzt *welche*
+  Ablehnung, das Fenster sagt sie in Worten — `BookFieldRejection`,
+  `ShelfEdit.Rejection`, `SeriesPosition.Place`.
+- **Berichte bleiben Englisch, mit Grund.** `Scripts/proof-run.sh` liest sie
+  mit `grep`, vier Screenshot-Skripte warten auf das Wort „Verified" im
+  AX-Baum. `ByteCount.format` behält deshalb die C-Locale; das Fenster hat
+  `Loc.size`.
+- **Das ⌘?-Blatt öffnet sich nicht auf ein gepostetes „?" mit ⌘.** Es ist als
+  ⌘/ deklariert und als ⌘? gezeichnet. Über den Menüpunkt geht es.
+- **`tree_has "Bewegen"` findet „BEWEGEN" nicht.** Die Gruppen im ⌘?-Blatt
+  werden in Großbuchstaben gezeichnet.
+- **Die Sprache wird nie global umgestellt.** `Scripts/german-shots.sh`
+  schreibt `AppleLanguages` in **Shelfs eigene** Defaults-Domain und nimmt sie
+  in einem `trap` wieder heraus, auch wenn der Lauf scheitert.
 
-- **Ein Netz-Zugriff ist eine Regel plus ein Socket, und nur das Socket gehört
-  in die App.** `MetadataTransport` ist die Naht. Alles darüber – welche URL,
-  wie oft, was ein 503 heißt und was ein 429 heißt, ob schon gefragt wurde, was
-  die zwei JSON-Formen bedeuten, welcher Kandidat das Buch ist – liegt im Kern
-  und ist ohne Netz geprüft. `URLSessionTransport` sind dreißig Zeilen. **Kein
-  Test und kein CI-Lauf öffnet ein Socket**; die Tests lesen gespeicherte echte
-  Antworten.
-- **Ein Dienst, der ausfällt, ist eine Zeile und kein Abbruch.** Fällt einer
-  aus, bleiben die Kandidaten des anderen. Genau das war an dem Tag der
-  Normalfall und nicht der Sonderfall.
-- **Nichts wird angehakt, was etwas ersetzen würde.** Und seit dem Blick auf den
-  Screenshot auch nichts, was aus einem *Werk*-Datensatz stammt und eine
-  Auflage beschreibt (Verlag, Sprache, Jahr). Open Library antwortet auf
-  Werk-Ebene und reicht die Felder irgendeiner Auflage durch: für ein
-  Puffin-Taschenbuch von *Fantastic Mr Fox* kamen `Caedmon Audio Cassette`,
-  `ja` und **1917**.
-- **Ein Bild ansehen findet, was kein Test findet.** Zwei Fehlverhalten dieses
-  Sprints stammen aus genau einem Blick auf je einen Screenshot: das
-  vorangehakte Jahr 1917 und „Tags – would replace" über einer Zeile, die nichts
-  ersetzt.
-- **Ein Blatt (`.sheet`) hat keinen UndoManager.** `@Environment(\.undoManager)`
-  ist darin `nil`, weil ein Blatt eine eigene Präsentation ist. Übernehmen hat
-  `metadata.opf` geschrieben, nichts registriert, und ⌘Z tat nichts – lautlos.
-  `ContentView` reicht den UndoManager des Fensters jetzt hinein.
-  `Scripts/online-apply-proof.sh` hat es gefunden, indem es die Datei von der
-  Platte liest statt der App zu glauben. **Wer ein neues Blatt baut, das etwas
-  ändert, reicht den UndoManager hinein.**
+### Was in `~/Library/Caches/Shelf/` von dieser Sitzung stammt
 
-### Was dabei zu beachten ist
+Angelegt und benannt, wie CLAUDE.md es verlangt — **alles andere dort wurde
+nicht angefasst**:
 
-- **Die Feldregeln liegen im Kern, nicht in der Ansicht.** `BookField`,
-  `IdentifierEdit`, `TagEdit`, `ISBN`, `ShelfEdit` und `AcrossBooks` entscheiden,
-  was ein leeres Feld bedeutet, wie Autoren getrennt werden, ob „2,5" eine Zahl
-  ist. Seit Sprint 6 geht auch jeder Wert aus dem Netz durch dieselben Regeln:
-  eine ISBN mit falscher Prüfziffer wird abgelehnt, egal wer sie angeboten hat.
-- **Ein Regal steht im Buch, seine Form in `library.json`** (ADR 0008), und
-  **eine eigene Spalte genauso** (ADR 0010). Beim Wiederaufbau **zuerst den Baum
-  und die Spalten, dann die Bücher**.
-- **Der Kern schreibt den Index während des Laufs** (`ImportRunner.saveBatch`),
-  nicht erst am Ende.
-- **`Metas.known` in `OPFDocument` ist eine Liste von acht Namen, kein Präfix.**
-  Wer eine Meta zum Leser hinzufügt, trägt sie dort ein.
-- **Was im Index steht, muss aus dem Ordner wieder herleitbar sein** (ADR 0001).
-- **`ImportRunner` kennt nur Bücher, die er selbst angelegt hat** – für ein
-  vorhandenes Buch braucht er `existingEntry`.
-- **`SHELF_TIMING=1`** schaltet die Zeitmessungen im Fenster ein,
-  **`SHELF_ONLINE_HOST=metadata.invalid`** schickt die Metadaten-Abfragen an
-  einen Namen, den es nie geben wird (RFC 2606) – so wird ein Netzfehler
-  fotografiert, ohne an den Systemeinstellungen zu drehen.
-- **SlateKit steht auf `0.3.1`**; der Weg zu einer Änderung steht in `CLAUDE.md`.
-- **Welches Format wer liest, ist eine Tabelle, kein `if`**
-  (`BookFileFormat.readerLayer`).
-
-### Die Sandbox-Frage, unverändert offen
-
-`com.apple.security.files.removable-volumes.read-write` steht in den
-Entitlements. Mit ihr konnte die App bei einem **Disk-Image** Name und freien
-Platz lesen und das Verzeichnis **nicht** auflisten – eine Karte mit fünf
-Büchern zeigte „0 books". Für echte Wechselmedien ist die Entitlement gedacht,
-bewiesen ist es nicht. In diesem Lauf war **kein Wechselmedium angesteckt**:
-`/Volumes/` enthielt nur `Macintosh HD`, `diskutil list` zeigte keine externe
-Platte und `system_profiler SPUSBDataType` überhaupt nichts. Geht es nicht, ist
-die automatische Erkennung Zierde, und jedes Gerät muss über
-`Device ▸ Treat Volume as Device…` von Hand gewählt werden. **Mit einem Kobo
-oder Kindle am Kabel in zwei Minuten geklärt.**
-
-### Fallstricke, die die Sitzungen bezahlt haben
-
-Aus Sprint 6:
-
-- **Ein direkt gestartetes App-Bundle hat für die Accessibility-API keine
-  Fenster.** `"$APP/Contents/MacOS/Shelf"` startet die App, sie zeichnet ihr
-  Fenster, und `ax-dump.swift` antwortet „no windows for pid …". `open -a` geht
-  über LaunchServices und registriert sie richtig. Ein ganzer Screenshot-Lauf.
-- **Die Fixtures wären fast Attrappen geworden.** `shelf-tool synthesise`
-  schreibt nur manchen Büchern eine ISBN, und ein `sed`, das die ISBN *ersetzt*,
-  ersetzt dann nichts. Zehn Bücher gingen mit Titel-Suche statt ISBN-Suche durch
-  den Lauf, und der Screenshot sah trotzdem richtig aus.
-- **`grep -q` hinter einer Pipe macht unter `pipefail` aus einem Treffer den
-  Status 141.** `tree_has` nutzt `grep -c`. Die Skripte sind bash, nicht zsh.
-- **Ein Klick auf das Suchfeld direkt nach einem geschlossenen Blatt landet, bevor
-  das Fenster die Tastatur zurückhat**, und das Getippte hängt sich an die alte
-  Suche an: „Left HandClean Code" findet nichts, und der Fehler beschuldigt das
-  Raster. ⌘F über den Menüpunkt kann nicht danebengehen.
-- **Ein einziger Kandidat mit 100 Punkten öffnet sich ohne Klick** – gewollt,
-  und es hat ein Skript zerlegt, das auf die Kandidatenliste gewartet hat.
-- **Open Library ist mal 1,9 s und mal 24 s schnell** für dieselbe Art Frage.
-  Ohne Wiederholung meldete der erste Beweislauf drei von zehn als Zeitüberschreitung;
-  alle drei antworteten beim zweiten Versuch in unter drei Sekunden.
-
-Aus Sprint 5, weiter gültig:
-
-- **Ein gesperrter Bildschirm** macht jedes fenstergetriebene Skript still
-  kaputt; `caffeinate -di` reicht auf diesem Mac nicht, es ist `-dimsu`.
-- **`screencapture -l <fenster-id>` fotografiert den Backing Store**, der bei
-  einer gescrollten SwiftUI-`ScrollView` nicht neu gezeichnet wird. `-R` mit dem
-  Fensterrechteck fotografiert, was ein Mensch sieht – und damit auch den
-  Tooltip des Dock-Symbols, weshalb `Scripts/cursor-park.swift` den Zeiger
-  vorher wegschiebt.
-- **Die beiden `contentsOfDirectory` widersprechen sich auf FAT**; die Pfad-Form
-  meldet `system` als `System`.
-- **APFS ist case-insensitiv**, also ist `fileExists` keine Antwort auf „heißt da
-  etwas so": `/System` und `/Applications` beantworten die Marker eines
-  PocketBooks.
-- **libarchive stürzt ab, wenn man ein Format zweimal registriert.**
-- **macOS stellt die Fenster wieder her, die eine *abgeschossene* App hatte.**
-  Ein ordentliches `quit` setzt es zurück.
-- **`UInt8(n)` trapt über 255**, und **`hdiutil` legt unter etwa 40 MB kein
-  FAT32 an**.
-- **Eine Fixture, die mit sich selbst kollidiert, misst die Duplikatprüfung.**
-  Jede generierte Datei trägt ihren Index jetzt in den Bytes.
-- **macOS schreibt Akzente auf FAT32 zerlegt**; dass die Zuordnung trotzdem
-  trägt, liegt an Swifts kanonischem String-Vergleich.
-- **Ein Check gegen den ganzen Accessibility-Baum beantwortet „steht das Wort
-  irgendwo im Fenster"** – nicht „hat *dieses Buch* mehrere Dateien".
+- `measure-library-7/` – die Zwölf-Bücher-Bibliothek der deutschen Screenshots
+- `linux-check-7/` – ein `git archive` von HEAD, in dem der Swift-Container
+  gebaut hat (615 MB, kann weg)
+- `release/` – das Ergebnis von `make release-dry`
 
 ## Was Erik ansehen muss: die CI läuft seit Sprint 4 überhaupt nicht
 
-Jeder Lauf der letzten zwölf Commits endet nach sieben Sekunden mit
+Unverändert am 18.09.2026, **dreimal an diesem Tag nachgeprüft** (Läufe
+35381934435, 35386308364, 35386741392): jeder Lauf endet nach sieben Sekunden
+mit
 
 > The job was not started because recent account payments have failed or your
 > spending limit needs to be increased.

@@ -2,7 +2,8 @@
 
 An eBook manager for the Mac that looks like [Selector](https://github.com/Erikemmer/Selector)
 and behaves like a library: covers, metadata, shelves, a Calibre import, and
-your readers. macOS 14+, Swift 6.
+your readers. **English and German.** macOS 14 or later, Apple silicon or
+Intel; Swift 6.
 
 **What it is not**, on purpose: not a reader, not a converter, not a content
 server, and it does not touch DRM in any way. In v1.0 it does less than Calibre
@@ -19,9 +20,13 @@ and does it with the quiet and the speed Selector has for photographs.
 * **A Calibre library is only ever read**, byte for byte unchanged.
 * **DRM is detected and then left alone.** Never removed, never worked around.
 * **Nothing from the net is taken over without being ticked.** ⌘E asks Open
-  Library and Google Books, shows every field old beside new, and ticks only
-  what fills a gap. A service that does not answer is one line in the status
-  bar, never a dialogue.
+  Library and Google Books, shows every field old beside new **with the service
+  that said it on each line**, and ticks only what fills a gap. Where the two
+  disagree there are two lines and a box each, and neither is ticked. A service
+  that does not answer is one line in the status bar, never a dialogue.
+* **Only what leaves this Mac is the ISBN or the title being looked up.** No
+  identifier of you, your library or your machine; no telemetry; and the only
+  network access in the whole build is that one explicit ⌘E.
 
 ## Getting it running
 
@@ -50,6 +55,11 @@ make synthetic-clean   # delete the test material, and say how much came back
 make online-proof  # ask both metadata services about ten ISBNs and refresh the
                    # test fixtures. The only thing in the build that uses the
                    # network — no test and no CI job does
+make german-shots  # photograph the window in German (its own defaults domain,
+                   # never the Mac's language)
+make release-dry   # archive, sign ad hoc, verify, zip — the release path as
+                   # far as the step that needs Apple
+make release       # the real one: Developer ID, notarytool, stapler, spctl
 ```
 
 `make help` lists them all. Before every commit: **`make test && make app &&
@@ -67,7 +77,23 @@ make lint && make smoke`**, all four green.
 | `docs/DATA-MODEL.md` | the folder layout, the OPF, the index schema. |
 | `docs/adr/` | the decisions, and what they cost. |
 | `docs/BACKLOG.md` | the sprints, and what is done. |
+| `docs/RELEASE.md` | how a build here becomes a file somebody else can open. |
 | `CHANGELOG.md` | what changed, with the measured numbers. |
+
+## Languages
+
+English and German. Every word the window draws goes through one door and lives
+in `App/Shelf/Resources/Localizable.xcstrings` — 429 entries, both languages,
+with real plural forms rather than a trailing "s". Numbers, dates and file sizes
+are the reader's: *18.09.2026* and *134,5 kB* on a German Mac.
+
+Five tests keep it honest, because none of the three ways of losing a
+translation is visible by looking at the app: a missing entry, a missing German
+and a sentence that never reached the catalogue all draw perfectly good English
+([ADR 0016](docs/adr/0016-the-core-answers-in-english-the-window-translates.md)).
+
+A library's own words are never translated. Your tags, authors, series and
+shelves are yours.
 
 The look lives in [SlateKit](https://github.com/Erikemmer/SlateKit), a package
 shared with Selector and used through a tag — see
