@@ -44,6 +44,13 @@ let package = Package(
             name: "ShelfCoreTests",
             dependencies: ["ShelfCore"],
             path: "Tests/ShelfCoreTests",
+            // Stored answers from Open Library and Google Books, fetched once
+            // by `Scripts/online-proof.sh` and trimmed. The readers are tested
+            // against these and never against the live services: no network in
+            // the tests, none in CI (CONCEPT §14). Their provenance, including
+            // the one file that is *not* a live answer, is in
+            // `Tests/ShelfCoreTests/Fixtures/online/README.md`.
+            resources: [.copy("Fixtures")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
     ]

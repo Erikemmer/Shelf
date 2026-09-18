@@ -1,0 +1,49 @@
+{
+  "docs": [
+    {
+      "author_name": [
+        "Robert C. Martin"
+      ],
+      "cover_i": 8065615,
+      "first_publish_year": 2008,
+      "isbn": [
+        "9780132350884",
+        "9780136083221",
+        "9782326002890",
+        "9783826655487",
+        "3826655486",
+        "0136083226"
+      ],
+      "key": "/works/OL17618370W",
+      "language": [
+        "eng",
+        "fre",
+        "hun",
+        "spa"
+      ],
+      "number_of_pages_median": 444,
+      "publisher": [
+        "Prentice Hall",
+        "Pearson",
+        "PEARSON",
+        "Kiskapu",
+        "mitp",
+        "Pearson Education, Limited",
+        "Helion",
+        "ANAYA MULTIMEDIA",
+        "Apogeo",
+        "Pearson France",
+        "Pearson Education Canada"
+      ],
+      "subtitle": "A Handbook of Agile Software Craftsmanship",
+      "title": "Clean Code",
+      "subject": [
+        "Agile software development",
+        "Reliability",
+        "Computer software",
+        "Computer software, development",
+        "Coding theory"
+      ]
+    }
+  ]
+}

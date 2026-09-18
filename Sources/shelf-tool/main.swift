@@ -50,6 +50,11 @@ let usage = """
                                     (yes/no) – writes metadata.opf, never the book
       show <library> <title>        print what the index holds about one book
       digest <file>                 SHA-256 of one file, to compare with shasum
+      online-read <file>…           read stored answers from Open Library or
+                                    Google Books the way the app does, and print
+                                    the candidates with their match scores.
+                                    Reads files, never the network — the network
+                                    belongs to Scripts/online-proof.sh
 
     Devices (Sprint 5). Everything here works on a mounted volume, which in the
     proof run is a disk image made by `Scripts/device-images.sh` – so the whole
@@ -119,6 +124,7 @@ case "shelve": try await Commands.shelve(Array(arguments.dropFirst()))
 case "edit": try await Commands.edit(Array(arguments.dropFirst()))
 case "show": try await Commands.show(Array(arguments.dropFirst()))
 case "digest": try Commands.digest(Array(arguments.dropFirst()))
+case "online-read": try Commands.onlineRead(Array(arguments.dropFirst()))
 case "devices": Commands.devices()
 case "device-contents": try await Commands.deviceContents(Array(arguments.dropFirst()))
 case "send": try await Commands.send(Array(arguments.dropFirst()))
@@ -522,6 +528,66 @@ enum Commands {
                         + " [\(entry.formatLine)]")
             }
             if ids.isEmpty { print("  (none)") }
+        }
+    }
+
+    /// What ShelfCore makes of the answers the two services gave.
+    ///
+    /// The proof run (`Scripts/online-proof.sh`) fetches them and reports what
+    /// `jq` sees. This reports what *Shelf* sees, which is the thing that
+    /// matters and the thing a reviewer cannot otherwise check without the
+    /// window. Nothing here touches the network: the service is told by the
+    /// file's name, and the question by its name too.
+    static func onlineRead(_ arguments: [String]) throws {
+        guard !arguments.isEmpty else {
+            print("usage: shelf-tool online-read <stored answer>…")
+            exit(2)
+        }
+        for path in arguments {
+            let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+            let name = url.lastPathComponent
+            let data = try Data(contentsOf: url)
+            let query = onlineQuery(from: name)
+
+            print("\(name) — \(query?.description ?? "no question in the file name")")
+            do {
+                let found =
+                    name.hasPrefix("googlebooks")
+                    ? try GoogleBooksReader.candidates(from: data)
+                    : try OpenLibraryReader.candidates(from: data, answering: query ?? .isbn(""))
+                if found.isEmpty { print("  (no candidate)") }
+                // A file whose name does not say what was asked — the stored
+                // 429 and the reconstructed volume — is listed without a score
+                // rather than with a meaningless one.
+                let ranked =
+                    query.map { MetadataScore.ranked(found, for: $0) }
+                    ?? found.map { (candidate: $0, score: -1) }
+                for (candidate, score) in ranked {
+                    print("  \(score < 0 ? "  —" : String(format: "%3d", score))  \(candidate.title)")
+                    print("        \(candidate.subtitle)")
+                    print(
+                        "        \(candidate.source.name) · \(candidate.subjects.count) subjects · "
+                            + "description: \(candidate.summary == nil ? "no" : "yes") · "
+                            + "cover: \(candidate.coverURL == nil ? "no" : "yes")")
+                }
+            } catch let failure as MetadataReadFailure {
+                print("  \(failure.message)")
+            } catch {
+                print("  unreadable: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// The question a stored answer was the answer to, taken from its file
+    /// name. `openlibrary-isbn-9780441013593.json` was an ISBN question.
+    private static func onlineQuery(from name: String) -> MetadataQuery? {
+        let stem = name.replacingOccurrences(of: ".json", with: "")
+        let parts = stem.split(separator: "-").map(String.init)
+        guard parts.count >= 3 else { return nil }
+        switch parts[1] {
+        case "isbn": return .isbn(parts[2])
+        case "title": return .titleAuthor(title: parts.dropFirst(2).joined(separator: " "), author: nil)
+        default: return nil
         }
     }
 
