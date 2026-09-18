@@ -37,6 +37,35 @@ enum Theme {
     static let drmBadge = Slate.textSecondary
 }
 
+/// The badge that says a file is protected.
+///
+/// Not red, and not an alert symbol: a protected file is not an error and not a
+/// problem Shelf is asking the user to fix. It is a fact about the file, and
+/// the reason its metadata may be thin. Shelf recognises it, says so, and does
+/// nothing else — never removes it, never works around it (CONCEPT §12,
+/// ADR 0012).
+struct DRMBadge: View {
+    let drm: DRMKind
+
+    init(_ drm: DRMKind) { self.drm = drm }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "lock.fill").font(.system(size: 8))
+            Text(drm.label).font(.caption2)
+        }
+        .foregroundStyle(Theme.drmBadge)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 1)
+        .background(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Slate.textSecondary.opacity(0.14))
+        )
+        .accessibilityLabel("\(drm.label), not touched")
+        .help("\(drm.label). Shelf shows it and leaves the file exactly as it is.")
+    }
+}
+
 /// The sidebar's sections, in the order CONCEPT §3.2 gives them.
 enum SidebarSection: String, CaseIterable, Identifiable {
     case shelves = "Shelves"

@@ -97,13 +97,12 @@ enum PDFFileReader {
         book.titleSort = TitleSort.of(book.title)
         book.description = text(subjectKey)
         book.published = attributes[creationKey] as? Date
-        if let keywords = text(keywordsKey) {
-            book.tags = Set(
-                keywords.split(whereSeparator: { $0 == "," || $0 == ";" })
-                    .map { $0.trimmingCharacters(in: .whitespaces) }
-                    .filter { !$0.isEmpty }
-            ).sorted()
-        }
+        // Keywords come back as an **array** from some PDFs and as one comma-
+        // separated string from others — PDFKit splits the field itself when it
+        // can. Reading only the string form silently dropped every tag of every
+        // PDF that had more than one, which is the quiet kind of wrong: the
+        // import succeeds and the tags are simply not there.
+        book.tags = Self.keywords(in: attributes[keywordsKey])
 
         var cover: Data?
         var coverName: String?
@@ -121,6 +120,22 @@ enum PDFFileReader {
         return BookFileReader.Result(
             book: book, cover: cover, coverName: coverName, drm: drm, warnings: warnings,
             fromTheFile: fromTheFile)
+    }
+
+    /// The keyword field, whichever of its two shapes PDFKit hands over.
+    static func keywords(in value: Any?) -> [String] {
+        let pieces: [String]
+        switch value {
+        case let list as [Any]: pieces = list.compactMap { $0 as? String }
+        case let text as String: pieces = [text]
+        default: return []
+        }
+        return Set(
+            pieces
+                .flatMap { $0.split(whereSeparator: { $0 == "," || $0 == ";" }) }
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+        ).sorted()
     }
 
     /// Whether a PDF's Title is really just its file name.

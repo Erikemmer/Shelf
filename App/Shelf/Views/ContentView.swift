@@ -84,6 +84,12 @@ struct ContentView: View {
             // It also shows the inspector if it is hidden, because asking for a
             // field in a hidden panel can only mean "show me the panel".
             model.focusTagField()
+        case " ":
+            // Quick Look, and through the same monitor as the rating keys for
+            // the same reason (ADR 0006): a menu shortcut would swallow the
+            // space bar before the search field ever saw it, and nobody could
+            // type a title with a space in it.
+            model.quickLookSelection()
         default:
             return false
         }

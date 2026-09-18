@@ -17,6 +17,11 @@ let usage = """
     shelf-tool – proof runs for ShelfCore
 
       synthesise <folder> [count]   write <count> synthetic EPUBs with real covers
+      synthesise-mixed <folder> [count per format]
+                                    write <count> each of EPUB, MOBI, AZW3, PDF
+                                    and CBZ, plus DRM-marked and deliberately
+                                    broken files. No CBR: nothing here can write
+                                    a RAR
       import <source> <library>     import a folder into a library, verified
       calibre-synthesise <folder> [count]
                                     write a synthetic Calibre library – the
@@ -73,6 +78,7 @@ let arguments = Array(CommandLine.arguments.dropFirst())
 
 switch arguments.first {
 case "synthesise": try Commands.synthesise(Array(arguments.dropFirst()))
+case "synthesise-mixed": try Commands.synthesiseMixed(Array(arguments.dropFirst()))
 case "import": try await Commands.importFolder(Array(arguments.dropFirst()))
 case "calibre-synthesise": try Commands.calibreSynthesise(Array(arguments.dropFirst()))
 case "calibre-dry": try Commands.calibreDry(Array(arguments.dropFirst()))
@@ -139,6 +145,142 @@ enum Commands {
         print(
             "synthesised \(count) EPUBs · \(ByteCount.format(bytes)) · "
                 + "\(ImportReport.duration(Date().timeIntervalSince(started))) · \(root.path)")
+    }
+
+    // MARK: synthesise-mixed
+
+    /// Writes a folder holding every format Shelf reads, for the Sprint 4
+    /// proof run.
+    ///
+    /// `count` of each of EPUB, MOBI, AZW3, PDF and CBZ, and on top of those, of
+    /// each format, three files announcing DRM and three that are deliberately
+    /// broken — truncated, or the right name over the wrong bytes. The broken
+    /// ones are the point as much as the good ones: CONCEPT §13 says a bad file
+    /// must never stop an import, and a run that only ever sees good files
+    /// cannot show that.
+    ///
+    /// **CBR is not written**, and that is not an oversight. A RAR is a
+    /// proprietary compressed format and this Mac has no tool that can make
+    /// one; writing a fake would test the fallback rather than the reader. The
+    /// command says so on its way past, so nobody reads a proof run and assumes
+    /// CBR was covered.
+    static func synthesiseMixed(_ arguments: [String]) throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool synthesise-mixed <folder> [count per format]")
+            exit(2)
+        }
+        let root = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        let count = arguments.count > 1 ? (Int(arguments[1]) ?? 500) : 500
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        // The same fixed seed the plain generator uses, so two runs produce the
+        // same library and two measurements can be compared.
+        var random = SeededGenerator(seed: 20_260_918)
+        let started = Date()
+        var written: [String: Int] = [:]
+        var bytes: Int64 = 0
+
+        func write(_ name: String, _ data: Data, as kind: String) throws {
+            try data.write(to: root.appendingPathComponent(name))
+            written[kind, default: 0] += 1
+            bytes += Int64(data.count)
+        }
+
+        func stem(_ book: Book) -> String {
+            let raw =
+                "\(BookFolderName.sanitised(book.title, fallback: "Untitled")) - "
+                + "\(BookFolderName.sanitised(book.primaryAuthor, fallback: Book.unknownAuthor))"
+            return BookFolderName.truncated(raw, toBytes: 200)
+        }
+
+        for index in 0..<count {
+            let book = SyntheticBooks.make(index: index, using: &random)
+            let cover = SyntheticBooks.cover(index: index, using: &random)
+            let name = stem(book)
+
+            try write("\(name).epub", SyntheticEPUB(book: book, cover: cover).data(), as: "epub")
+            try write("\(name) M.mobi", SyntheticMobi(book: book, cover: cover).data(), as: "mobi")
+            try write("\(name) A.azw3", SyntheticMobi(book: book, cover: cover, isAZW3: true).data(), as: "azw3")
+            try write("\(name).pdf", SyntheticPDF(book: book).data(), as: "pdf")
+            // A comic is named the way a comic is named — the file name is the
+            // only metadata most of them have.
+            //
+            // The issue number is the index and **not** `index % 300`, which is
+            // what it was first: that made two different books into the same
+            // `Series 032`, the importer rightly called 308 of them duplicates
+            // of each other, and the run measured the duplicate check instead of
+            // the comic reader. A fixture that collides with itself measures the
+            // wrong thing.
+            let comicName =
+                "\(BookFolderName.sanitised(book.title, fallback: "Comic")) \(String(format: "%03d", index)) (20\(10 + index % 15))"
+            try write(
+                "\(BookFolderName.truncated(comicName, toBytes: 200)).cbz",
+                SyntheticComic(
+                    seed: UInt8(index % 200), pageWidth: 8 + index % 37, pageHeight: 12 + index % 41
+                ).data(), as: "cbz")
+
+            if (index + 1) % 100 == 0 {
+                print("  \(index + 1) / \(count) of each · \(ByteCount.format(bytes))")
+            }
+        }
+
+        // ── Three protected files per format that can carry the announcement ──
+        //
+        // Announced, not encrypted. Shelf's whole claim about DRM is that it
+        // reads the flag and stops, so a fixture that were really encrypted
+        // would test nothing further — and would be a thing this repository
+        // should not hold (ADR 0012).
+        for index in 0..<3 {
+            let book = Book(title: "Protected Book \(index)", authors: ["A Publisher"])
+            let name = stem(book)
+            try write("\(name).mobi", SyntheticMobi(book: book, withKindleDRM: true).data(), as: "mobi (DRM)")
+            try write(
+                "\(name).azw3", SyntheticMobi(book: book, isAZW3: true, withKindleDRM: true).data(),
+                as: "azw3 (DRM)")
+            try write(
+                "\(name).epub", SyntheticEPUB.withAdobeDRM(book: book).data(), as: "epub (DRM)")
+        }
+
+        // ── Three broken files per format ────────────────────────────────────
+        //
+        // Two kinds, because they fail differently: a truncated file stops
+        // part-way through a structure the reader is walking, and the right
+        // name over the wrong bytes fails at the first check. Both have to end
+        // as a book named after its file, with a line in the report.
+        for index in 0..<3 {
+            let book = Book(title: "Broken Book \(index)", authors: ["Nobody"])
+            let name = stem(book)
+            let good = SyntheticEPUB(book: book).data()
+
+            // Each one carries its own index in its bytes. Without that the
+            // three "wrong bytes" files were byte-for-byte identical, the
+            // importer skipped two of them as duplicates of the first — which
+            // is correct and which meant only one of the three ever reached the
+            // reader.
+            let marker = Data("broken fixture \(index)\n".utf8)
+
+            try write("\(name) truncated.epub", good.prefix(good.count / 3) + marker, as: "broken")
+            try write("\(name) wrong bytes.mobi", Data("this is not a MOBI at all".utf8) + marker, as: "broken")
+            try write(
+                "\(name) truncated.azw3", SyntheticMobi(book: book, isAZW3: true).data().prefix(50) + marker,
+                as: "broken")
+            try write("\(name) nearly empty.pdf", marker, as: "broken")
+            try write("\(name) wrong bytes.cbz", Data("not a zip".utf8) + marker, as: "broken")
+            // A KFX, which nothing can read and which must still be carried.
+            try write(
+                "\(name).kfx", Data("CONT".utf8) + marker + Data([UInt8](repeating: 0, count: 64)), as: "kfx")
+        }
+
+        print("")
+        for kind in written.keys.sorted() {
+            print("  \(kind): \(written[kind] ?? 0)")
+        }
+        print(
+            "synthesised \(written.values.reduce(0, +)) files · \(ByteCount.format(bytes)) · "
+                + "\(ImportReport.duration(Date().timeIntervalSince(started))) · \(root.path)")
+        print("")
+        print("NOT written: CBR. A RAR is a proprietary compressed format and this Mac has no")
+        print("tool that can make one, so no genuine .cbr was generated and none was measured.")
     }
 
     // MARK: import

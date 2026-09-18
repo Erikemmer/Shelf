@@ -13,18 +13,33 @@ public struct SyntheticComic: Sendable {
     public var comicInfo: String?
     /// The seed for each page's colours, so two runs make the same file.
     public var seed: UInt8
+    /// The page size. Not decoration: it is the second thing that makes one
+    /// generated comic's bytes differ from another's.
+    ///
+    /// The proof run's first attempt seeded on `index % 200` and nothing else,
+    /// so comics 0, 200 and 400 came out **byte for byte identical**. The
+    /// importer skipped 300 of 500 as duplicates of each other — correctly, by
+    /// SHA-256 — and the run measured the duplicate check instead of the comic
+    /// reader. A fixture that collides with itself measures the wrong thing.
+    public var pageWidth: Int
+    public var pageHeight: Int
 
-    public init(pageNames: [String] = ["01.png", "02.png", "03.png"], comicInfo: String? = nil, seed: UInt8 = 3) {
+    public init(
+        pageNames: [String] = ["01.png", "02.png", "03.png"], comicInfo: String? = nil, seed: UInt8 = 3,
+        pageWidth: Int = 8, pageHeight: Int = 12
+    ) {
         self.pageNames = pageNames
         self.comicInfo = comicInfo
         self.seed = seed
+        self.pageWidth = pageWidth
+        self.pageHeight = pageHeight
     }
 
     /// The page images, by name, so a test can check *which* page became the
     /// cover rather than only that there is one.
     public func pages() -> [(name: String, data: Data)] {
         pageNames.enumerated().map { index, name in
-            (name, MinimalPNG.cover(width: 8, height: 12, seed: seed &+ UInt8(index % 200)))
+            (name, MinimalPNG.cover(width: pageWidth, height: pageHeight, seed: seed &+ UInt8(index % 200)))
         }
     }
 

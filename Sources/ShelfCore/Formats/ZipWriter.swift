@@ -166,6 +166,36 @@ public struct SyntheticEPUB: Sendable {
         return ext == "jpg" ? "image/jpeg" : "image/\(ext)"
     }
 
+    /// Writes `META-INF/encryption.xml`, which is how an EPUB **announces**
+    /// Adobe DRM.
+    ///
+    /// Announced and not encrypted: the text stays readable. Shelf's whole
+    /// claim about DRM is that it sees this file, badges the book and stops, so
+    /// a fixture that were really encrypted would test nothing further — and a
+    /// repository holding real encrypted material is a thing this project does
+    /// not want (CONCEPT §12, ADR 0012).
+    public var announcesAdobeDRM = false
+
+    /// An EPUB that says it is protected. The bytes inside are ordinary.
+    public static func withAdobeDRM(book: Book, cover: Data? = nil) -> SyntheticEPUB {
+        var epub = SyntheticEPUB(book: book, cover: cover)
+        epub.announcesAdobeDRM = true
+        return epub
+    }
+
+    /// What a real ADEPT-protected EPUB carries at `META-INF/encryption.xml`:
+    /// one `EncryptedData` element per protected file. Only its *presence* is
+    /// read (`EPUBMetadata.encryptionPath`).
+    static let encryption = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+          <EncryptedData xmlns="http://www.w3.org/2001/04/xmlenc#">
+            <EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes128-cbc"/>
+            <CipherData><CipherReference URI="OEBPS/text.xhtml"/></CipherData>
+          </EncryptedData>
+        </encryption>
+        """
+
     public func data() -> Data {
         var items: [ZipWriter.Item] = [
             // First entry, stored, no extra field – what the standard demands.
@@ -174,6 +204,9 @@ public struct SyntheticEPUB: Sendable {
             ZipWriter.Item(path: "OEBPS/content.opf", text: opf()),
             ZipWriter.Item(path: "OEBPS/text.xhtml", text: page()),
         ]
+        if announcesAdobeDRM {
+            items.append(ZipWriter.Item(path: EPUBMetadata.encryptionPath, text: Self.encryption))
+        }
         if let cover {
             items.append(ZipWriter.Item(path: "OEBPS/\(coverName)", data: cover))
         }

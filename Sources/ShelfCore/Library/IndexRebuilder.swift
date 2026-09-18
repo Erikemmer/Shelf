@@ -177,7 +177,13 @@ public struct IndexRebuilder: Sendable {
             formats.append(
                 BookFormat(
                     bookID: book.id, format: format, fileName: name, byteSize: byteSize,
-                    sha256: digest, modifiedAt: modified))
+                    sha256: digest, modifiedAt: modified,
+                    // Asked of the file, every time. The proof run found this
+                    // missing: nine protected files kept their badge through an
+                    // import and lost it on the next rebuild, silently. The
+                    // index is a cache (ADR 0001), so everything in it has to
+                    // be re-derivable from the folder — and this was not.
+                    drm: DRMProbe.drm(of: url, format: format)))
         }
         guard !formats.isEmpty else { return nil }
 

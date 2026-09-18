@@ -584,6 +584,53 @@ final class LibraryModel {
         Task { await importModel.examine(panel.urls) }
     }
 
+    /// Adds another file to the book that is selected.
+    ///
+    /// The same operation as dragging a second file onto the window, and it
+    /// goes through the same `ImportPlanner`: the planner recognises the book
+    /// by its ISBN or its title and author and turns the file into an
+    /// `.addFormat` into the folder that book already has (ADR 0002, decision
+    /// 8). Nothing here writes over a file that is there — a file of the same
+    /// name in the folder is refused by the runner, not overwritten.
+    ///
+    /// A *second copy of a format the book already has* is skipped as a
+    /// duplicate, and the sheet says so before anything is copied. That is the
+    /// planner's judgement and not this method's, which is the point of not
+    /// having a second path for it.
+    func presentAddFormatPanel() {
+        guard let importModel, selectedEntry != nil else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = true
+        panel.prompt = "Add"
+        panel.message =
+            "Choose another file for this book. It is copied in beside the ones that are there; "
+            + "nothing is written over."
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+        isImportSheetPresented = true
+        Task { await importModel.examine(panel.urls) }
+    }
+
+    /// Shows one of a book's files in the Finder – the file, not the folder.
+    func revealInFinder(_ format: BookFormat, of entry: LibraryEntry) {
+        guard let library else { return }
+        let url = library.root
+            .appendingPathComponent(entry.folder, isDirectory: true)
+            .appendingPathComponent(format.fileName)
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    /// Hands one particular file to whatever reads it. Shelf is not a reader
+    /// (CONCEPT §1); the file is opened and never modified.
+    func open(_ format: BookFormat, of entry: LibraryEntry) {
+        guard let library else { return }
+        let url = library.root
+            .appendingPathComponent(entry.folder, isDirectory: true)
+            .appendingPathComponent(format.fileName)
+        NSWorkspace.shared.open(url)
+    }
+
     /// Choose a Calibre library, count it, and show the counting protocol.
     ///
     /// The folder with `metadata.db` in it, which is what Calibre calls the
@@ -1162,6 +1209,17 @@ final class LibraryModel {
             .appendingPathComponent(entry.folder, isDirectory: true)
             .appendingPathComponent(format.fileName)
         NSWorkspace.shared.open(url)
+    }
+
+    /// Quick Look over the selected book (␣).
+    ///
+    /// The *first* of a multiple selection: a space bar over twenty books is a
+    /// question about one of them. What it shows is `QuickLookPreview`'s
+    /// decision — the file itself for a PDF or a comic, the cover already on
+    /// disk for an EPUB or a MOBI, which macOS cannot preview at all.
+    func quickLookSelection() {
+        guard let library, let entry = selectedEntry else { return }
+        QuickLookPreview.shared.toggle(entry, in: library)
     }
 
     // MARK: The cover cache

@@ -541,21 +541,72 @@ struct InspectorView: View {
         }
     }
 
+    /// The book's files: one row each, with its size, what protects it, and a
+    /// way to the file itself.
+    ///
+    /// Per *file* and not per book, which is the Sprint 4 change: a book can
+    /// hold an EPUB and an AZW3 and only one of them be protected, and a single
+    /// badge on the book would have said nothing about which. `Add Format…`
+    /// puts another file beside the ones already there — the same operation a
+    /// drag of a second file performs, through the same planner, so the two
+    /// cannot disagree.
     private func formats(for entry: LibraryEntry) -> some View {
         SlateInspectorSection("Formats") {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 ForEach(entry.formats.sorted { $0.format < $1.format }, id: \.id) { format in
-                    SlateValueRow(
-                        name: format.format.label,
-                        value: ByteCount.format(format.byteSize))
+                    formatRow(format, in: entry)
                 }
-                // Recognised, named, and otherwise left entirely alone
-                // (CONCEPT §12).
-                if let drm = entry.drm {
-                    SlateValueRow(name: drm.label, value: "not touched")
-                }
+
+                SlateSecondaryButton("Add Format…") { model.presentAddFormatPanel() }
+                    .help("Adds another file to this book – it is never written over one that is there")
+                    .padding(.top, 2)
             }
         }
+    }
+
+    @ViewBuilder
+    private func formatRow(_ format: BookFormat, in entry: LibraryEntry) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 6) {
+                Text(format.format.label)
+                    .font(.callout)
+                    .foregroundStyle(Slate.textPrimary)
+                // Recognised, named, and otherwise left entirely alone
+                // (CONCEPT §12, ADR 0012). On the *file*, because that is what
+                // carries the protection.
+                if let drm = format.drm {
+                    DRMBadge(drm)
+                }
+                Spacer(minLength: 4)
+                Text(ByteCount.format(format.byteSize))
+                    .font(.caption)
+                    .foregroundStyle(Slate.textSecondary)
+                    .monospacedDigit()
+            }
+
+            Text(format.fileName)
+                .font(.caption2)
+                .foregroundStyle(Slate.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            if let note = format.format.unreadableNote {
+                Text(note)
+                    .font(.caption2)
+                    .foregroundStyle(Slate.textSecondary)
+            }
+            if let drm = format.drm {
+                Text("\(drm.label). Shelf shows it and does not touch it.")
+                    .font(.caption2)
+                    .foregroundStyle(Slate.textSecondary)
+            }
+        }
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button("Show in Finder") { model.revealInFinder(format, of: entry) }
+            Button("Open in Default App") { model.open(format, of: entry) }
+        }
+        .help("\(format.fileName) · right-click to show it in the Finder")
     }
 
     private func actions(for entry: LibraryEntry) -> some View {
