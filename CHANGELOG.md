@@ -3,6 +3,152 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 5 – devices · 18 September 2026
+
+Measured on Erik's Mac (M-series, macOS 15.6) against
+`~/Library/Caches/Shelf/measure-library-5/` and **four e-readers made out of
+`hdiutil` disk images** — no real device was plugged in, and what that leaves
+unproven is listed in `docs/BACKLOG.md` under "To check on real hardware". 531
+core tests, up from 478.
+
+### Added — recognising a reader
+
+A volume is a device when **all** of a profile's markers are there, or when its
+name is one the profile claims. The profiles are **data, not code**: four JSON
+files in `ShelfCore/Devices/Profiles/`, read at runtime, so a new model is a
+file rather than a release
+([ADR 0013](docs/adr/0013-device-profiles-are-data-not-code.md)). A profile that
+will not decode is left out and named; it costs its own device and nothing else.
+
+Two things about markers were found by running the thing rather than by
+thinking about it, and both would have shipped.
+
+**The boot disk was a PocketBook.** APFS is case-insensitive, so `/System` and
+`/Applications` answer a profile asking for `system` and `applications`, and the
+first run of `shelf-tool devices` printed `Macintosh HD → PocketBook (pocketbook)`.
+A marker is a *name*; a file system that answers to the wrong case is not
+evidence that the name is there. Markers are now checked against the directory's
+own listing, and a volume that cannot be unplugged is never a device.
+
+**And that fix broke every Kindle.** The two forms of `contentsOfDirectory`
+disagree on FAT — which is what every reader that takes a USB cable is formatted
+with. On a FAT32 card holding a folder called `system`:
+
+| API | answer |
+|---|---|
+| `contentsOfDirectory(atPath:)` | `System` |
+| `contentsOfDirectory(at:)` | `system` |
+| `readdir(3)`, `ls`, `find` | `system` |
+
+The path form is the odd one out. Built on it, the case-exact check made every
+Kindle and every PocketBook stop being recognised the moment the proof run put
+them on a real FAT32 volume — and the unit test did not catch it, because a
+temporary folder is on APFS. `Scripts/proof-run.sh` section 11 is what catches
+it, and `DeviceTests` now says so where somebody tidying the function will read
+it.
+
+### Added — sending books
+
+`TransferPlanner` chooses the format by the **device's** preference order, not
+Shelf's: a Kindle gets AZW3 before MOBI before PDF and never an EPUB, where
+Shelf's own ranking puts EPUB first because everything reads it. A book the
+device can open none of is `cannot be sent: no compatible format` — an answer,
+not a step towards one, because Shelf converts nothing in v1.0.
+
+`TransferRunner` is `ImportRunner`'s pattern on a card
+([ADR 0002](docs/adr/0002-copy-verify-then-trust.md)): write to a `.part`, hash
+the source while reading it, **read the file back off the device** and hash
+that, and only then rename it into place and write the manifest. A file already
+on the card under that name is never overwritten — it is something Shelf did not
+put there. A cancelled run takes away its own leftovers and nothing else.
+
+The manifest on the card (`<volume>/.shelf/device-manifest.json`) is what makes
+a second run a resume rather than a repeat, and its digests are the ones read
+back *off the device*, so it is a statement about the card and not about the
+library.
+
+**Names on a device** are `{author} - {title}.{ext}` — the other way round from
+the library's own, because a reader sorts its file list by name. Cleaned for
+FAT: forbidden characters, no trailing dot or space, Windows's reserved names,
+and **both** length budgets, because FAT counts UTF-16 code units and APFS counts
+bytes and neither can be derived from the other. A file of 4 GiB or more is
+refused on FAT32 before the copy starts.
+
+### Added — what is on the device, and a Kobo's own state
+
+The files on a card are matched to the library's books by the manifest first and
+by name second, and the row says which — "sent by Shelf" and "matched by name"
+are different claims. **No hashing**: hashing a 32 GB card to draw a badge would
+make plugging a reader in a two-minute operation.
+
+A Kobo also says how far its owner has read, what its shelves are called and
+what is on them. It is read **through a copy with its WAL**, exactly as Calibre's
+database is ([ADR 0009](docs/adr/0009-calibre-is-read-through-a-copy-of-metadata-db.md)),
+and **never written back**. A test hashes the device's database before and after
+to say so, and so does the proof run.
+
+### Added — deleting, behind a list of names
+
+Deleting on a device is the one destructive thing Shelf does, and it has its own
+ADR ([0014](docs/adr/0014-deleting-on-a-device-needs-a-named-confirmation.md)).
+It is reachable from one place only — the sheet where the files are chosen — and
+then only through a confirmation that names **every** file, not a count and not
+the first ten. The second line says what will *not* happen, because the fear
+this dialog answers is "does this take them out of my library too". Never as a
+side effect of a sync; there is no sync.
+
+### Measured
+
+Release build, against disk images on an internal SSD — so the *times* are
+faster than a real USB card would be and the *counts* are not.
+
+| | |
+|---|---|
+| Four layouts recognised, boot disk not | ✓ |
+| 250 books to a Kobo | 25.9 MB, **2 s**, every file read back and hashed |
+| A second run over the same selection | nothing sent — the manifest is the resume |
+| 250 books to a Kindle | 212 sent (AZW3 206, MOBI 3, PDF 3), **38 named as "cannot be sent"**, no EPUB written |
+| Longest name written to FAT32 | 255 bytes and 255 UTF-16 units, no forbidden character |
+| Transfer killed at 40 of 120 | resumed by copying the missing 80; a planted half-written file swept up; 0 left behind |
+| A card with 4.4 MB free, 26.7 MB plan | refused before the first byte, 0 files written |
+| A Kobo read back | 250 reading positions, shelves and read status; database digest **identical** before and after |
+| Files on the card matched to books | 212 of 212 |
+| Deleting 3 of 20 named files | 17 left; nothing without the confirmation |
+| The library afterwards | 1841 files before and after; **0 books or OPFs modified**; 5 sample digests unchanged |
+
+### Two things that are not about devices, found on the way
+
+**Accents survive FAT32 and change shape.** macOS writes `Lefèvre` to a card
+**decomposed** and the library's OPF holds it composed. Matching survives that
+because Swift compares Strings by canonical equivalence — but nothing said so,
+and anyone swapping it for a UTF-8 byte comparison would lose the badge on every
+book with an accent in its author's name and see nothing fail. There is a test
+now.
+
+**`screencapture -l <window id>` photographs a stale window.** For a SwiftUI
+`ScrollView` the backing store is not redrawn when the view scrolls, so the
+sidebar screenshot showed the top of the list three runs in a row while the
+screen showed the bottom. `Scripts/device-shot.sh` captures the window's
+rectangle instead. The accessibility API is no help either: it clamps the frame
+of a row scrolled out of view to the scroll area's own, so a check built on a
+row's position passes while the picture shows something else.
+
+### The sandbox, and what it costs
+
+`com.apple.security.files.removable-volumes.read-write` is in the entitlements,
+and it does **not** cover a mounted disk image: with it in place the app could
+read an image's name and free space and could not list its directory, so a card
+with five books on it showed "0 books". So `Device ▸ Treat Volume as Device ▸
+Kindle…` now opens a panel — choosing the volume there is what the sandbox takes
+as permission. It was already the way in for a reader Shelf does not recognise;
+it is now also the way in when the sandbox will not let Shelf look.
+
+**This means every screenshot in `docs/screenshots/sprint-5/` shows a device
+chosen by hand, and none shows one found by its marker alone.** Whether
+auto-detection works against real removable media is the first line of the
+hardware list, and it is not a formality: if it does not, auto-detection is
+decorative.
+
 ## Sprint 4a – three things the screenshot showed · 18 September 2026
 
 Found by looking at `docs/screenshots/sprint-4/formats-inspector-many.jpg`

@@ -500,3 +500,140 @@ leads with what was verified, names every skipped file and why, names every
 failure, and ends with "Nothing at the source was changed, moved or deleted."
 Dates and durations are formatted with a fixed locale: a record that reads
 differently on another Mac is a worse record.
+
+## 8. Devices
+
+Everything in this section is about a *volume*, not about the library. Nothing
+here is written into `library.json`, into an OPF or into the index: a device is
+true of the moment it is plugged in, and a library that remembered which books
+were on a card somebody lent to a friend last year would be a library telling
+lies.
+
+### The profile (`Sources/ShelfCore/Devices/Profiles/*.json`)
+
+One file per device, read at runtime
+([ADR 0013](adr/0013-device-profiles-are-data-not-code.md)).
+
+| Field | Type | What it is |
+|---|---|---|
+| `id` | string | Stable, lower case. Stored in the device's manifest. |
+| `name` | string | What the sidebar calls it. |
+| `markers` | [string] | Paths relative to the volume root that must **all** exist. |
+| `volumeNames` | [string] | Volume names that say so on their own, compared case-insensitively. |
+| `booksFolder` | string | Where books go, relative to the root. Empty means the root. |
+| `formats` | [format] | What the device can open at all. Nothing else is ever written to it. |
+| `preferredFormats` | [format] | Which to send when a book has several, best first. |
+| `fileNamePattern` | string | `{author}` and `{title}`. Nothing else is substituted. |
+| `readBack` | `fileList` \| `kobo` | What can be read back off it. |
+| `note` | string \| null | One sentence the transfer sheet shows about this device. |
+
+The four that ship are `kobo`, `kindle`, `tolino` and `pocketbook`, exactly as
+CONCEPT §8.1 tabulates them.
+
+**Two rules about markers, both of which cost a defect to find.** All of a
+profile's markers must be present, because `system/` alone is a Kindle, a
+PocketBook and half the USB sticks in the world. And a marker is matched
+**case-exactly, against the directory's own listing** — APFS is
+case-insensitive, so a Mac's boot disk answers a PocketBook's `system` and
+`applications` with `/System` and `/Applications`, and the first run of
+`shelf-tool devices` duly reported "Macintosh HD → PocketBook". A volume that
+cannot be unplugged is also never a device.
+
+Detection tries the profiles **most specific first** — most markers, then by
+name — so a volume carrying the markers of two profiles gets the same answer
+twice rather than whichever the directory listing happened to yield.
+
+### The device manifest (`<volume>/.shelf/device-manifest.json`)
+
+What Shelf has put on this device. A *cache of the card*, in the same sense the
+index is a cache of the library folder: losing it costs speed, never data,
+because the files are still there to be listed and matched by name.
+
+```json
+{
+  "version": 1,
+  "deviceID": "kindle",
+  "entries": [
+    {
+      "path": "documents/Jane Austen - Emma.azw3",
+      "bookID": "…UUID…",
+      "title": "Emma",
+      "author": "Jane Austen",
+      "format": "azw3",
+      "byteSize": 419234,
+      "sha256": "…",
+      "sentAt": "2026-09-18T16:04:11Z"
+    }
+  ]
+}
+```
+
+`path` is relative to the **volume root**, not to the books folder, because that
+is what deleting takes and what a listing produces. `sha256` is the digest of
+the bytes **as they were read back off the device** — that is the whole of what
+"verified" means, and it is what makes a second transfer a resume rather than a
+repeat.
+
+A manifest that is missing or will not parse comes back empty rather than
+throwing.
+
+### "On the device"
+
+Two rules, strongest first, and **no hashing**: hashing a 32 GB card to draw a
+badge would make plugging a reader in a two-minute operation.
+
+| Rule | What it is | Shown as |
+|---|---|---|
+| Manifest | The file's path is in the manifest | "sent by Shelf" |
+| Name | The file is called exactly what Shelf would call that book | "matched by name" |
+
+The second is a guess and says so. Where two library books would get the same
+name on the card, the first wins and the manifest is what tells them apart —
+guessing between them would put the wrong badge on one of them.
+
+Names are compared as Swift compares Strings, which is by **canonical
+equivalence**. That is not incidental: macOS writes `Lefèvre` to a FAT32 card
+decomposed, and the library's OPF holds it composed. A byte comparison would
+lose the badge on every book with an accent in its author's name and nothing
+would fail.
+
+### What a Kobo says back (`<volume>/.kobo/KoboReader.sqlite`)
+
+**Read only, through a copy with its WAL**, exactly as Calibre's `metadata.db`
+is ([ADR 0009](adr/0009-calibre-is-read-through-a-copy-of-metadata-db.md)).
+Nothing is ever written back.
+
+| Shelf | Kobo | Notes |
+|---|---|---|
+| `path` | `content.ContentID` | `file:///mnt/onboard/…` with the prefix taken off, so it lines up with a listing of the volume. A `ContentID` under another mount point (an SD card) is left out rather than guessed at. |
+| `title` | `content.Title` | |
+| `author` | `content.Attribution` | |
+| `percentRead` | `content.___PercentRead` | 0–100. Integer on current firmware, a real on older ones; both are read. |
+| `status` | `content.ReadStatus` | 0 unread, 1 reading, 2 finished. A value this version has never seen is `unread`, not a crash. |
+| `lastReadAt` | `content.DateLastRead` | A date that will not parse is no date rather than a wrong one. |
+| `shelves` | `ShelfContent.ShelfName` | The **device's** shelves. Shown, never merged into the library's own tree (ADR 0008). |
+
+Only `content.ContentType = 6` rows are read — that is a book, where the other
+types are chapters and bookmarks inside one.
+
+### The transfer report (`<volume>/.shelf/Send-Report.txt`)
+
+Plain text, appended to, and written **on the device** rather than in the
+library: it is about the card, and a card carried to another Mac should still
+say what is on it and how it got there. It leads with
+`Verified · n books · Skipped: n · Failed: n` and ends with "Nothing in the
+library was changed, and nothing on the device was deleted."
+
+### Names on the device
+
+`{author} - {title}.{ext}` — the other way round from the library's own
+`{title} - {author}`, because a reader sorts its file list by name and an
+author-first list is the one people want there.
+
+Cleaned for FAT, which every reader that takes a USB cable is formatted with:
+the forbidden characters `/ : \ * ? " < > |` and control characters, no trailing
+dot or space (FAT drops those, and two titles would become one file), Windows's
+reserved names out of the way, and **both** length budgets — 255 bytes *and* 255
+UTF-16 code units, because FAT counts the one and APFS counts the other and
+neither can be derived from the other. A file of 4 GiB or more is refused before
+the copy starts on FAT32 and allowed on exFAT.

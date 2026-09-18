@@ -10,7 +10,7 @@ Du arbeitest mit mir (Erik Emmer) an **Shelf**, einem Mac-only eBook-Manager im
 Look & Feel von Selector. Repo: https://github.com/Erikemmer/Shelf (lokal
 `~/Documents/Shelf`). Shelf ist ein modern aussehendes Calibre: Bibliothek,
 Metadaten, Calibre-Import, Geräte – kein Reader, keine Konvertierung in v1.0.
-Stand: Sprints 1–4 fertig, `main` grün, 457 Kern-Tests, SlateKit-Pin 0.3.1.
+Stand: Sprints 1–5 fertig, `main` grün, 531 Kern-Tests, SlateKit-Pin 0.3.1.
 
 **Lies zuerst, in dieser Reihenfolge:** `Programmier-Leitlinie.md` (bindend),
 `CLAUDE.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG.md`, `CHANGELOG.md` (oben
@@ -55,46 +55,68 @@ die Entscheidungen in `docs/adr/`.
 
 ---
 
-## Nächster Schritt: Sprint 5 – Geräte
+## Nächster Schritt: Sprint 6 – Online-Metadaten (Open Library, Google Books)
 
-**Sprint 4 ist fertig.** Shelf liest jetzt EPUB, KEPUB, MOBI, AZW3, PDF, CBZ und
-CBR; KFX wird als Datei geführt und nicht geöffnet. Mehrere Dateien je Buch
-stehen einzeln im Inspector, mit Größe, DRM-Badge und „Show in Finder“;
-`Add Format…` geht durch denselben `ImportPlanner` wie ein hineingezogenes File.
-Quick Look liegt auf der Leertaste. DRM wird erkannt, gebadgt und in Ruhe
-gelassen. Die Zahlen stehen im `CHANGELOG.md`, die Bilder samt Einordnung in
-`docs/screenshots/sprint-4/README.md`, die Entscheidungen in ADR 0011 und 0012.
+**Sprint 5 ist fertig, gegen Disk-Images.** Shelf erkennt Kobo, Kindle, Tolino
+und PocketBook an ihren Markerpfaden; die Geräteprofile sind vier JSON-Dateien
+(ADR 0013). Bücher gehen per Drag auf die Gerätezeile oder ⌘⇧S hinüber, im
+Format, das *das Gerät* bevorzugt, mit SHA-256-Rückleseprüfung auf der Karte,
+Manifest, Wiederaufnahme und Bericht „Verified · n books · Skipped: n ·
+Failed: n“. Der Geräteinhalt wird gelistet und den Büchern zugeordnet, ein Kobo
+zusätzlich nur lesend ausgelesen. Gelöscht wird ausschließlich hinter einer
+Bestätigung, die jede Datei beim Namen nennt (ADR 0014). Zahlen im
+`CHANGELOG.md`, Bilder in `docs/screenshots/sprint-5/README.md`.
 
-**Zwei Ausnahmen, beide von Erik abhängig.**
+**Die große Einschränkung, und sie ist keine Formalie.** Kein echtes Gerät war
+angesteckt. Die vier „Lesegeräte“ sind `hdiutil`-Images. Alles, was eine *Regel*
+ist, ist damit gemessen; alles, was Hardware ist, nicht — die Liste steht in
+`docs/BACKLOG.md` unter „To check on real hardware“. Die erste Zeile davon ist
+die wichtigste:
 
-1. **Es hat immer noch keine echte Calibre-Bibliothek gesehen** (offen seit
-   Sprint 3). `~/Downloads/Calibre Library Erik` enthält nur `metadata.db` ohne
-   Buchordner; das prüft das Schema und nicht den Import. **Erik muss den Pfad
-   nennen.**
-2. **Es hat auch keine echten Bücher gesehen.** Alles in Sprint 4 ist gegen
-   synthetisches Material gemessen, das diese Sitzung selbst schreibt. Konkret
-   ungeprüft: ein bei Amazon gekauftes MOBI oder AZW3, ein echtes CBR (RAR ist
-   ein proprietäres Format, dieser Mac kann keins schreiben), und eine wirklich
-   DRM-geschützte Datei — die Fixtures *kündigen* Schutz an, ohne verschlüsselt
-   zu sein, weil genau das Shelfs Anspruch ist. **Vier Dateien von Erik würden
-   reichen.**
+> **Die Sandbox lässt die App in ein Disk-Image nicht hineinsehen.**
+> `com.apple.security.files.removable-volumes.read-write` steht in den
+> Entitlements, und mit ihr konnte die App Name und freien Platz eines Images
+> lesen und sein Verzeichnis **nicht** auflisten — eine Karte mit fünf Büchern
+> zeigte „0 books“. Für echte Wechselmedien ist genau diese Entitlement gedacht,
+> es sollte also gehen. Bewiesen ist es nicht. Geht es nicht, ist die
+> automatische Erkennung Zierde, und jedes Gerät muss über
+> `Device ▸ Treat Volume as Device…` von Hand gewählt werden. **Das ist mit
+> einem Kobo oder Kindle am Kabel in zwei Minuten geklärt und sollte als Erstes
+> geklärt werden.**
 
-Was als Nächstes ansteht (CONCEPT §8, Sprint 5):
+**Drei Dinge, die weiter auf Erik warten** (die ersten beiden seit Sprint 3
+bzw. 4):
 
-1. **Erkennung** über `NSWorkspace`-Volume-Benachrichtigungen und Markerpfade;
-   Geräteprofile als JSON-**Daten** in `ShelfCore/Devices/Profiles/`, nicht als
-   Code, damit ein neues Modell ohne Release nachgetragen werden kann.
-2. **Übertragen** mit SHA-256 und Rückleseprüfung, Formatpräferenz je Gerät
-   (Kindle: AZW3 > MOBI > PDF), „cannot be sent: no compatible format“ für den
-   Rest. Dateinamen für FAT32 bereinigt, 4-GB-Grenze vorher geprüft.
-3. **Geräteinhalt anzeigen**; beim Kobo zusätzlich Lesefortschritt und Regale
-   **nur lesend** aus einer Kopie von `KoboReader.sqlite`.
-4. **Löschen auf dem Gerät nur hinter einer Bestätigung, die jede Datei beim
-   Namen nennt.** Der Sheet dafür existiert schon in anderer Gestalt:
-   `OrphanSheet` macht genau das für verwaiste Ordner und ist die Vorlage — zwei
-   Schritte, Dateinamen im zweiten, und was verschwindet, geht in den Papierkorb.
-5. **Auswerfen**, nur wenn kein Transfer läuft.
-6. Beweislauf mit jedem Gerät, das Erik hat.
+1. **Eine echte Calibre-Bibliothek.** `~/Downloads/Calibre Library Erik` enthält
+   nur `metadata.db` ohne Buchordner. **Erik muss den Pfad nennen.**
+2. **Echte Bücher.** Ein gekauftes MOBI oder AZW3, ein echtes CBR, eine wirklich
+   DRM-geschützte Datei. **Vier Dateien würden reichen.**
+3. **Ein echtes Lesegerät.** Siehe oben.
+
+Was als Nächstes ansteht (CONCEPT §9, Sprint 6):
+
+1. **Open Library und Google Books**, ohne API-Schlüssel, zuerst über ISBN, dann
+   über Titel + Autor.
+2. **Kandidatenliste**, dann Feld für Feld alt/neu mit je einer Auswahl — nichts
+   wird stillschweigend überschrieben. Das ist dieselbe Haltung, die das
+   Zählprotokoll beim Import und das Transfer-Blatt beim Gerät haben: erst
+   zeigen, dann tun.
+3. **Cover aus dem Netz**, wenn die Datei keins hat.
+4. **Netzfehler sind leise**: eine Zeile in der Statusleiste, nie ein Modal.
+
+### Was dabei aus Sprint 5 mitzunehmen ist
+
+- **Ein Netz-Zugriff ist wie ein Gerät: die Regel gehört in den Kern, die
+  Verbindung in die App.** `DeviceDetection`, `TransferPlanner`,
+  `DeviceFileName` und `DeviceDeletion` sind reine Werte und deshalb ohne Gerät
+  geprüft; `DeviceWatcher` und `DeviceModel` halten AppKit und die Tasks. Für
+  Sprint 6 heißt das: Parser, Feldabgleich und „welcher Kandidat passt“ in den
+  Kern, `URLSession` in die App.
+- **Ein Bericht gehört dorthin, worüber er spricht.** Der Import-Bericht liegt
+  in der Bibliothek, der Transfer-Bericht auf dem Gerät. Ein Metadaten-Abgleich
+  spricht über Bücher — also in die Bibliothek.
+- **Nichts wird ohne Namensliste verändert.** Beim Gerät heißt das ADR 0014;
+  beim Online-Abgleich heißt es Feld für Feld mit alt und neu nebeneinander.
 
 ### Was dabei zu beachten ist
 
@@ -171,6 +193,39 @@ Was als Nächstes ansteht (CONCEPT §8, Sprint 5):
 - **`scroll-at.swift` scrollt bei *negativer* Klickzahl nach unten.** Steht in
   seinem eigenen Kopf; eine positive Zahl scrollt nach oben, und oben war das
   Panel schon — der Screenshot zeigte zweimal brav den Anfang des Inspectors.
+- **Die beiden `contentsOfDirectory` widersprechen sich auf FAT.** Die
+  Pfad-Form meldet einen Ordner namens `system` als `System`; die URL-Form,
+  `readdir`, `ls` und `find` sagen `system`. Auf APFS sind sie sich einig, also
+  war der Unit-Test grün und jeder Kindle und jeder PocketBook wurde nicht mehr
+  erkannt, sobald der Beweislauf sie auf ein echtes FAT32-Volume legte.
+- **APFS ist case-insensitiv, also ist `fileExists` keine Antwort auf „heißt da
+  etwas so“.** `/System` und `/Applications` beantworten die Marker eines
+  PocketBooks, und der erste Lauf von `shelf-tool devices` meldete brav
+  „Macintosh HD → PocketBook“.
+- **`screencapture -l <fenster-id>` fotografiert den Backing Store**, und der
+  wird bei einer gescrollten SwiftUI-`ScrollView` nicht neu gezeichnet: der
+  Seitenleisten-Screenshot zeigte dreimal hintereinander den Anfang der Liste,
+  während der Bildschirm das Ende zeigte. `-R` mit dem Fensterrechteck
+  fotografiert, was ein Mensch sieht.
+- **Die Accessibility-API klemmt die Position einer ausgescrollten Zeile** auf
+  den Rahmen der Scroll-Ansicht. Eine Prüfung „ist die Zeile im Fenster“ ist
+  damit immer wahr. Der Scrollbalken-Wert ist die Frage, die wirklich zählt.
+- **`screencapture -R` fotografiert den Bildschirm**, also auch den Tooltip des
+  Dock-Symbols, über dem der Zeiger zufällig stehen blieb.
+  `Scripts/cursor-park.swift` schiebt ihn vorher weg.
+- **macOS stellt die Fenster wieder her, die eine *abgeschossene* App hatte.**
+  Ein Skript, das die App ein Dutzend Mal mit `kill` beendet, hinterlässt einen
+  Zustand, der sie alle zurückbringt: `make smoke` meldete zwölf echte Fenster
+  auf dem Willkommensbildschirm, wo eins hingehört, und an der App war nichts
+  falsch. Ein ordentliches `quit` setzte es zurück.
+- **`hdiutil` legt unter etwa 40 MB kein FAT32 an** („Der Vorgang ist nicht
+  zugelassen“ bei 6, 12, 16 und 32 MB). Eine fast volle Karte wird deshalb mit
+  Ballast gefüllt, nicht klein gemacht.
+- **macOS schreibt Akzente auf FAT32 zerlegt** (`Lefèvre` als `e` plus
+  Gravis-Zeichen), die Bibliothek hält sie zusammengesetzt. Dass die Zuordnung
+  trotzdem trägt, liegt an Swifts kanonischem String-Vergleich — ein
+  Byte-Vergleich hätte jedes Buch mit Akzent im Autorennamen verloren, ohne dass
+  irgendetwas fehlgeschlagen wäre.
 - **Ein Check gegen den ganzen Accessibility-Baum beantwortet „steht das Wort
   irgendwo im Fenster“.** `tree_has "AZW3"` traf die Formats-Sektion der
   Seitenleiste, also war jede Zelle „richtig“, und das Bild zeigte einen Comic

@@ -319,8 +319,21 @@ tree | sed -n '/AXSheet/,$p' | head -50 >"$OUT/ax-devices-delete.txt"
 # behaviour behind it is measured in proof-run.sh section 11.
 click "desc=Cancel" >/dev/null 2>&1
 
-say "closing the Shelf this script started"
-kill "$PID" 2>/dev/null
+# Quit, not kill. macOS restores the windows an app had when it was *killed*,
+# and a script that SIGTERMs it a dozen times leaves a saved state that brings
+# them all back: `make smoke` went from "1 real window" to twelve, on the
+# welcome screen, with nothing wrong with the app. A proper quit put it back to
+# one. This one is Shelf's own process — the script started it — so ending it
+# is this session's to do (CLAUDE.md), and ending it *properly* is the part
+# that was learned here.
+say "quitting the Shelf this script started"
+osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1
+WAITED=0
+while pgrep -x Shelf >/dev/null; do
+    WAITED=$((WAITED + 1))
+    [ "$WAITED" -lt 15 ] || { kill "$PID" 2>/dev/null; break; }
+    sleep 1
+done
 sleep 2
 "$HERE/device-images.sh" unmount >/dev/null 2>&1
 say "done – $OUT"

@@ -254,17 +254,71 @@ change of controls, not of layout.
       DRM-protected file to try the readers against. Everything above is
       measured against synthetic material only
 
-## Sprint 5 – Devices
+## Sprint 5 – Devices · done, against disk images
 
-- [ ] Detection through `NSWorkspace` volume notifications and marker paths;
+- [x] Detection through `NSWorkspace` volume notifications and marker paths;
       profiles as JSON data in `ShelfCore/Devices/Profiles/`
-- [ ] Transfer with SHA-256 and read-back, format preference per device,
+      ([ADR 0013](adr/0013-device-profiles-are-data-not-code.md))
+- [x] Transfer with SHA-256 and read-back, format preference per device,
       "cannot be sent: no compatible format"
-- [ ] What is on the device, listed; Kobo reading progress and shelves read
+- [x] What is on the device, listed; Kobo reading progress and shelves read
       (read-only, through a copy of `KoboReader.sqlite`)
-- [ ] Deleting on the device only behind a confirmation that **names every file**
-- [ ] Eject, only when no transfer is running
-- [ ] Proof run with every device Erik owns
+- [x] Deleting on the device only behind a confirmation that **names every file**
+      ([ADR 0014](adr/0014-deleting-on-a-device-needs-a-named-confirmation.md))
+- [x] Eject, only when no transfer is running
+- [x] Proof run — `Scripts/proof-run.sh` section 11, against four disk images
+      made by `Scripts/device-images.sh`
+- [ ] Proof run with every device Erik owns → see below
+
+### To check on real hardware
+
+**Nothing in Sprint 5 was measured against a real e-reader.** The four devices
+are `hdiutil` disk images, which is enough for every *rule* — markers, format
+choice, file names, verification, resume, the 4 GB limit, the Kobo reader — and
+is not enough for the list below. Each line says what would be learned and what
+is currently assumed.
+
+- [ ] **A real device, plugged in, detected by its marker alone.** This is the
+      first one because the sandbox makes it genuinely uncertain.
+      `com.apple.security.files.removable-volumes.read-write` is in the
+      entitlements, and with it the app could read a mounted disk image's *name
+      and free space* and could **not** list its directory — a card holding five
+      books showed "0 books". Real removable media is exactly what that
+      entitlement is for, so it is expected to work; it is not proven, and if it
+      does not, auto-detection is decorative and every device has to be chosen
+      through `Device ▸ Treat Volume as Device…`. **Check first, with a Kobo or
+      a Kindle on a cable.**
+- [ ] **The `NSWorkspace` mount notification.** The proof run lists `/Volumes`;
+      the app subscribes to `didMount`/`didUnmount`. Those are different code
+      paths and only the first is measured. A reader plugged in while the window
+      is open should appear in the sidebar within a second.
+- [ ] **A cable pulled out mid-transfer.** The nearest measured thing is a
+      process killed mid-run, which stops *between* files. A cable pulled during
+      a write is a partial file plus a volume that has gone: `copyAndVerify`
+      should fail its digest check, the `.part` should be swept up — and the
+      sweep itself runs on a volume that is no longer there, which is the part
+      no test has exercised.
+- [ ] **A real `KoboReader.sqlite`.** `SyntheticKoboDatabase` writes the tables
+      and columns Shelf reads; a real one has about a hundred more columns, a
+      real WAL, and firmware differences in `___PercentRead` and `ReadStatus`.
+      Wanted: that the reading positions come back, that the shelves come back,
+      and that the file's digest is unchanged afterwards — the last one being
+      the claim that matters.
+- [ ] **A Kobo's `.kobo/` folder at full size.** It holds tens of thousands of
+      files. The listing skips hidden folders, so it should cost nothing;
+      measured only against a folder with one file in it.
+- [ ] **A device that is nearly full, for real.** Measured with ballast on a
+      40 MB image, because `hdiutil` refuses to make a FAT32 volume smaller than
+      about 40 MB on this Mac.
+- [ ] **A KEPUB on a Kobo.** The profile prefers KEPUB over EPUB and nothing has
+      ever produced one: no fixture writes a `.kepub.epub`, so the preference is
+      tested and the *file* is not.
+- [ ] **exFAT.** Three images are FAT32 and one is HFS+. Newer readers are
+      exFAT, which has no 4 GB limit — so a book over 4 GB should be refused on
+      one and sent on the other, and only the refusal has been seen.
+- [ ] **A book over 4 GB.** The limit is checked against a fabricated byte size.
+      No file that big exists in any fixture here, and making one would put 4 GB
+      of zeroes in the cache folder.
 
 ## Sprint 6 – Online metadata
 

@@ -31,6 +31,12 @@
 │              + LibArchive (dlopen, checked at runtime)        │
 │            QuickLookPreview (␣: the file for a PDF, the       │
 │              extracted cover for everything else)             │
+│            DeviceWatcher (NSWorkspace mount notices, statfs)  │
+│            DeviceModel (@MainActor: what is plugged in, what  │
+│              is on it, how far a transfer has got)            │
+│  Views:    DevicesSection (sidebar rows, drop target, eject) ·│
+│            SendToDeviceSheet · DeviceContentsSheet ·          │
+│            DeleteFromDeviceSheet                              │
 ├───────────────────────────────────────────────────────────────┤
 │  ShelfCore (Swift package, no UI, runs on Linux too)          │
 │  Model:     Book · SeriesRef · BookFormat · BookFileFormat ·  │
@@ -45,6 +51,12 @@
 │             handful of books have in common)                  │
 │  Index:     IndexSchema (migrations) · LibraryIndex (GRDB) ·  │
 │             BookSort + BookOrder (the one SQL order)          │
+│  Devices:   DeviceProfile + Profiles/*.json (data, ADR 0013) · │
+│             DeviceDetection (markers, case-exact) ·           │
+│             DeviceFileName (FAT-safe {author} - {title}) ·    │
+│             TransferPlanner/TransferPlan · TransferRunner ·   │
+│             DeviceManifest (on the card) · DeviceContents ·   │
+│             DeviceDeletion (ADR 0014) · KoboReadingState      │
 │  Formats:   BookFileReader (which reader for which file) ·    │
 │             ZipReader · Inflate · XMLTree · OPFDocument ·     │
 │             EPUBMetadata · AuthorField · FileNameMetadata ·   │
@@ -338,10 +350,53 @@ adds the second. A test asserts the two tables cannot drift apart.
 The per-format detail — which field comes from where, and what reaches the OPF —
 is [docs/DATA-MODEL.md §6a](DATA-MODEL.md).
 
+## Data flow: sending books to a device
+
+```
+NSWorkspace didMount ──▶ DeviceWatcher.mountedVolumes()   (removable only)
+                              │  MountedVolume values
+                              ▼
+                     DeviceDetection.profile(for:)        ← Profiles/*.json
+                              │  ConnectedDevice
+          ┌───────────────────┴───────────────────┐
+          ▼                                       ▼
+  DeviceContents.list + matched            TransferPlanner.plan
+    (manifest first, then name)              (format by the device's
+          │  DeviceFile[]                     preference; what cannot
+          ▼                                   be sent, and why)
+  "on the device" badge                              │  TransferPlan
+                                                     ▼
+                                      ┌──── the sheet: the person agrees
+                                      ▼
+                              TransferRunner.run
+                              per file: .part ▸ hash the source while
+                              reading ▸ hash the file **on the device**
+                              ▸ compare ▸ rename ▸ manifest
+                                      │
+                                      ▼
+                        DeviceManifest + Send-Report.txt, on the card
+```
+
+Three things about this are worth keeping.
+
+**The library is only read.** Nothing in this path writes into it — not a
+read-status, not a "sent on" date. What comes *back* off a Kobo is a separate,
+read-only step through a copy of its database, and it is shown rather than
+merged.
+
+**The digest that counts is the one read off the device.** `sourceDigest` in the
+plan is what the index already knew; the manifest stores what came back from the
+card. That is what makes a second run a resume rather than a repeat, and it is
+what "Verified" means in the report.
+
+**Deleting is not in this picture at all**, and cannot be reached from it
+([ADR 0014](adr/0014-deleting-on-a-device-needs-a-named-confirmation.md)).
+
 ## Concurrency
 
 Swift 6 strict concurrency, complete. `LibraryModel` and `ImportModel` are
-`@MainActor`; `LibraryIndex` is a `Sendable` final class over a GRDB pool;
+`@MainActor`, and so is `DeviceModel`; `LibraryIndex` is a `Sendable` final
+class over a GRDB pool;
 `CoverLoader` and `CoverDiskCache` are actors; core types are `Sendable` value
 types. Nothing slow runs on the main actor: reading files, hashing, decoding and
 rebuilding all happen in detached tasks, and only their results hop back.
