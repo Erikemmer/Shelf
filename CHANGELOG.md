@@ -8,6 +8,110 @@ on and what was *not* measured.
 Measured on Erik's Mac (M-series, macOS 15.6) against
 `~/Library/Caches/Shelf/measure-library-6/`.
 
+### Added — Fetch Metadata (⌘E): Open Library and Google Books, field by field
+
+Both services are asked about one book, without an API key, **by ISBN where the
+book has a valid one and by title and author otherwise**. What comes back is a
+candidate list with a match score out of 100; the chosen candidate is then set
+against the book field by field, old above new, a box per field — and Apply goes
+through the same undo-then-write path an inspector edit goes through, so a
+fetched title is undone with ⌘Z like a typed one
+([ADR 0015](docs/adr/0015-online-metadata-two-sources-field-by-field.md)).
+
+**Nothing is ticked that would replace an answer the book already has.** Only
+empty fields arrive ticked — and not even all of those; see the two findings
+below. Tags are *added*, never replaced, and no tag is ever taken off a book
+because a service has not heard of it.
+
+The rules are in `ShelfCore` and the socket is in the app. `MetadataTransport`
+is the seam: which URL, how often, what a 503 means, whether this was asked
+before, what the two JSON shapes mean, which candidate is the book, and what a
+candidate would do to it are all tested **without a network**, against answers
+the services really gave. 57 new core tests, 588 in total, up from 531.
+
+Manners, as a rule with a test (`NetworkPolicy`): a User-Agent naming the
+project and nothing about the person; one request per second **per service**; a
+retry only for a 5xx or for no answer at all, waiting 1 s, 2 s, 4 s; a 15-second
+limit; and every answer kept for a month in `~/Library/Caches/Shelf/online/`, so
+the same ISBN is never asked twice. `Shelf ▸ Clear Downloaded Metadata` names
+its size. The only thing that leaves this Mac is the ISBN or the title.
+
+### Measured — the real run against both services, ten ISBNs
+
+`Scripts/online-proof.sh`, 18 September 2026, from this Mac. It is also what
+writes the fixtures the tests read.
+
+| | answered | of ten | total time |
+|---|---|---|---|
+| Open Library | HTTP 200 ten times | **9 books** | 69.7 s |
+| Google Books | **HTTP 429 ten times** | 0 books | 5.0 s |
+
+- **Google Books' shared anonymous quota was exhausted.** `Quota exceeded for
+  quota metric 'Queries' … for consumer project_number:624717413613` — the same
+  1 306-byte body ten times, and the same from `books.googleapis.com` and with
+  `country=DE` and `country=US`. Not Shelf's quota: the one everybody's unkeyed
+  requests share. A key would fix it and would be a secret in a shipped app.
+- **Open Library knew nine of the ten**; the tenth (a German Heyne paperback)
+  it answered `{"docs": []}` for, which is an answer.
+- Its speed varies by an order of magnitude: 1.9 s for *The Fellowship of the
+  Ring*, 24 s for *Nineteen Eighty-Four* (which needed the second attempt). The
+  first version of the proof script had no retry and reported three of the ten
+  as timeouts; all three answered in under three seconds when asked again, so
+  the script now retries exactly as `NetworkPolicy` does. A measurement that
+  does not behave like the app measures something the app does not do.
+- What the two disagree about, where both answered: nothing, because one of them
+  never did. That column of the proof run is empty and says so.
+
+### Changed — Open Library is asked through `/search.json`, not `/api/books`
+
+CONCEPT §9 names `/api/books?bibkeys=ISBN:…` for an ISBN lookup. It answered
+**HTTP 404 with an empty body** to every ISBN tried — four of them, including
+ISBNs whose books Open Library's own search finds, and with `jscmd=details` as
+well as `jscmd=data`. `/search.json?q=isbn:…` answers the same book in the same
+`docs` shape the title question gets, so Sprint 6 ships **one endpoint and one
+reader** where two were planned. The concept is amended in ADR 0015 with the
+measurement beside it.
+
+### Found by looking at the screenshots — two defaults that were wrong
+
+**Open Library answers a *work*, and hands out one of its editions' fields.**
+The picture of *Fantastic Mr Fox* (`docs/screenshots/sprint-6/online-cover.jpg`)
+showed, for a Puffin paperback: authors `Roald Dahl & Roal'd Dal'`, publisher
+`Caedmon Audio Cassette`, language `ja`, published **1917**. Three of those were
+`would replace` and so unticked. The year was `not set` — and arrived **ticked**,
+because the rule was "tick what fills a gap". A record that describes a work now
+never pre-ticks a publisher, a language or a date. The lines are still drawn:
+what a service says is worth seeing even when it is wrong.
+
+**"Tags — would replace" was written over a line that replaces nothing.** Tags
+are merged, never overwritten. They now read `would add`, and they are not
+ticked for anybody either: a catalogue's subjects are catalogue vocabulary and a
+person's tags are their own.
+
+### Added — a cover from the net, when the file has none
+
+Only on the explicit **Use This Cover**, only when the book's folder has no
+cover file, and the bytes' magic number is checked before anything is written —
+a service that answers an error page with a 200 would otherwise leave a
+`cover.jpg` holding the words "Not Found". It is written through a `.part` and a
+rename, beside the book. **The book file is not opened at all** (CONCEPT §4).
+The cached thumbnail for that one book is thrown away, so the grid draws the new
+cover rather than the placeholder it was holding.
+
+### Added — network failures are quiet, and that is photographed
+
+`Scripts/online-shot.sh` takes the last two pictures with
+`SHELF_ONLINE_HOST=metadata.invalid` — the name RFC 2606 reserves as
+never-resolvable — so both services really fail. Nothing on the Mac is switched
+off for it. There is no dialogue and no spinner left behind: the sheet says
+"Nothing came back. The book keeps everything it has." and the sidebar's footer
+carries one line.
+
+That line is short because the first one was not: both services' own sentences
+came to 130 characters and the footer showed "…hostname could not be foun…".
+One failure is now said in full, two are named — "Open Library and Google Books
+did not answer." — and the whole text stays in the sheet and in the tooltip.
+
 ### Fixed — "Duplicates" said 396 of 413 books, and meant nothing by it
 
 The Sprint 5 screenshot showed a sidebar claiming **396 duplicates in a library

@@ -178,6 +178,13 @@ final class LibraryModel {
     var isImportSheetPresented = false
     private(set) var importModel: ImportModel?
 
+    // MARK: Online metadata
+
+    var isFetchMetadataSheetPresented = false
+    /// Made when a library is opened, because it needs the library's root to
+    /// put a fetched cover beside the right book.
+    private(set) var onlineMetadata: OnlineMetadataModel?
+
     // MARK: Orphaned folders
 
     /// `Library ▸ Find Orphaned Folders…`. The list is what the sheet shows and
@@ -284,6 +291,7 @@ final class LibraryModel {
             self.index = index
             self.loader = loader
             importModel = ImportModel(library: library, index: index)
+            onlineMetadata = OnlineMetadataModel(libraryRoot: library.root)
             errorMessage = nil
             syncWarning = library.syncWarning
             warmer.reset()
@@ -401,6 +409,7 @@ final class LibraryModel {
         index = nil
         loader = nil
         importModel = nil
+        onlineMetadata = nil
         entries = []
         visible = []
         selectedBookID = nil
@@ -795,6 +804,79 @@ final class LibraryModel {
         if let loader { coversOnDisk = await loader.cachedBookIDs() }
         _ = index
         await reload()
+    }
+
+    // MARK: Online metadata
+
+    /// ⌘E. Asks both services about the selected books, one at a time.
+    ///
+    /// A multiple selection walks through the books in order with a decision
+    /// for each — there is no automatic bulk match in v1.0, and a "do them all"
+    /// button would be one (CONCEPT §9).
+    func presentFetchMetadata() {
+        guard library != nil, !selectedEntries.isEmpty else { return }
+        onlineMetadata?.start(with: selectedEntries)
+        isFetchMetadataSheetPresented = true
+    }
+
+    /// Takes over the ticked fields, as one step on the undo stack.
+    ///
+    /// Through the very same `apply` an inspector edit goes through: undo
+    /// registered from the *old* book before anything is written, then
+    /// `metadata.opf`, then the index. Nothing about a value having come from
+    /// the net changes that path — which is why a fetched title can be undone
+    /// with ⌘Z like a typed one.
+    func applyFetchedMetadata(undoManager: UndoManager?) {
+        guard let online = onlineMetadata, let entry = online.currentBook else { return }
+        let chosen = online.chosenProposals
+        guard !chosen.isEmpty else { return }
+
+        let applied = MetadataMerge.apply(chosen, to: entry.book)
+        if let refusal = applied.refused.first {
+            // One refused value does not cost the others: the rest is applied
+            // and the refusal is said out loud.
+            fieldRejection = FieldRejection(key: "online", message: refusal.message)
+        }
+        let change = MetadataChange.make(from: entry.book) { $0 = applied.book }
+        apply(change, to: entry, undoManager: undoManager)
+    }
+
+    /// The name ⌘Z will show afterwards, and the sheet's own button label.
+    func fetchedMetadataSummary() -> String? {
+        guard let online = onlineMetadata else { return nil }
+        let count = online.chosenProposals.count
+        guard count > 0 else { return nil }
+        return "\(count) field\(count == 1 ? "" : "s")"
+    }
+
+    /// Fetches the cover and forgets the cached thumbnail for that book, so the
+    /// grid and the inspector draw the new one instead of the placeholder they
+    /// have been holding.
+    func fetchCoverFromTheNet() async {
+        guard let online = onlineMetadata, let id = await online.fetchCover() else { return }
+        if let loader { coversOnDisk = await loader.cachedBookIDs().union([id]) }
+        // The disk cache is keyed by the book's UUID, so the stale thumbnail is
+        // in there under the same key: it is thrown away rather than waited out.
+        await loader?.forget(id)
+        totals = (try? await index?.totals(coversOnDisk: coversOnDisk)) ?? totals
+        coverRefreshRequest += 1
+    }
+
+    /// Bumped when a cover has changed under a book, so the views that hold a
+    /// decoded image redraw. A counter for the same reason `focusRequest` is
+    /// one: two fetches in a row are two events.
+    private(set) var coverRefreshRequest = 0
+
+    /// What the stored answers take up, for the menu item that names it.
+    private(set) var onlineCacheBytes: Int64 = 0
+
+    func refreshOnlineCacheSize() async {
+        onlineCacheBytes = await OnlineMetadataModel.cacheSize()
+    }
+
+    func clearOnlineCache() async {
+        await OnlineMetadataModel.clearCache()
+        await refreshOnlineCacheSize()
     }
 
     // MARK: Editing metadata

@@ -216,6 +216,19 @@ struct SidebarView: View {
             SlateStatusBar(progress.label)
         } else if model.isLoading {
             SlateStatusBar("Reading the library")
+        } else if let note = model.onlineMetadata?.briefNote {
+            // A service that did not answer is a line here and nowhere else:
+            // never a dialogue, never a stop (CONCEPT §9). Click to dismiss.
+            Text(note)
+                .font(.caption2)
+                .foregroundStyle(Slate.accent)
+                .lineLimit(2)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onTapGesture { model.onlineMetadata?.clearNote() }
+                .help((model.onlineMetadata?.note ?? note) + " Click to dismiss")
+                .accessibilityLabel("Network note: \(note)")
         } else {
             Text(model.statusLine)
                 .font(.caption2)

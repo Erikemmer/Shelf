@@ -27,7 +27,12 @@ struct ShelfApp: App {
                 .preferredColorScheme(.dark)
                 .frame(minWidth: 1_100, minHeight: 700)
                 .sheet(isPresented: $isShowingShortcuts) { shortcutSheet }
-                .onAppear { delegate.model = model }
+                .onAppear {
+                    delegate.model = model
+                    // So the two "Clear …" items in the app menu can name what
+                    // they would throw away before anybody opens the menu.
+                    Task { await model.refreshOnlineCacheSize() }
+                }
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: true))
@@ -41,6 +46,12 @@ struct ShelfApp: App {
                     Task { await model.clearCoverCache() }
                 }
                 .disabled(model.library == nil)
+                // The answers the two metadata services gave, so the same ISBN
+                // is not asked twice. Not inside a library: it is keyed by an
+                // ISBN and serves every library on this Mac.
+                Button("Clear Downloaded Metadata (\(CoverCachePolicy.sizeLabel(usedBytes: model.onlineCacheBytes)))") {
+                    Task { await model.clearOnlineCache() }
+                }
             }
             fileMenu
             libraryMenu
@@ -81,6 +92,11 @@ struct ShelfApp: App {
             // The reason most people will open Shelf at all (CONCEPT §7).
             Button("Import from Calibre…") { model.presentCalibrePanel() }
                 .keyboardShortcut("i", modifiers: [.command, .option])
+            // ⌘E, the shortcut sheet has said so since Sprint 1. It asks; it
+            // writes nothing until a person has agreed field by field.
+            Button("Fetch Metadata…") { model.presentFetchMetadata() }
+                .keyboardShortcut("e", modifiers: .command)
+                .disabled(model.library == nil || model.selection.isEmpty)
                 .disabled(model.library == nil)
             Divider()
             Button("Show in Finder") { model.revealSelectedInFinder() }

@@ -13,12 +13,14 @@ struct MetadataMergeTests {
         language: String? = "en",
         subjects: [String] = ["science fiction", "Desert ecology"],
         summary: String? = "A boy becomes a messiah on a desert planet.",
-        isbn: String? = "9780441013593"
+        isbn: String? = "9780441013593",
+        describesOneEdition: Bool = true
     ) -> MetadataCandidate {
         MetadataCandidate(
             id: "openlibrary:/works/OL893415W", source: .openLibrary, title: title, authors: authors,
             publisher: publisher, published: published, language: language, subjects: subjects,
-            summary: summary, identifiers: isbn.map { ["isbn": $0] } ?? [:])
+            summary: summary, identifiers: isbn.map { ["isbn": $0] } ?? [:],
+            describesOneEdition: describesOneEdition)
     }
 
     private func line(_ lines: [FieldProposal], _ id: String) throws -> FieldProposal {
@@ -37,10 +39,35 @@ struct MetadataMergeTests {
         #expect(try line(lines, "publisher").kind == .add)
         #expect(try line(lines, "identifier:isbn").kind == .add)
         #expect(try line(lines, "tags").kind == .add)
+        // Tags are the exception, even on a book with none: a catalogue's
+        // subjects are not a person's vocabulary, so they are offered and not
+        // chosen for them.
+        #expect(try !line(lines, "tags").isTickedByDefault)
         #expect(lines.filter(\.isTickedByDefault).allSatisfy { $0.kind == .add })
         // The titles agree, so the line is drawn and cannot be ticked. A list
         // that showed only the differences would hide how good the match was.
         #expect(try !line(lines, "title").isTickedByDefault)
+    }
+
+    /// What the Sprint 6 screenshot of *Fantastic Mr Fox* showed: Open
+    /// Library's search answers a **work**, and hands out one of its editions'
+    /// publisher, language and year. For a Puffin paperback it offered
+    /// "Caedmon Audio Cassette", `ja` and **1917** — and the year, being the
+    /// one that filled an empty field, arrived ticked.
+    @Test("a work record never pre-ticks a publisher, a language or a year")
+    func workLevelFieldsAreNotTicked() throws {
+        let book = Book(title: "Fantastic Mr Fox")
+        let work = candidate(title: "Fantastic Mr Fox", describesOneEdition: false)
+        let lines = MetadataMerge.proposals(for: book, from: work)
+
+        for id in ["publisher", "published", "language"] {
+            let line = try line(lines, id)
+            #expect(line.kind == .add, "\(id) is still drawn, and still says what the service said")
+            #expect(!line.isTickedByDefault, "\(id) came from a work, not from this edition")
+        }
+        // What is about the book rather than about a printing is unaffected.
+        #expect(try line(lines, "authors").isTickedByDefault)
+        #expect(try line(lines, "identifier:isbn").isTickedByDefault)
     }
 
     /// The rule the whole sheet turns on: what would **replace** something is
@@ -93,6 +120,13 @@ struct MetadataMergeTests {
     func tagsAreAdded() throws {
         var book = Book(title: "Dune", tags: ["favourites"])
         let lines = MetadataMerge.proposals(for: book, from: candidate())
+        // Not `.replace`: applying takes nothing off the book, and the first
+        // screenshot of the sheet had "would replace" written over a line that
+        // replaces nothing.
+        #expect(try line(lines, "tags").kind == .append)
+        // And not ticked for somebody: a catalogue's subjects are not a
+        // person's own vocabulary.
+        #expect(try !line(lines, "tags").isTickedByDefault)
         let applied = MetadataMerge.apply([try line(lines, "tags")], to: book)
 
         #expect(applied.book.tags.contains("favourites"))
@@ -113,7 +147,8 @@ struct MetadataMergeTests {
     func refusedValuesAreNamed() {
         let book = Book(title: "Dune")
         let bad = FieldProposal(
-            target: .identifier("isbn"), label: "ISBN", current: "", proposed: "9780441013594", kind: .add)
+            target: .identifier("isbn"), label: "ISBN", current: "", proposed: "9780441013594",
+            kind: .add, isTickedByDefault: true)
         let applied = MetadataMerge.apply([bad], to: book)
 
         #expect(applied.book.identifiers["isbn"] == nil)
@@ -127,7 +162,8 @@ struct MetadataMergeTests {
         let book = Book(title: "Dune")
         let lines = MetadataMerge.proposals(for: book, from: candidate())
         let bad = FieldProposal(
-            target: .field(.title), label: "Title", current: "Dune", proposed: "", kind: .replace)
+            target: .field(.title), label: "Title", current: "Dune", proposed: "", kind: .replace,
+            isTickedByDefault: false)
         let applied = MetadataMerge.apply([bad, try line(lines, "authors")], to: book)
 
         #expect(applied.book.title == "Dune")

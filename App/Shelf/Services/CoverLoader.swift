@@ -104,6 +104,15 @@ actor CoverLoader {
         largeCovers.removeAll(except: [])
     }
 
+    /// Forgets one book's cover, in memory and on disk, so the next request
+    /// decodes the file that is there now. Used when a cover has been fetched
+    /// from the net and written into the book's folder.
+    func forget(_ bookID: UUID) async {
+        await diskCache.forget(bookID)
+        gridCovers.remove(bookID)
+        largeCovers.remove(bookID)
+    }
+
     // MARK: Decoding
 
     private func decode(
@@ -188,6 +197,11 @@ private final class Cache {
     func removeAll(except keep: Set<UUID>) {
         for id in keys.subtracting(keep) { storage.removeObject(forKey: id.uuidString as NSString) }
         keys.formIntersection(keep)
+    }
+
+    func remove(_ id: UUID) {
+        storage.removeObject(forKey: id.uuidString as NSString)
+        keys.remove(id)
     }
 
     /// `NSCache` needs a class; `DecodedCover` stays a value type.

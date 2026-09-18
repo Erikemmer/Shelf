@@ -637,3 +637,96 @@ reserved names out of the way, and **both** length budgets — 255 bytes *and* 2
 UTF-16 code units, because FAT counts the one and APFS counts the other and
 neither can be derived from the other. A file of 4 GiB or more is refused before
 the copy starts on FAT32 and allowed on exFAT.
+
+## 9. Online metadata (Sprint 6)
+
+Nothing here is a new store. An online lookup produces **proposals**, and a
+proposal that a person ticks becomes an ordinary `MetadataChange` — the same
+`metadata.opf` write and the same index update an inspector edit makes
+([ADR 0015](adr/0015-online-metadata-two-sources-field-by-field.md)). The only
+new files on disk are the response cache and, on an explicit action, a
+`cover.jpg` beside a book.
+
+### What is asked, and of whom
+
+| the book has | the question | Open Library | Google Books |
+|---|---|---|---|
+| a valid ISBN | `.isbn` | `/search.json?q=isbn:…&limit=1` | `/volumes?q=isbn:…` |
+| a title (and perhaps an author) | `.titleAuthor` | `/search.json?title=…&author=…&limit=10` | `/volumes?q=intitle:… inauthor:…&maxResults=10` |
+| neither | nothing is asked | | |
+
+An ISBN that fails its check digit is **not** used as the question: it is a
+typo, and asking with it answers nothing while looking like "the services do not
+have this book". `/api/books` is not used at all — it answered 404 to every
+ISBN tried (ADR 0015).
+
+### Which field comes from which source
+
+`—` means the service does not carry the field at that endpoint at all, not that
+it was empty for some book.
+
+| Shelf's field | Open Library (`/search.json`) | Google Books (`/volumes`) |
+|---|---|---|
+| `title` | `docs[].title`, plus `subtitle` joined with `: ` | `volumeInfo.title`, plus `subtitle` the same way |
+| `authors` | `docs[].author_name` | `volumeInfo.authors` |
+| `series` | — | `volumeInfo.seriesInfo`, where it is there at all |
+| `publisher` | `docs[].publisher[0]` **(work-level)** | `volumeInfo.publisher` |
+| `published` | `docs[].first_publish_year` **(work-level)** | `volumeInfo.publishedDate` |
+| `language` | `docs[].language[0]` **(work-level)**, 639-2 → 639-1 | `volumeInfo.language` |
+| `description` | — | `volumeInfo.description` |
+| `tags` | `docs[].subject`, first twelve | `volumeInfo.categories` |
+| `identifiers["isbn"]` | `docs[].isbn`, see below | `industryIdentifiers`, ISBN_13 before ISBN_10 |
+| `identifiers["openlibrary"]` | the last segment of `docs[].key` | — |
+| `identifiers["google"]` | — | `items[].id` |
+| cover image | `https://covers.openlibrary.org/b/id/<cover_i>-L.jpg` | `volumeInfo.imageLinks.thumbnail`, forced to https, `&edge=curl` removed |
+| *(not a book field)* `pageCount` | `number_of_pages_median` | `volumeInfo.pageCount` |
+
+**Work-level** marks the three fields that belong to a *printing* rather than to
+a book. Open Library's search answers a work — every edition rolled together —
+and hands out one edition's publisher, language and year. Those three are drawn
+but never pre-ticked from such a record (`MetadataCandidate.describesOneEdition`).
+
+**Which ISBN.** A search answers every ISBN of every edition — about two hundred
+for *Dune*. When the question *was* an ISBN and the work carries it, that is the
+one offered; otherwise the first 13-digit one; otherwise whatever there is.
+
+### How a date is read
+
+`OPFDate.parse` first — `2019-04-23`, `2019-04`, `2019` — and then the written
+forms the services use: `October 1, 1988`, `Oct 1, 1988`, `October 1988`,
+`1 October 1988`. **A date that is not understood is kept as text and offered as
+nothing**: the comparison shows the service's own wording and has no box, which
+is better than storing 1 January of a year nobody claimed.
+
+### The response cache (`~/Library/Caches/Shelf/online/`)
+
+```
+~/Library/Caches/Shelf/online/
+  openlibrary-3f2a…json     the body, exactly as it came back
+  googlebooks-9c41…json
+```
+
+Outside the library, unlike the cover cache: the key is an ISBN or a folded
+title, so one answer serves every library on this Mac, and unlike a cover it is
+worth nothing on another machine. The file name is
+`<service>-<first 32 hex of SHA-256 of "<service>/<question>">`, and the question
+is folded (`DuplicateKey.fold`) so that two spellings of one title are one
+question. An entry older than **30 days** is ignored. Deleting the folder costs
+one more request; `Shelf ▸ Clear Downloaded Metadata` names its size and empties
+it. In a sandboxed app the path is the container's own
+`Library/Caches/Shelf/online/`, which is the same folder as far as the app is
+concerned.
+
+### A cover fetched from the net
+
+Written beside the book as `cover.<ext>`, the extension taken from the **bytes**
+(`CoverFile`, as for a cover extracted from a file), through a `.part` and a
+rename. Refused when the folder already has a cover, and refused when the bytes
+are not an image Shelf recognises. The book file is never opened.
+
+### What leaves this Mac
+
+The ISBN, or the title and author, of the one book being looked up — and a
+User-Agent naming the project and its repository. No library name, no folder
+path, no identifier of the person or the machine, no telemetry, and no API key
+because there is none.

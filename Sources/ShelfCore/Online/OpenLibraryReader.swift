@@ -48,7 +48,11 @@ public enum OpenLibraryReader {
             coverURL: (doc["cover_i"] as? Int).flatMap {
                 URL(string: "https://covers.openlibrary.org/b/id/\($0)-L.jpg")
             },
-            pageCount: doc["number_of_pages_median"] as? Int
+            pageCount: doc["number_of_pages_median"] as? Int,
+            // A *work*, not an edition: the publisher, the language and the
+            // year below are one of the work's editions picked at the service's
+            // discretion. See `MetadataCandidate.describesOneEdition`.
+            describesOneEdition: false
         )
     }
 

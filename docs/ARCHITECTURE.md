@@ -32,10 +32,14 @@
 │            QuickLookPreview (␣: the file for a PDF, the       │
 │              extracted cover for everything else)             │
 │            DeviceWatcher (NSWorkspace mount notices, statfs)  │
+│            URLSessionTransport (the only socket in Shelf) ·   │
+│            OnlineMetadataModel (@MainActor: the lookup, the   │
+│              candidate, the ticks, the quiet note)            │
 │            DeviceModel (@MainActor: what is plugged in, what  │
 │              is on it, how far a transfer has got)            │
 │  Views:    DevicesSection (sidebar rows, drop target, eject) ·│
 │            SendToDeviceSheet · DeviceContentsSheet ·          │
+│            FetchMetadataSheet (⌘E) ·                          │
 │            DeleteFromDeviceSheet                              │
 ├───────────────────────────────────────────────────────────────┤
 │  ShelfCore (Swift package, no UI, runs on Linux too)          │
@@ -57,6 +61,13 @@
 │             TransferPlanner/TransferPlan · TransferRunner ·   │
 │             DeviceManifest (on the card) · DeviceContents ·   │
 │             DeviceDeletion (ADR 0014) · KoboReadingState      │
+│  Online:    MetadataQuery + MetadataEndpoint (what to ask) ·  │
+│             OpenLibraryReader · GoogleBooksReader ·           │
+│             MetadataCandidate + MetadataScore (which one is   │
+│             the book) · MetadataMerge → FieldProposal (old |  │
+│             new, field by field) · NetworkPolicy +            │
+│             MetadataTransport (the seam) · MetadataFetcher ·  │
+│             ResponseCache · OnlineCover · OnlineValues        │
 │  Formats:   BookFileReader (which reader for which file) ·    │
 │             ZipReader · Inflate · XMLTree · OPFDocument ·     │
 │             EPUBMetadata · AuthorField · FileNameMetadata ·   │
@@ -391,6 +402,57 @@ what "Verified" means in the report.
 
 **Deleting is not in this picture at all**, and cannot be reached from it
 ([ADR 0014](adr/0014-deleting-on-a-device-needs-a-named-confirmation.md)).
+
+## Data flow: asking the net about a book
+
+```
+⌘E on a selection
+  → MetadataQuery.about(book)                                  (ShelfCore)
+      an ISBN when the book has a valid one, else title + author,
+      else nothing is asked at all
+  → MetadataEndpoint.requests                                  (ShelfCore)
+      one URL per service. No API key anywhere (CONCEPT §9)
+  → MetadataFetcher                                            (ShelfCore, an actor)
+      the cache first ▸ one request per second per service ▸ a retry
+      only for a 5xx or for no answer ▸ a time limit
+          │
+          ▼  MetadataTransport                     ← the only seam
+      URLSessionTransport                                      (App/Shelf)
+          │
+  → OpenLibraryReader / GoogleBooksReader                      (ShelfCore)
+      two quite different JSON shapes → one MetadataCandidate
+  → MetadataScore.ranked                                       (ShelfCore)
+      best first, with the number shown, so a weak best match looks weak
+  → the sheet: a person chooses one
+  → MetadataMerge.proposals                                    (ShelfCore)
+      one line per field: what the book says, what the service says, and
+      whether that is an addition, a replacement, an appendage or nothing
+      — ticked only where it fills a gap (ADR 0015)
+  → the sheet: a person ticks
+  → MetadataMerge.apply → BookField / TagEdit / IdentifierEdit (ShelfCore)
+      the same rules a typed value goes through; a refused value is left
+      out and named, never fatal
+  → LibraryModel.apply → MetadataEditor → LibraryIndex
+      undo first, then metadata.opf, then the index — the Sprint 2a chain,
+      unchanged
+```
+
+**Everything that can be wrong is in the core and is tested without a socket.**
+Which URL, how often, what a 503 means and what a 429 means, whether this was
+asked before, what the two shapes mean, which candidate is the book, what a
+candidate would do to it. The app contributes `URLSessionTransport`, which is
+thirty lines. The tests read stored answers the services really gave
+(`Tests/ShelfCoreTests/Fixtures/online/`); **no test and no CI job opens a
+socket**.
+
+**A service that fails is a line, not a stop.** One refusing still leaves the
+other's candidates, and the failure is one sentence in the sidebar's footer —
+never a dialogue (CONCEPT §9). The day the proof run was taken, Google Books
+answered 429 to everything and Open Library answered nine books out of ten; the
+window showed nine books and one line.
+
+**The cover is the only thing here that writes without Apply**, on its own
+button, only when the book's folder has none, and never into the book file.
 
 ## Concurrency
 

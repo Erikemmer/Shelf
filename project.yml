@@ -53,6 +53,13 @@ targets:
         # book to a reader is the feature; the library is what is never
         # written to from here.
         com.apple.security.files.removable-volumes.read-write: true
+        # Online metadata (Sprint 6, CONCEPT §9). Outgoing only, and only to
+        # Open Library and Google Books, on an explicit ⌘E. Without it every
+        # lookup fails with "the request did not get an answer" and the reason
+        # is invisible — the sandbox refuses the connection before URLSession
+        # ever gets a socket. There is no server entitlement: Shelf listens for
+        # nothing (CONCEPT §12, no content server in v1.0).
+        com.apple.security.network.client: true
     info:
       path: App/Shelf/Resources/Info.plist
       properties:

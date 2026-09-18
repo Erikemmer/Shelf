@@ -30,6 +30,22 @@ public struct MetadataCandidate: Identifiable, Equatable, Sendable {
     /// abridgement from the book it was cut out of, and the list shows it.
     public var pageCount: Int?
 
+    /// Whether this record is about **one edition** or about a *work*.
+    ///
+    /// Google Books answers a volume: one printing, one publisher, one
+    /// language, one date. Open Library's search answers a **work** — every
+    /// edition of it rolled together — and then hands out one publisher, one
+    /// language and one year from among them, with no guarantee they belong to
+    /// the same printing or to the book on the disk.
+    ///
+    /// The Sprint 6 screenshot of *Fantastic Mr Fox* is what this field is for:
+    /// the work record offered `Caedmon Audio Cassette` as the publisher, `ja`
+    /// as the language and **1917** as the year, for a Puffin paperback. All
+    /// three were drawn correctly as what the service said; the year, being the
+    /// only one that filled an empty field, was ticked for the person. It is
+    /// not any more (`MetadataMerge`).
+    public var describesOneEdition: Bool
+
     public init(
         id: String,
         source: MetadataSource,
@@ -44,7 +60,8 @@ public struct MetadataCandidate: Identifiable, Equatable, Sendable {
         summary: String? = nil,
         identifiers: [String: String] = [:],
         coverURL: URL? = nil,
-        pageCount: Int? = nil
+        pageCount: Int? = nil,
+        describesOneEdition: Bool = true
     ) {
         self.id = id
         self.source = source
@@ -60,6 +77,7 @@ public struct MetadataCandidate: Identifiable, Equatable, Sendable {
         self.identifiers = identifiers
         self.coverURL = coverURL
         self.pageCount = pageCount
+        self.describesOneEdition = describesOneEdition
     }
 
     /// The line under the title in the candidate list.

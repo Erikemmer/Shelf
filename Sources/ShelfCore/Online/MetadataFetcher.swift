@@ -209,9 +209,32 @@ public struct LookupResult: Equatable, Sendable {
             && left.ranked.map(\.score) == right.ranked.map(\.score)
     }
 
-    /// The one line the status bar shows, or nothing.
+    /// Everything that went wrong, in full. What the sheet shows, where there
+    /// is room for it.
     public var statusLine: String? {
         guard !problems.isEmpty else { return nil }
         return problems.joined(separator: " ")
+    }
+
+    /// The same, short enough for the status bar.
+    ///
+    /// One failure is said in full — "Google Books answered 429." is the useful
+    /// sentence and it is short. Two are named rather than recited: both
+    /// sentences together came to 130 characters and the sidebar showed
+    /// "…hostname could not be foun…", which tells nobody anything. The whole
+    /// of it is still in the sheet and in the row's help text.
+    public func briefProblem(_ failed: [MetadataSource]) -> String? {
+        guard !problems.isEmpty else { return nil }
+        guard problems.count > 1 else { return problems[0] }
+        let names = failed.map(\.name)
+        let list = names.count == 2 ? names.joined(separator: " and ") : names.joined(separator: ", ")
+        return "\(list) did not answer."
+    }
+
+    /// Which services failed, in the order they were asked.
+    public var failedSources: [MetadataSource] {
+        MetadataSource.allCases.filter { source in
+            problems.contains { $0.hasPrefix(source.name) }
+        }
     }
 }

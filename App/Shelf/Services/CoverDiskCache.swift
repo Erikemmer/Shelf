@@ -110,6 +110,20 @@ actor CoverDiskCache {
         logger.info("cover cache cleared")
     }
 
+    /// Forgets one book's cached covers, both sizes.
+    ///
+    /// For the one case where the file beside the book changes under the cache:
+    /// a cover fetched from the net and written into the book's folder. Without
+    /// this the grid would keep drawing the placeholder it cached until the
+    /// cache was trimmed — wrong, and then quietly right, which is the worse
+    /// kind of wrong.
+    func forget(_ bookID: UUID) {
+        for size in CoverSize.allCases {
+            let key = CoverCacheKey(bookID: bookID, pixelWidth: size.pixels)
+            try? FileManager.default.removeItem(at: folder.appendingPathComponent(fileName(for: key)))
+        }
+    }
+
     // MARK: Facts about files
 
     private func entries() -> [CoverCachePolicy.Entry] {

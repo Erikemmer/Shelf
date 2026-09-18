@@ -12,12 +12,19 @@ public struct FieldProposal: Identifiable, Equatable, Sendable {
         case identifier(String)
     }
 
-    /// Whether the line offers something new, something different, or nothing.
+    /// Whether the line offers something new, something different, something
+    /// additional, or nothing.
     public enum Kind: Equatable, Sendable {
         /// The book has nothing there.
         case add
         /// The book has something else there.
         case replace
+        /// Added to what the book has, taking nothing away. Tags, and only
+        /// tags: every other field holds one value, so offering it is always a
+        /// choice between two. Drawing this as `replace` said "would replace"
+        /// over a line that replaces nothing — found in the first screenshot of
+        /// the sheet.
+        case append
         /// The two agree. Drawn, not tickable: "these already match" is worth
         /// seeing, and a list of only the differences hides how good the match
         /// was.
@@ -32,6 +39,24 @@ public struct FieldProposal: Identifiable, Equatable, Sendable {
     /// What the service says.
     public let proposed: String
     public let kind: Kind
+    /// Whether the line is ticked when the sheet opens.
+    ///
+    /// **Only what fills a gap, and only where the record is about this
+    /// edition.** Taking over a field the book already has is a decision about
+    /// somebody's own library, and a sheet that arrives with eleven
+    /// replacements pre-ticked is a sheet whose "Apply" button quietly
+    /// overwrites work.
+    ///
+    /// Filling an empty field is the thing that was asked for — except from a
+    /// record that describes a *work* rather than one edition, where the
+    /// publisher, the language and the year belong to some edition and not
+    /// necessarily to this one. See `MetadataCandidate.describesOneEdition`
+    /// and ADR 0015.
+    ///
+    /// Tags are not ticked either, although they take nothing away: the
+    /// subjects a catalogue carries are catalogue vocabulary — "Reliability",
+    /// "Accessible book" — and a person's tags are their own.
+    public let isTickedByDefault: Bool
 
     public var id: String {
         switch target {
@@ -41,14 +66,11 @@ public struct FieldProposal: Identifiable, Equatable, Sendable {
         }
     }
 
-    /// Whether the line is ticked when the sheet opens.
-    ///
-    /// **Only what fills a gap.** Taking over a field the book already has is a
-    /// decision about somebody's own library, and a sheet that arrives with
-    /// eleven replacements pre-ticked is a sheet whose "Apply" button quietly
-    /// overwrites work. Filling in what is missing is the thing that was asked
-    /// for (ADR 0015).
-    public var isTickedByDefault: Bool { kind == .add }
+    /// The three fields that belong to a *printing* rather than to a book, and
+    /// so cannot be trusted from a work-level record.
+    static let editionLevel: Set<Target> = [
+        .field(.publisher), .field(.published), .field(.language),
+    ]
 }
 
 /// What a candidate would do to a book, field by field — and what it does when
@@ -72,9 +94,11 @@ public enum MetadataMerge {
             }
             let kind: FieldProposal.Kind =
                 current == proposed ? .same : (current.isEmpty ? .add : .replace)
+            let trustworthy = candidate.describesOneEdition || !FieldProposal.editionLevel.contains(target)
             lines.append(
                 FieldProposal(
-                    target: target, label: label, current: current, proposed: proposed, kind: kind))
+                    target: target, label: label, current: current, proposed: proposed, kind: kind,
+                    isTickedByDefault: kind == .add && trustworthy))
         }
 
         add(.field(.title), BookField.title.label, current: book.title, proposed: candidate.title)
@@ -120,9 +144,11 @@ public enum MetadataMerge {
                     target: .tags, label: "Tags",
                     current: book.tags.joined(separator: ", "),
                     proposed: newTags.joined(separator: ", "),
-                    // Always an addition: nothing is taken away, so there is
-                    // nothing here to replace.
-                    kind: book.tags.isEmpty ? .add : .replace))
+                    // Never a replacement: `apply` adds these and removes
+                    // nothing (`TagEdit`), so a line saying "would replace"
+                    // would be describing something that does not happen.
+                    kind: book.tags.isEmpty ? .add : .append,
+                    isTickedByDefault: false))
         }
         return lines
     }

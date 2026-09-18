@@ -85,6 +85,9 @@ struct MetadataFetcherTests {
         #expect(result.problems.count == 1)
         #expect(result.statusLine?.contains("429") == true)
         #expect(result.statusLine?.contains("Google Books") == true)
+        #expect(result.failedSources == [.googleBooks])
+        // One failure is said in full: the sentence is short and it is useful.
+        #expect(result.briefProblem(result.failedSources) == result.statusLine)
     }
 
     /// A 429 is the service saying "stop". The answer to being told to stop is
@@ -138,6 +141,9 @@ struct MetadataFetcherTests {
         #expect(await transport.asked.count == 4)
         #expect(result.problems.count == 2)
         #expect(result.isEmpty)
+        // Two are named rather than recited: both sentences together came to
+        // 130 characters and the sidebar showed "…could not be foun…".
+        #expect(result.briefProblem(result.failedSources) == "Open Library and Google Books did not answer.")
     }
 
     /// Two free services with no API key are two people's servers paying for

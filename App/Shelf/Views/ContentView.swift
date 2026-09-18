@@ -68,6 +68,13 @@ struct ContentView: View {
         ) {
             DeleteFromDeviceSheet().environment(model)
         }
+        .sheet(
+            isPresented: Binding(
+                get: { model.isFetchMetadataSheetPresented },
+                set: { model.isFetchMetadataSheetPresented = $0 })
+        ) {
+            FetchMetadataSheet().environment(model)
+        }
         .onAppear {
             editingKeys.start(handleEditingKey)
             focus = model.focusTarget

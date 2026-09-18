@@ -330,10 +330,46 @@ is currently assumed.
       Measured: 413 books, 0 certain, 396 suspicions
 - [x] **The inspector names what is `Mixed`** across a selection, and `Added`
       and `Size` stop reporting the anchor book's values as the selection's
-- [ ] Open Library and Google Books, no API key, by ISBN then title + author
-- [ ] Candidate list, then field-by-field old/new with a checkbox each
-- [ ] Cover fetched from the net when the file has none
-- [ ] Network errors are quiet: a line in the status bar, never modal
+- [x] Open Library and Google Books, no API key, by ISBN then title + author.
+      Open Library through `/search.json` for both questions: `/api/books`
+      answered 404 to every ISBN tried ([ADR 0015](adr/0015-online-metadata-two-sources-field-by-field.md))
+- [x] Candidate list with a match score, then field-by-field old/new with a
+      checkbox each. Ticked only where it fills a gap — and not even then from a
+      work-level record
+- [x] Cover fetched from the net when the file has none, on its own button
+- [x] Network errors are quiet: one line in the sidebar's footer, never modal.
+      Photographed against a host that cannot resolve
+- [x] Proof run against both services with ten ISBNs; its answers are the test
+      fixtures. Numbers in `CHANGELOG.md`
+- [x] Screenshots in `docs/screenshots/sprint-6/`, each looked at and judged
+
+### What Sprint 6 found and did not finish
+
+- [ ] **Google Books has never answered.** Its shared anonymous quota was
+      exhausted all day: HTTP 429 to all ten ISBNs, from both hostnames and with
+      either `country` parameter. The reader is therefore tested against **one
+      hand-written fixture** built from Google's documented shape, named as such
+      in `Tests/ShelfCoreTests/Fixtures/online/README.md`. Re-run
+      `Scripts/online-proof.sh` when the quota allows; it overwrites the
+      fixtures with live answers. Until then, everything this repository knows
+      about Google Books' JSON is read off a manual
+- [ ] **The score is lenient with omnibuses.** "Earthsea & The Left Hand of
+      Darkness" scores 94 against "The Left Hand of Darkness" — high enough to
+      be clicked without thinking. A collection is recognisable (several titles
+      joined by `&` or `/`), and recognising it is a rule worth its own test
+      rather than a tweak to the weights
+- [ ] **Open Library's speed varies by an order of magnitude**: 1.9 s to 24 s
+      for the same kind of question, and three of ten proof-run requests timed
+      out at 15 s before the retry was added. A 15-second limit and three
+      attempts means a lookup can take 45 s with only a "Asking Open Library and
+      Google Books" to look at. A first answer shown as soon as *either* service
+      replies would fix it
+- [ ] **Nothing has been measured about the response cache in use.** It is
+      tested, and no run has yet asked the same book twice through the window to
+      see the second lookup come back instantly
+- [ ] **A real disagreement between the two services has never been seen**, so
+      the proof run's "where the two disagree" table is one column of dashes.
+      That is the same 429
 
 ## Sprint 7 – Polish and release
 
