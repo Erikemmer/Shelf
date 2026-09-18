@@ -86,7 +86,11 @@ public enum DeviceDetection {
         profiles: [DeviceProfile] = DeviceProfiles.all,
         exists: (String) -> Bool
     ) -> DeviceProfile? {
-        DeviceProfiles.ordered(profiles).first { matches(volume, $0, exists: exists) }
+        // A reader is something you unplug. The check is here rather than only
+        // in the app's listing because this function is what answers "is this
+        // a device", and the boot disk must not be one whatever is at its root.
+        guard volume.isRemovable else { return nil }
+        return DeviceProfiles.ordered(profiles).first { matches(volume, $0, exists: exists) }
     }
 
     /// A volume is a device when **all** of a profile's markers are there, or
@@ -104,10 +108,53 @@ public enum DeviceDetection {
 
     /// The same question against a real volume on disk.
     public static func profile(
-        forVolumeAt url: URL, name: String, profiles: [DeviceProfile] = DeviceProfiles.all
+        forVolumeAt url: URL, name: String, isRemovable: Bool = true,
+        profiles: [DeviceProfile] = DeviceProfiles.all
     ) -> DeviceProfile? {
-        profile(for: MountedVolume(url: url, name: name), profiles: profiles) { relative in
-            FileManager.default.fileExists(atPath: url.appendingPathComponent(relative).path)
+        profile(
+            for: MountedVolume(url: url, name: name, isRemovable: isRemovable), profiles: profiles
+        ) { relative in
+            existsExactly(relative, under: url)
         }
+    }
+
+    /// Whether a path exists on this volume **spelt exactly this way**.
+    ///
+    /// `FileManager.fileExists` is not enough, and this is not a theoretical
+    /// worry. APFS is case-insensitive by default, so asking a Mac's boot disk
+    /// for `system` and `applications` gets `/System` and `/Applications` and
+    /// the volume answers as a PocketBook. The first run of
+    /// `shelf-tool devices` printed exactly that:
+    ///
+    ///     /Volumes/Macintosh HD
+    ///       device: PocketBook (pocketbook)
+    ///
+    /// A marker is a *name*, and a file system that answers to the wrong case
+    /// is not evidence that the name is there. So each component is checked
+    /// against the directory's own listing.
+    ///
+    /// **The URL form of `contentsOfDirectory`, never the path form.** They
+    /// disagree on FAT, which is what every reader that takes a USB cable is
+    /// formatted with. On a FAT32 card holding a folder called `system`:
+    ///
+    ///     contentsOfDirectory(atPath:)  → ["System", "documents", …]
+    ///     contentsOfDirectory(at:)      → ["system", "documents", …]
+    ///     readdir(3), ls(1), find(1)    → ["system", "documents", …]
+    ///
+    /// The path form is the odd one out, and building the check on it made
+    /// every Kindle and every PocketBook stop being recognised the moment the
+    /// proof run put them on a real FAT32 volume. The URL form agrees with the
+    /// kernel, so it is the one that answers a question about a name.
+    static func existsExactly(_ relative: String, under root: URL) -> Bool {
+        var current = root
+        for component in relative.split(separator: "/").map(String.init) {
+            guard
+                let contents = try? FileManager.default.contentsOfDirectory(
+                    at: current, includingPropertiesForKeys: nil),
+                contents.contains(where: { $0.lastPathComponent == component })
+            else { return false }
+            current = current.appendingPathComponent(component)
+        }
+        return true
     }
 }

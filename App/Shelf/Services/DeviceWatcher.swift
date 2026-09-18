@@ -83,7 +83,9 @@ final class DeviceWatcher {
     /// The readers among them.
     static func connectedDevices(manual: [String: String] = [:]) -> [ConnectedDevice] {
         mountedVolumes().compactMap { volume in
-            if let profile = DeviceDetection.profile(forVolumeAt: volume.url, name: volume.name) {
+            if let profile = DeviceDetection.profile(
+                forVolumeAt: volume.url, name: volume.name, isRemovable: volume.isRemovable)
+            {
                 return ConnectedDevice(volume: volume, profile: profile)
             }
             // A volume the user vouched for by hand, because its marker is not

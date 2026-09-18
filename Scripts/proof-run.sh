@@ -27,6 +27,14 @@
 # every file compared byte for byte, and then the index thrown away again to see
 # whether a thousand shelf memberships come back out of the folders.
 #
+# Section 11 is Sprint 5's: four e-readers made out of disk images (hdiutil,
+# FAT32 and HFS+), detected by their markers, sent 200 books with SHA-256 read
+# back off the device, interrupted and resumed, filled up, read back from a
+# synthetic KoboReader.sqlite, and finally deleted from — on a confirmation that
+# names every file. The library is checked afterwards with `find -newer` and
+# sample hashes: nothing Shelf does to a device may touch it. What still needs
+# real hardware is in docs/BACKLOG.md under "To check on real hardware".
+#
 # The window's own numbers – how long until every visible cover is on screen,
 # and whether a held arrow key stutters – need the app open. `SHELF_TIMING=1`
 # and `docs/BACKLOG.md` say how.
@@ -35,6 +43,7 @@
 # folder is synced, and 5 000 generated books would be uploaded to iCloud.
 set -uo pipefail
 
+HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="${1:-$HOME/Library/Caches/Shelf/synthetic}"
 COUNT="${COUNT:-5000}"
 SOURCE="$ROOT/source"
@@ -435,6 +444,203 @@ if [ "$BOOKS_BACK" = "$MIXED_BOOKS" ] && [ "$FILES_BACK" = "$MIXED_FILES" ] \
 else
     echo "  THE REBUILD LOST SOMETHING" >&2
     exit 1
+fi
+
+
+# ── 11. Devices (Sprint 5) ────────────────────────────────────────────────────
+#
+# Four readers out of disk images. `Scripts/device-images.sh` makes them, and
+# only ever detaches the four it made — a session never ends something it did
+# not start (CLAUDE.md).
+#
+# `SKIP_DEVICES=1` leaves this out, for a run on a Mac where hdiutil is not
+# available or where somebody is using the volume names.
+if [ "${SKIP_DEVICES:-0}" = "1" ]; then
+    say "devices: skipped (SKIP_DEVICES=1)"
+else
+DEVICE_ROOT="${DEVICE_ROOT:-$HOME/Library/Caches/Shelf/measure-library-5}"
+DEVICE_SOURCE="$DEVICE_ROOT/device-source"
+DEVICE_LIBRARY="$DEVICE_ROOT/device-library"
+DEVICE_COUNT="${DEVICE_COUNT:-200}"
+IMAGES="$HERE/device-images.sh"
+
+device_fail() { echo "  $1" >&2; "$IMAGES" unmount >/dev/null 2>&1; exit 1; }
+
+say "making four e-readers out of disk images"
+"$IMAGES" unmount >/dev/null 2>&1
+# Fresh cards every run, or the timings measure nothing: the second run over a
+# Kobo that already holds the books correctly sends none of them, which is the
+# *resume* being proved two steps further down and not a transfer. By name, and
+# only the ones this script makes — a folder in the cache is not a folder to
+# empty (CLAUDE.md).
+for IMAGE in KOBOeReader Kindle tolino PocketBook KindleSmall; do
+    rm -f "$DEVICE_ROOT/device-images/$IMAGE.dmg"
+done
+"$IMAGES" make "$DEVICE_ROOT/device-images" || device_fail "could not make the disk images"
+
+say "which volumes are readers, and which are not"
+"$TOOL" devices
+# The Mac's own disk must not be one of them. It was, on the first run: APFS is
+# case-insensitive, so `/System` and `/Applications` answered a PocketBook's
+# markers. Checked here as well as in the unit test, because this is the shape
+# of the mistake that only shows up against a real file system.
+if "$TOOL" devices | grep -A2 "Macintosh HD" | grep -q "device: [A-Z]"; then
+    device_fail "THE BOOT DISK WAS TAKEN FOR A READER"
+fi
+for NAME in KOBOEREADER KINDLE tolino POCKETBOOK; do
+    "$TOOL" devices | grep -A2 "/Volumes/$NAME$" | grep -q "device: " \
+        || device_fail "$NAME was not recognised"
+done
+echo "  all four recognised, and the boot disk is not one of them ✓"
+
+say "a library of $DEVICE_COUNT books in every format, to send"
+if [ ! -f "$DEVICE_LIBRARY/.shelf/library.json" ]; then
+    rm -rf "$DEVICE_SOURCE" "$DEVICE_LIBRARY"
+    "$TOOL" synthesise-mixed "$DEVICE_SOURCE" "$DEVICE_COUNT" | tail -3
+    mkdir -p "$DEVICE_LIBRARY"
+    "$TOOL" import "$DEVICE_SOURCE" "$DEVICE_LIBRARY" | tail -2
+else
+    echo "  $DEVICE_LIBRARY is already there – left alone"
+fi
+DEVICE_DB="$DEVICE_LIBRARY/.shelf/library.sqlite"
+LIB_FILES_BEFORE=$(find "$DEVICE_LIBRARY" -type f | wc -l | tr -d ' ')
+# A marker whose timestamp every later `find -newer` is measured against.
+touch "$DEVICE_ROOT/.before-devices"
+echo "  library: $LIB_FILES_BEFORE files"
+
+say "sending 250 books to the Kobo, verified on the device"
+/usr/bin/time -l "$TOOL" send "$DEVICE_LIBRARY" /Volumes/KOBOEREADER 250 2>&1 \
+    | grep -Ev "^  *[0-9]+  |^  [0-9]+ / " | tail -12
+"$TOOL" send "$DEVICE_LIBRARY" /Volumes/KOBOEREADER 250 2>&1 | tail -1 | grep -q "nothing to send" \
+    || device_fail "THE SECOND RUN WANTED TO SEND SOMETHING AGAIN"
+echo "  a second run sends nothing – the manifest on the card is the resume ✓"
+
+say "the same books to a Kindle, which reads neither EPUB nor CBZ"
+"$TOOL" send "$DEVICE_LIBRARY" /Volumes/KINDLE 250 2>&1 | grep -Ev "^  [0-9]+ / " | tail -16
+ON_KINDLE=$(ls /Volumes/KINDLE/documents 2>/dev/null | wc -l | tr -d ' ')
+ls /Volumes/KINDLE/documents 2>/dev/null | grep -q "\.epub$" \
+    && device_fail "AN EPUB WAS WRITTEN TO A KINDLE"
+echo "  $ON_KINDLE files on the Kindle, not one of them an EPUB ✓"
+
+say "the names on a FAT32 card"
+LONGEST=$(ls /Volumes/KINDLE/documents | awk '{ print length($0), $0 }' | sort -rn | head -1)
+echo "  longest name: ${LONGEST%% *} characters"
+BAD=$(ls /Volumes/KINDLE/documents | LC_ALL=C grep -c '[\\:*?"<>|]' || true)
+echo "  names holding a character FAT refuses: $BAD"
+[ "${BAD:-0}" = "0" ] || device_fail "A FORBIDDEN CHARACTER REACHED THE CARD"
+OVERLONG=$(ls /Volumes/KINDLE/documents | while IFS= read -r n; do
+    printf '%s' "$n" | wc -c
+done | sort -rn | head -1)
+echo "  longest name in bytes: $(echo "$OVERLONG" | tr -d ' ')"
+[ "$(echo "$OVERLONG" | tr -d ' ')" -le 255 ] || device_fail "A NAME IS LONGER THAN 255 BYTES"
+echo "  every name fits FAT's budget, and none carries a character it refuses ✓"
+
+say "a transfer killed in the middle, and then resumed"
+SHELF_EXIT_AFTER=40 "$TOOL" send "$DEVICE_LIBRARY" /Volumes/POCKETBOOK 120 2>&1 \
+    | grep -Ev "^  [0-9]+ / |^    " | tail -3
+AFTER_KILL=$(ls /Volumes/POCKETBOOK/Books 2>/dev/null | wc -l | tr -d ' ')
+PARTS=$(find /Volumes/POCKETBOOK -name "*.part" | wc -l | tr -d ' ')
+echo "  on the card after the kill: $AFTER_KILL books, $PARTS half-written files"
+# A file left half-written by a kill *during* a copy, which the untidy exit
+# above cannot produce on its own — it stops between files. Planted, so the
+# next run's cleaning is measured rather than assumed.
+head -c 4096 /Volumes/POCKETBOOK/Books/*.epub > "/Volumes/POCKETBOOK/Books/.shelf-send-deadbeef.part" 2>/dev/null
+"$TOOL" send "$DEVICE_LIBRARY" /Volumes/POCKETBOOK 120 2>&1 | grep -Ev "^  [0-9]+ / |^    " | tail -4
+RESUMED=$(ls /Volumes/POCKETBOOK/Books | wc -l | tr -d ' ')
+PARTS_AFTER=$(find /Volumes/POCKETBOOK -name "*.part" | wc -l | tr -d ' ')
+echo "  after the resume: $RESUMED books, $PARTS_AFTER half-written files"
+[ "$RESUMED" = "120" ] || device_fail "THE RESUME DID NOT FINISH THE TRANSFER"
+[ "$PARTS_AFTER" = "0" ] || device_fail "A HALF-WRITTEN FILE WAS LEFT ON THE DEVICE"
+echo "  the resume copied only what was missing and swept up what a kill left ✓"
+
+say "a card with no room left"
+"$IMAGES" small "$DEVICE_ROOT/device-images" 3 | tail -2
+SMALL=/Volumes/KINDLESMALL
+"$TOOL" send "$DEVICE_LIBRARY" "$SMALL" 250 2>&1 | grep -Ev "^    |^  [0-9]+ / " | tail -4
+WRITTEN=$(ls "$SMALL/documents" 2>/dev/null | wc -l | tr -d ' ')
+echo "  files written: $WRITTEN"
+[ "$WRITTEN" = "0" ] || device_fail "SOMETHING WAS COPIED ONTO A FULL CARD"
+"$TOOL" send "$DEVICE_LIBRARY" "$SMALL" 20 2>&1 | grep -Ev "^    |^  [0-9]+ / " | tail -3
+echo "  refused before the first byte, and a plan that fits still goes ✓"
+
+say "reading a Kobo back – progress, shelves and read status"
+"$TOOL" kobo-synthesise /Volumes/KOBOEREADER | tail -2
+"$TOOL" kobo-read /Volumes/KOBOEREADER | tail -6
+"$TOOL" kobo-read /Volumes/KOBOEREADER | grep -q "^UNCHANGED" \
+    || device_fail "THE DEVICE'S DATABASE WAS WRITTEN TO"
+
+say "what is on the device, matched to the library's books"
+CONTENTS=$("$TOOL" device-contents /Volumes/KINDLE "$DEVICE_LIBRARY")
+echo "$CONTENTS" | head -3
+# Loudly, not vacuously: the first version counted a string in output that was
+# not there because the command had failed with "no device profile matches",
+# and a check that passes when its subject is missing is not a check.
+echo "$CONTENTS" | grep -q "^files: " || device_fail "DEVICE-CONTENTS DID NOT LIST ANYTHING: $CONTENTS"
+UNMATCHED=$(echo "$CONTENTS" | grep -c "not in the library" || true)
+MATCHED=$(echo "$CONTENTS" | sed -n 's/.*matched to a book: \([0-9]*\).*/\1/p')
+echo "  files Shelf could not place: $UNMATCHED"
+[ "${MATCHED:-0}" -gt 0 ] || device_fail "NOT ONE FILE ON THE DEVICE WAS MATCHED TO A BOOK"
+
+say "deleting on the device – the confirmation names every file"
+DELETE_PATHS=()
+while IFS= read -r NAME; do DELETE_PATHS+=("documents/$NAME"); done \
+    < <(ls "$SMALL/documents" | head -3)
+BEFORE_DELETE=$(ls "$SMALL/documents" | wc -l | tr -d ' ')
+"$TOOL" device-delete "$SMALL" "${DELETE_PATHS[@]}"
+STILL=$(ls "$SMALL/documents" | wc -l | tr -d ' ')
+[ "$STILL" = "$BEFORE_DELETE" ] || device_fail "SOMETHING WAS DELETED WITHOUT A CONFIRMATION"
+echo "  nothing went without the confirmation ✓"
+SHELF_CONFIRM_DELETE=yes "$TOOL" device-delete "$SMALL" "${DELETE_PATHS[@]}" | tail -2
+AFTER_DELETE=$(ls "$SMALL/documents" | wc -l | tr -d ' ')
+echo "  on the card: $BEFORE_DELETE before, $AFTER_DELETE after"
+[ "$AFTER_DELETE" = "$((BEFORE_DELETE - 3))" ] || device_fail "THE DELETION REMOVED THE WRONG NUMBER OF FILES"
+
+# ── The claim the whole section exists to earn ────────────────────────────────
+say "is the library untouched by all of that?"
+LIB_FILES_AFTER=$(find "$DEVICE_LIBRARY" -type f | wc -l | tr -d ' ')
+echo "  files in the library: $LIB_FILES_BEFORE before, $LIB_FILES_AFTER after"
+[ "$LIB_FILES_BEFORE" = "$LIB_FILES_AFTER" ] || device_fail "THE LIBRARY GAINED OR LOST FILES"
+
+# `.shelf/library.sqlite` and its WAL are **expected** to change: reading the
+# library to work out a plan opens the index, and SQLite touches its own files
+# when it does. The index is a cache of the folders (ADR 0001) and can be thrown
+# away at any moment, so that is not what "untouched" means here.
+#
+# What it means is the part that cannot be rebuilt: the book files and the
+# `metadata.opf` beside them. Those are listed separately, and one of them
+# changing is what fails this run.
+TOUCHED_ALL=$(find "$DEVICE_LIBRARY" -type f -newer "$DEVICE_ROOT/.before-devices" | wc -l | tr -d ' ')
+TOUCHED_BOOKS=$(find "$DEVICE_LIBRARY" -type f -newer "$DEVICE_ROOT/.before-devices" \
+    -not -path "*/.shelf/*" | wc -l | tr -d ' ')
+echo "  files modified since the devices were plugged in: $TOUCHED_ALL"
+echo "    of those, inside .shelf/ (the index, a cache): $((TOUCHED_ALL - TOUCHED_BOOKS))"
+echo "    books and metadata.opf: $TOUCHED_BOOKS"
+if [ "$TOUCHED_BOOKS" != "0" ]; then
+    find "$DEVICE_LIBRARY" -type f -newer "$DEVICE_ROOT/.before-devices" -not -path "*/.shelf/*" | head -10
+    device_fail "A BOOK OR ITS METADATA WAS WRITTEN TO"
+fi
+
+# Sample hashes as well as timestamps: a file rewritten with the same content
+# and an old mtime would pass `find -newer` and is exactly what a careless
+# "sync" would do.
+say "sample hashes of the library's own books"
+SAMPLE_BAD=0
+while IFS= read -r FILE; do
+    OURS=$("$TOOL" digest "$FILE")
+    THEIRS=$(shasum -a 256 "$FILE" | awk '{print $1}')
+    IN_INDEX=$(sqlite3 "$DEVICE_DB" "SELECT COUNT(*) FROM formats WHERE sha256 = '$THEIRS'")
+    if [ "$OURS" = "$THEIRS" ] && [ "${IN_INDEX:-0}" -gt 0 ]; then
+        echo "  ${FILE##*/}: unchanged, and the index still knows it"
+    else
+        echo "  ${FILE##*/}: CHANGED"
+        SAMPLE_BAD=1
+    fi
+done < <(find "$DEVICE_LIBRARY" -type f \( -name "*.epub" -o -name "*.azw3" -o -name "*.pdf" \) | head -5)
+[ "$SAMPLE_BAD" = "0" ] || device_fail "A BOOK IN THE LIBRARY CHANGED"
+echo "  the library is byte for byte what it was ✓"
+
+say "putting the disk images away"
+"$IMAGES" unmount
 fi
 
 say "done"

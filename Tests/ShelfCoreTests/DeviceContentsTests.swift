@@ -62,6 +62,33 @@ struct DeviceContentsTests {
         #expect(matched.first?.matchedBy == .name)
     }
 
+    /// Measured on a real FAT32 card in the Sprint 5 proof run: macOS writes
+    /// `Lefèvre` **decomposed** (`e` plus a combining grave) and the library's
+    /// OPF holds it composed. Matching survives that because Swift compares
+    /// Strings by canonical equivalence — but nothing said so, and anyone
+    /// swapping this for a UTF-8 byte comparison would break the badge on
+    /// every book with an accent in its author's name and see nothing fail.
+    @Test("a name the card wrote decomposed still matches the library's composed one")
+    func normalisationDoesNotBreakMatching() {
+        let entry = entry("A Desolation #164", author: "Becky Lefèvre")
+        let composed = "Becky Lef\u{00E8}vre - A Desolation #164.epub"
+        let decomposed = "Becky Lefe\u{0300}vre - A Desolation #164.epub"
+        #expect(composed == decomposed, "Swift compares these as one string")
+
+        let matched = DeviceContents.matched(
+            [DeviceFile(path: decomposed, format: .epub, byteSize: 1)],
+            to: [entry], manifest: DeviceManifest(deviceID: "kobo"), profile: kobo)
+        #expect(matched.first?.bookID == entry.id)
+
+        // And through the manifest, whose path Shelf wrote composed.
+        var manifest = DeviceManifest(deviceID: "kobo")
+        manifest.record(
+            .init(
+                path: composed, bookID: entry.id, title: "A Desolation #164", author: "Becky Lefèvre",
+                format: .epub, byteSize: 1, sha256: "d"))
+        #expect(manifest.entry(at: decomposed) != nil)
+    }
+
     @Test("a file that is nothing in the library stays unmatched")
     func unmatched() {
         let matched = DeviceContents.matched(

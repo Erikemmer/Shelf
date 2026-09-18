@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import ShelfCore
 
@@ -50,6 +51,29 @@ let usage = """
       show <library> <title>        print what the index holds about one book
       digest <file>                 SHA-256 of one file, to compare with shasum
 
+    Devices (Sprint 5). Everything here works on a mounted volume, which in the
+    proof run is a disk image made by `Scripts/device-images.sh` – so the whole
+    of it can be measured without four e-readers on the desk.
+
+      devices                       every mounted volume and which device
+                                    profile, if any, it matches. Reads only
+      device-contents <volume> [library]
+                                    the book files on the volume, matched to the
+                                    library's books where one is given
+      send <library> <volume> [count]
+                                    send the first <count> books to the volume:
+                                    the plan, then the copy with SHA-256 read
+                                    back off the device, then the report
+      device-delete <volume> <path>…
+                                    print the confirmation that names every file
+                                    and, only with SHELF_CONFIRM_DELETE=yes,
+                                    carry it out
+      kobo-synthesise <volume> [count]
+                                    write a synthetic KoboReader.sqlite naming
+                                    the books already on the volume
+      kobo-read <volume>            reading positions, shelves and read status,
+                                    through a copy. Never writes
+
     The Sprint 2b proof run (Scripts/proof-run.sh section 7) uses these four.
     They all address "the first <count> books by book number", which is a stable
     order: the number is in the folder name and no edit changes it, where title
@@ -71,8 +95,9 @@ let usage = """
                                     whether every one of those changes is still
                                     there – run it after a rebuild
 
-    SHELF_EXIT_AFTER=<n> makes `import` leave the process after n files, the way
-    a crash does – it is how the proof run produces an interrupted import.
+    SHELF_EXIT_AFTER=<n> makes `import` and `send` leave the process after n
+    files, the way a crash does – it is how the proof run produces an
+    interrupted import and an interrupted transfer.
 
     Test material belongs under ~/Library/Caches/Shelf, never under ~/Documents.
     """
@@ -94,6 +119,12 @@ case "shelve": try await Commands.shelve(Array(arguments.dropFirst()))
 case "edit": try await Commands.edit(Array(arguments.dropFirst()))
 case "show": try await Commands.show(Array(arguments.dropFirst()))
 case "digest": try Commands.digest(Array(arguments.dropFirst()))
+case "devices": Commands.devices()
+case "device-contents": try await Commands.deviceContents(Array(arguments.dropFirst()))
+case "send": try await Commands.send(Array(arguments.dropFirst()))
+case "device-delete": Commands.deviceDelete(Array(arguments.dropFirst()))
+case "kobo-synthesise": try Commands.koboSynthesise(Array(arguments.dropFirst()))
+case "kobo-read": try Commands.koboRead(Array(arguments.dropFirst()))
 case "bulk-edit": try await Commands.bulkEdit(Array(arguments.dropFirst()))
 case "bulk-tag-undo": try await Commands.bulkTagUndo(Array(arguments.dropFirst()))
 case "epub-digests": try await Commands.epubDigests(Array(arguments.dropFirst()))
@@ -481,6 +512,302 @@ enum Commands {
             print("  \(strongest.label): \(entry.book.title) — \(entry.book.primaryAuthor) [\(entry.formatLine)]")
         }
         if found.isEmpty { print("  (no book in this library looks like a copy of another)") }
+    }
+
+    // MARK: devices
+
+    /// Where a volume is, and what it is.
+    ///
+    /// The tool has no `NSWorkspace`, so it takes what is under `/Volumes`
+    /// rather than the workspace's list. That is the same set for the proof
+    /// run's disk images, and it is the one thing here the app does
+    /// differently — said out loud so nobody reads a green proof run as
+    /// evidence that the *notification* path works. That one needs hardware,
+    /// and it is in `docs/BACKLOG.md`.
+    static func mountedVolumes() -> [MountedVolume] {
+        let manager = FileManager.default
+        let names = (try? manager.contentsOfDirectory(atPath: "/Volumes")) ?? []
+        return names.sorted().compactMap { name in
+            let url = URL(fileURLWithPath: "/Volumes/\(name)", isDirectory: true)
+            var isDirectory: ObjCBool = false
+            guard manager.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue
+            else { return nil }
+            let values = try? url.resourceValues(forKeys: [
+                .volumeAvailableCapacityKey, .volumeTotalCapacityKey, .volumeIsRemovableKey,
+                .volumeIsEjectableKey, .volumeIsInternalKey,
+            ])
+            // A disk image mounted by `Scripts/device-images.sh` is ejectable,
+            // which is what makes it stand in for a reader here.
+            let removable =
+                ((values?.volumeIsRemovable ?? false) || (values?.volumeIsEjectable ?? false))
+                && !(values?.volumeIsInternal ?? false)
+            return MountedVolume(
+                url: url, name: name,
+                freeBytes: values?.volumeAvailableCapacity.map(Int64.init),
+                totalBytes: values?.volumeTotalCapacity.map(Int64.init),
+                isRemovable: removable,
+                fileSystem: fileSystemName(of: url))
+        }
+    }
+
+    /// `msdos`, `exfat`, `hfs`, `apfs` — from `statfs`, never from a localized
+    /// description string.
+    static func fileSystemName(of url: URL) -> String? {
+        var buffer = statfs()
+        guard statfs(url.path, &buffer) == 0 else { return nil }
+        return withUnsafeBytes(of: &buffer.f_fstypename) { raw in
+            guard let base = raw.baseAddress else { return nil }
+            return String(cString: base.assumingMemoryBound(to: CChar.self))
+        }
+    }
+
+    static func connectedDevice(at path: String) -> ConnectedDevice? {
+        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        let volume =
+            mountedVolumes().first { $0.url.path == url.path }
+            ?? MountedVolume(
+                url: url, name: url.lastPathComponent, freeBytes: nil, totalBytes: nil,
+                fileSystem: fileSystemName(of: url))
+        guard
+            let profile = DeviceDetection.profile(
+                forVolumeAt: volume.url, name: volume.name, isRemovable: volume.isRemovable)
+        else { return nil }
+        return ConnectedDevice(volume: volume, profile: profile)
+    }
+
+    static func devices() {
+        let volumes = mountedVolumes()
+        print("mounted volumes: \(volumes.count)")
+        for volume in volumes {
+            let profile = DeviceDetection.profile(
+                forVolumeAt: volume.url, name: volume.name, isRemovable: volume.isRemovable)
+            let free = volume.freeBytes.map(ByteCount.format) ?? "unknown"
+            print("  \(volume.url.path)")
+            print(
+                "    name: \(volume.name) · file system: \(volume.fileSystem ?? "unknown") · free: \(free)"
+                    + (volume.hasFAT32FileSizeLimit ? " · 4 GB file limit" : ""))
+            if let profile {
+                print(
+                    "    device: \(profile.name) (\(profile.id)) · books in: \(profile.booksFolder.isEmpty ? "the volume root" : profile.booksFolder)"
+                )
+                print("    takes: \(profile.preferredFormats.map(\.label).joined(separator: " > "))")
+            } else {
+                print("    device: no profile matches — not a reader")
+            }
+        }
+    }
+
+    // MARK: device-contents
+
+    static func deviceContents(_ arguments: [String]) async throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool device-contents <volume> [library]")
+            exit(2)
+        }
+        guard let device = connectedDevice(at: path) else {
+            print("no device profile matches \(path)")
+            exit(1)
+        }
+        var entries: [LibraryEntry] = []
+        if arguments.count > 1 {
+            let (library, _) = try Library.open(
+                URL(fileURLWithPath: (arguments[1] as NSString).expandingTildeInPath, isDirectory: true))
+            entries = try await LibraryIndex(library: library).allEntries()
+        }
+        let manifest = DeviceManifest.read(fromVolume: device.volume.url, deviceID: device.profile.id)
+        let files = DeviceContents.matched(
+            DeviceContents.list(on: device), to: entries, manifest: manifest, profile: device.profile)
+
+        print("\(device.profile.name) at \(device.volume.url.path)")
+        print("files: \(files.count) · matched to a book: \(files.count { $0.bookID != nil })")
+        let titles = Dictionary(entries.map { ($0.id, $0.book.title) }, uniquingKeysWith: { first, _ in first })
+        for file in files {
+            let book = file.bookID.flatMap { titles[$0] }
+            print(
+                "  \(file.path)  \(ByteCount.format(file.byteSize))"
+                    + (book.map { "  —  \($0) (\(file.matchedBy?.label ?? ""))" } ?? "  —  not in the library"))
+        }
+    }
+
+    // MARK: send
+
+    static func send(_ arguments: [String]) async throws {
+        guard arguments.count >= 2 else {
+            print("usage: shelf-tool send <library> <volume> [count]")
+            exit(2)
+        }
+        let (library, _) = try Library.open(
+            URL(fileURLWithPath: (arguments[0] as NSString).expandingTildeInPath, isDirectory: true))
+        guard let device = connectedDevice(at: arguments[1]) else {
+            print("no device profile matches \(arguments[1])")
+            exit(1)
+        }
+        let limit = arguments.count > 2 ? Int(arguments[2]) : nil
+        let index = try LibraryIndex(library: library)
+        // By book number, which is stable: a title changes when it is edited
+        // and the same run would then send a different set.
+        var entries = try await index.allEntries().sorted { $0.number < $1.number }
+        if let limit { entries = Array(entries.prefix(limit)) }
+
+        let manifest = DeviceManifest.read(fromVolume: device.volume.url, deviceID: device.profile.id)
+        let candidates = entries.map {
+            TransferCandidate(
+                entry: $0, folder: library.root.appendingPathComponent($0.folder, isDirectory: true))
+        }
+        let planStarted = Date()
+        let plan = TransferPlanner.plan(candidates: candidates, device: device, manifest: manifest)
+        print("\(device.profile.name) at \(device.volume.url.path)")
+        print("plan: \(plan.summary()) · \(ImportReport.duration(Date().timeIntervalSince(planStarted)))")
+        for reason in SkippedTransfer.Reason.allCases {
+            let group = plan.skipped(for: reason)
+            guard !group.isEmpty else { continue }
+            print("  \(reason.label): \(group.count)")
+            for skipped in group.prefix(10) { print("    \(skipped.title)") }
+            if group.count > 10 { print("    … and \(group.count - 10) more") }
+        }
+        guard !plan.isEmpty else {
+            print("nothing to send")
+            return
+        }
+        guard plan.fits(freeBytes: device.volume.freeBytes) else {
+            print(
+                "NOT ENOUGH ROOM: \(ByteCount.format(plan.requiredBytes)) needed, "
+                    + "\(ByteCount.format(device.volume.freeBytes ?? 0)) free. Nothing was copied.")
+            exit(3)
+        }
+
+        let started = Date()
+        let outcome = try await TransferRunner(makeHasher: PortableSHA256Hasher.factory).run(
+            .init(device: device, plan: plan, manifest: manifest),
+            progress: { progress in
+                if progress.filesDone > 0, progress.filesDone % 50 == 0 {
+                    print("  \(progress.filesDone) / \(progress.filesTotal)")
+                }
+                // The untidy exit, exactly as `import` has one: this is how the
+                // proof run produces a transfer that was cut off mid-copy.
+                if let after = ProcessInfo.processInfo.environment["SHELF_EXIT_AFTER"].flatMap(Int.init),
+                    progress.filesDone >= after
+                {
+                    print("SHELF_EXIT_AFTER=\(after) – leaving the process now, mid-transfer")
+                    exit(9)
+                }
+            })
+        try? outcome.report.append(toVolume: device.volume.url)
+        print(outcome.report.headline)
+        print("took \(ImportReport.duration(Date().timeIntervalSince(started)))")
+        for failure in outcome.report.failures { print("  FAILED \(failure.title): \(failure.message)") }
+        print("manifest on the device: \(outcome.manifest.entries.count) files")
+    }
+
+    // MARK: device-delete
+
+    static func deviceDelete(_ arguments: [String]) {
+        guard arguments.count >= 2 else {
+            print("usage: shelf-tool device-delete <volume> <path on the volume>…")
+            exit(2)
+        }
+        guard let device = connectedDevice(at: arguments[0]) else {
+            print("no device profile matches \(arguments[0])")
+            exit(1)
+        }
+        let wanted = Set(arguments.dropFirst())
+        let files = DeviceContents.list(on: device).filter { wanted.contains($0.path) }
+        guard !files.isEmpty else {
+            print("none of those paths is a book file on \(device.volume.url.path)")
+            exit(1)
+        }
+
+        var manifest = DeviceManifest.read(fromVolume: device.volume.url, deviceID: device.profile.id)
+        let titles = Dictionary(
+            manifest.entries.map { ($0.bookID, $0.title) }, uniquingKeysWith: { first, _ in first })
+        let confirmation = DeviceDeletion.Confirmation(
+            deviceName: device.name, files: files, titles: titles)
+
+        // The confirmation, in full, before anything happens — the same text
+        // the sheet shows, from the same place (ADR 0014).
+        print(confirmation.question)
+        print(confirmation.explanation)
+        for line in confirmation.lines { print("  \(line)") }
+
+        guard ProcessInfo.processInfo.environment["SHELF_CONFIRM_DELETE"] == "yes" else {
+            print("")
+            print("Nothing was deleted. Set SHELF_CONFIRM_DELETE=yes to carry this out.")
+            return
+        }
+        let outcome = DeviceDeletion.delete(files, fromVolume: device.volume.url, manifest: &manifest)
+        try? manifest.write(toVolume: device.volume.url)
+        print("")
+        print(outcome.summary)
+        for (path, reason) in outcome.failed.sorted(by: { $0.key < $1.key }) {
+            print("  FAILED \(path): \(reason)")
+        }
+    }
+
+    // MARK: kobo
+
+    /// Writes a synthetic `KoboReader.sqlite` describing the books that are
+    /// already on the volume.
+    ///
+    /// Synthetic, because a borrowed one would carry somebody's reading history
+    /// into this repository — and because the point being measured is that
+    /// Shelf reads the file and never writes it, which a fixture can show.
+    static func koboSynthesise(_ arguments: [String]) throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool kobo-synthesise <volume> [count]")
+            exit(2)
+        }
+        let volume = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        let profile = DeviceProfiles.profile(id: "kobo") ?? DeviceProfiles.all[0]
+        let device = ConnectedDevice(
+            volume: MountedVolume(url: volume, name: volume.lastPathComponent), profile: profile)
+        let files = DeviceContents.list(on: device)
+        let count = arguments.count > 1 ? (Int(arguments[1]) ?? files.count) : files.count
+
+        var random = SeededGenerator(seed: 20_260_918)
+        let shelfNames = ["On the train", "Holiday", "Book club"]
+        let entries = files.prefix(count).enumerated().map { offset, file -> SyntheticKoboDatabase.Entry in
+            let percent = Int(random.next() % 101)
+            let status: KoboReadingState.ReadStatus = percent == 0 ? .unread : (percent >= 100 ? .finished : .reading)
+            return SyntheticKoboDatabase.Entry(
+                path: file.path,
+                title: (file.name as NSString).deletingPathExtension,
+                author: "Synthetic Author",
+                percentRead: percent,
+                status: status,
+                shelves: offset % 3 == 0 ? [shelfNames[offset % shelfNames.count]] : [],
+                lastReadAt: Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 3_600))
+        }
+        let url = volume.appendingPathComponent(KoboReadingState.relativePath)
+        try SyntheticKoboDatabase(entries: Array(entries)).write(to: url)
+        print("wrote a synthetic \(KoboReadingState.relativePath) with \(entries.count) books")
+        print("NOT a real device database: the tables and columns Shelf reads, and nothing else.")
+    }
+
+    static func koboRead(_ arguments: [String]) throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool kobo-read <volume>")
+            exit(2)
+        }
+        let volume = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        let database = volume.appendingPathComponent(KoboReadingState.relativePath)
+        let before = try FileDigest.sha256(of: database, makeHasher: PortableSHA256Hasher.factory)
+
+        let cache = calibreCacheDirectory
+        let reading = try KoboReadingState().read(volume: volume, cacheDirectory: cache)
+        let after = try FileDigest.sha256(of: database, makeHasher: PortableSHA256Hasher.factory)
+
+        print("books the device knows: \(reading.books.count)")
+        for book in reading.books.prefix(15) {
+            let shelves = book.shelves.isEmpty ? "" : " · shelves: \(book.shelves.joined(separator: ", "))"
+            print("  \(book.path)  \(book.status.label) \(book.percentRead)%\(shelves)")
+        }
+        if reading.books.count > 15 { print("  … and \(reading.books.count - 15) more") }
+        for warning in reading.warnings { print("  warning: \(warning)") }
+        print("")
+        print("KoboReader.sqlite before: \(before)")
+        print("KoboReader.sqlite after:  \(after)")
+        print(before == after ? "UNCHANGED – the device's database was only read" : "CHANGED – this is a defect")
+        if before != after { exit(4) }
     }
 
     // MARK: calibre

@@ -108,6 +108,75 @@ struct DeviceTests {
         #expect(first?.id == "kindle")
     }
 
+    /// Found by running `shelf-tool devices` for the first time, which printed
+    ///
+    ///     /Volumes/Macintosh HD
+    ///       device: PocketBook (pocketbook)
+    ///
+    /// APFS is case-insensitive, so `/System` and `/Applications` answer to a
+    /// profile asking for `system` and `applications`. A marker is a name, and
+    /// a file system that answers to the wrong case is not evidence the name is
+    /// there — so each component is checked against the directory's own listing.
+    @Test("a marker spelt in another case is not a marker")
+    func markersAreCaseExact() throws {
+        let folder = try TemporaryFolder()
+        let volume = try folder.folder("volume")
+        _ = try folder.folder("volume/System")
+        _ = try folder.folder("volume/Applications")
+
+        #expect(!DeviceDetection.existsExactly("system", under: volume))
+        #expect(!DeviceDetection.existsExactly("applications", under: volume))
+        #expect(DeviceDetection.existsExactly("System", under: volume))
+        #expect(
+            DeviceDetection.profile(forVolumeAt: volume, name: "Macintosh HD") == nil,
+            "a Mac's boot disk is not a PocketBook")
+    }
+
+    /// The other half of that fix, and the half this suite **cannot** prove:
+    /// `existsExactly` has to use the URL form of `contentsOfDirectory`.
+    ///
+    /// The two forms disagree on FAT, and only on FAT — the path form reports a
+    /// folder called `system` as `System`, where the URL form, `readdir`, `ls`
+    /// and `find` all say `system`. The test above passes with either, because
+    /// a temporary folder is on APFS. The path form made every Kindle and every
+    /// PocketBook stop being recognised the moment the proof run put them on a
+    /// FAT32 disk image, and `Scripts/proof-run.sh` section 11 is what catches
+    /// that. This test exists to say so where somebody tidying the function
+    /// will read it.
+    @Test("case-exactness is checked through the URL listing, which is the one FAT agrees with")
+    func theListingAPIMatters() throws {
+        let folder = try TemporaryFolder()
+        let volume = try folder.folder("volume")
+        _ = try folder.folder("volume/system")
+        let contents = try FileManager.default.contentsOfDirectory(
+            at: volume, includingPropertiesForKeys: nil)
+        #expect(contents.map(\.lastPathComponent) == ["system"])
+        #expect(DeviceDetection.existsExactly("system", under: volume))
+    }
+
+    @Test("a marker several folders deep is found, and a missing step is not")
+    func nestedMarkers() throws {
+        let folder = try TemporaryFolder()
+        let volume = try folder.folder("volume")
+        try folder.write("volume/.kobo/KoboReader.sqlite", text: "x")
+
+        #expect(DeviceDetection.existsExactly(".kobo/KoboReader.sqlite", under: volume))
+        #expect(!DeviceDetection.existsExactly(".kobo/koboreader.sqlite", under: volume))
+        #expect(!DeviceDetection.existsExactly(".kobo/Something Else", under: volume))
+        #expect(DeviceDetection.profile(forVolumeAt: volume, name: "KOBOeReader")?.id == "kobo")
+    }
+
+    /// A reader is something you unplug. The boot disk must not be one whatever
+    /// happens to be at its root.
+    @Test("a volume that cannot be unplugged is never a device")
+    func onlyRemovableVolumes() {
+        let paths: Set<String> = [".kobo/KoboReader.sqlite"]
+        let fixed = MountedVolume(
+            url: URL(fileURLWithPath: "/"), name: "Macintosh HD", isRemovable: false)
+        #expect(DeviceDetection.profile(for: fixed) { paths.contains($0) } == nil)
+        #expect(DeviceDetection.profile(for: volume("KOBOeReader")) { paths.contains($0) }?.id == "kobo")
+    }
+
     // MARK: File names on the device
 
     @Test("a book on a device is {author} - {title}.{ext}")
