@@ -8,6 +8,35 @@ on and what was *not* measured.
 Measured on Erik's Mac (M-series, macOS 15.6) against
 `~/Library/Caches/Shelf/measure-library-7/`.
 
+### Added — `make release`: archive, sign, notarise, staple, assess
+
+Seven steps, each of which says what it did, in `Scripts/release.sh`
+([docs/RELEASE.md](docs/RELEASE.md)). **It never creates anything that costs
+money and never touches a certificate**: it reads a `Developer ID Application`
+identity out of the keychain, and a `notarytool` **keychain profile** for the
+Apple ID — so no password is ever on a command line, in an environment variable
+or in a file in this repository.
+
+`make release-dry` signs **ad hoc**, skips the two steps that need Apple and
+does everything else for real. Measured on 18 September 2026, version 0.1.0:
+
+```
+release: code directory flags: 0x10002(adhoc,runtime)
+release: hardened runtime: on
+release: Shelf-0.1.0.zip (5209 KB)
+```
+
+The entitlements read back **out of the signed build** rather than out of
+`project.yml`: app-sandbox, bookmarks.app-scope, removable-volumes.read-write,
+user-selected.read-write, network.client. Five, and no server entitlement —
+Shelf listens for nothing (CONCEPT §12).
+
+With no certificate in the keychain a real run stops at step 2 and says what to
+make and where, which is also proved above.
+
+**Nothing has ever been notarised.** Steps 6 and 7 have never run; there is no
+Developer ID on this Mac, and that is Erik's to make.
+
 ### Added — German, and a test for each of the three ways of losing it
 
 Every word Shelf draws is now in `App/Shelf/Resources/Localizable.xcstrings`:

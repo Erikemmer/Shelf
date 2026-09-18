@@ -15,7 +15,7 @@ CACHE ?= $(HOME)/Library/Caches/Shelf
 SYNTHETIC ?= $(CACHE)/synthetic
 
 .PHONY: help bootstrap test build lint format project app app-debug smoke synthetic synthetic-clean proof \
-	online-proof online-library online-shots clean
+	online-proof online-library online-shots german-shots release release-dry clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -73,6 +73,15 @@ online-library: ## Build the twelve-book library the Sprint 6 screenshots use
 
 online-shots: online-library ## Photograph Fetch Metadata against the live services (needs an unlocked screen)
 	@Scripts/online-shot.sh
+
+german-shots: ## Photograph the window in German (needs an unlocked screen)
+	@Scripts/german-shots.sh
+
+release: ## Build, sign, notarise and staple a downloadable Shelf (needs a Developer ID)
+	@Scripts/release.sh
+
+release-dry: ## The same path with an ad-hoc signature, as far as notarisation – needs nothing
+	@RELEASE_DRY_RUN=1 Scripts/release.sh
 
 clean: ## Remove build products
 	rm -rf .build Shelf.xcodeproj DerivedData
