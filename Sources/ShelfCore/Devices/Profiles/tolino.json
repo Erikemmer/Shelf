@@ -1,0 +1,12 @@
+{
+  "id": "tolino",
+  "name": "Tolino",
+  "markers": [".tolino"],
+  "volumeNames": ["tolino"],
+  "booksFolder": "Books",
+  "formats": ["epub", "pdf"],
+  "preferredFormats": ["epub", "pdf"],
+  "fileNamePattern": "{author} - {title}",
+  "readBack": "fileList",
+  "note": null
+}

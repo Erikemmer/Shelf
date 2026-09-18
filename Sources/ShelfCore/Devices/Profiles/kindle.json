@@ -1,0 +1,12 @@
+{
+  "id": "kindle",
+  "name": "Kindle",
+  "markers": ["system", "documents"],
+  "volumeNames": [],
+  "booksFolder": "documents",
+  "formats": ["azw3", "mobi", "pdf"],
+  "preferredFormats": ["azw3", "mobi", "pdf"],
+  "fileNamePattern": "{author} - {title}",
+  "readBack": "fileList",
+  "note": "A Kindle does not read EPUB over USB. Shelf sends AZW3, MOBI or PDF instead; a book that has none of those cannot be sent."
+}

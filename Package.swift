@@ -24,6 +24,11 @@ let package = Package(
             name: "ShelfCore",
             dependencies: [.product(name: "GRDB", package: "GRDB.swift")],
             path: "Sources/ShelfCore",
+            // The device profiles are data, not code (ADR 0013): four JSON
+            // files read at runtime through `Bundle.module`, which SwiftPM
+            // makes on macOS and on Linux alike — so the Linux CI job sees the
+            // same profiles the app does.
+            resources: [.copy("Devices/Profiles")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         // Command-line proof that the library, the EPUB reader and the importer

@@ -1,0 +1,12 @@
+{
+  "id": "kobo",
+  "name": "Kobo",
+  "markers": [".kobo/KoboReader.sqlite"],
+  "volumeNames": [],
+  "booksFolder": "",
+  "formats": ["epub", "kepub", "pdf", "cbz"],
+  "preferredFormats": ["kepub", "epub", "pdf", "cbz"],
+  "fileNamePattern": "{author} - {title}",
+  "readBack": "kobo",
+  "note": null
+}

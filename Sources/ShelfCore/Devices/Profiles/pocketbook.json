@@ -1,0 +1,12 @@
+{
+  "id": "pocketbook",
+  "name": "PocketBook",
+  "markers": ["system", "applications"],
+  "volumeNames": [],
+  "booksFolder": "Books",
+  "formats": ["epub", "pdf", "mobi", "cbz", "cbr"],
+  "preferredFormats": ["epub", "pdf", "mobi", "cbz", "cbr"],
+  "fileNamePattern": "{author} - {title}",
+  "readBack": "fileList",
+  "note": null
+}
