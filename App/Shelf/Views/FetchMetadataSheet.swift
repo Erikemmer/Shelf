@@ -189,7 +189,7 @@ struct FetchMetadataSheet: View {
             .labelsHidden()
             // A field the two already agree about has nothing to take over.
             .disabled(proposal.kind == .same)
-            .accessibilityLabel("Take over \(proposal.label)")
+            .accessibilityLabel("Take over \(proposal.label) from \(proposal.sourceLabel)")
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -199,6 +199,14 @@ struct FetchMetadataSheet: View {
                     Text(Self.kindLabel(proposal.kind))
                         .font(.caption2)
                         .foregroundStyle(proposal.kind == .replace ? Slate.accent : Slate.textSecondary)
+                    Spacer(minLength: 8)
+                    // Who said it. With two services there is no such thing as
+                    // "what the service says", and a person choosing between
+                    // two answers has to be able to see whose each one is.
+                    Text(proposal.sourceLabel)
+                        .font(.caption2)
+                        .foregroundStyle(Slate.textSecondary.opacity(0.8))
+                        .lineLimit(1)
                 }
                 // Old above new, and the old one struck through only when it
                 // would actually go: a replacement that is not ticked is not a
@@ -219,7 +227,13 @@ struct FetchMetadataSheet: View {
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .contain)
-        .help(Self.help(for: proposal))
+        .help(Self.help(for: proposal, contested: Self.isContested(proposal, in: online.proposals)))
+    }
+
+    /// Whether the other service answered this field differently, so this line
+    /// and its neighbour are a choice between two rather than two decisions.
+    private static func isContested(_ proposal: FieldProposal, in all: [FieldProposal]) -> Bool {
+        proposal.target != .tags && all.contains { $0.targetID == proposal.targetID && $0.id != proposal.id }
     }
 
     private static func kindLabel(_ kind: FieldProposal.Kind) -> String {
@@ -231,7 +245,11 @@ struct FetchMetadataSheet: View {
         }
     }
 
-    private static func help(for proposal: FieldProposal) -> String {
+    private static func help(for proposal: FieldProposal, contested: Bool) -> String {
+        if contested {
+            return "\(proposal.sourceLabel) says this; the other service says something else. "
+                + "Ticked neither, because that is a decision. Ticking one unticks the other"
+        }
         switch proposal.kind {
         case .add: return "\(proposal.label) is empty on this book — ticked because it fills a gap"
         case .replace:

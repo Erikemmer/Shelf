@@ -23,8 +23,10 @@ struct MetadataMergeTests {
             describesOneEdition: describesOneEdition)
     }
 
+    /// By the **field**, not by the line's id: with two services one field can
+    /// have two lines, so the id carries who said it as well.
     private func line(_ lines: [FieldProposal], _ id: String) throws -> FieldProposal {
-        try #require(lines.first { $0.id == id })
+        try #require(lines.first { $0.targetID == id })
     }
 
     /// A book that knows only its title: every line is something new, and every
@@ -92,9 +94,9 @@ struct MetadataMergeTests {
         let lines = MetadataMerge.proposals(
             for: Book(title: "Dune"),
             from: candidate(publisher: nil, published: nil, language: nil, subjects: [], summary: nil, isbn: nil))
-        #expect(!lines.contains { $0.id == "publisher" })
-        #expect(!lines.contains { $0.id == "published" })
-        #expect(!lines.contains { $0.id == "tags" })
+        #expect(!lines.contains { $0.targetID == "publisher" })
+        #expect(!lines.contains { $0.targetID == "published" })
+        #expect(!lines.contains { $0.targetID == "tags" })
     }
 
     @Test("ticking some lines changes those fields and leaves the rest alone")
@@ -148,7 +150,7 @@ struct MetadataMergeTests {
         let book = Book(title: "Dune")
         let bad = FieldProposal(
             target: .identifier("isbn"), label: "ISBN", current: "", proposed: "9780441013594",
-            kind: .add, isTickedByDefault: true)
+            sources: [.openLibrary], kind: .add, isTickedByDefault: true)
         let applied = MetadataMerge.apply([bad], to: book)
 
         #expect(applied.book.identifiers["isbn"] == nil)
@@ -162,8 +164,8 @@ struct MetadataMergeTests {
         let book = Book(title: "Dune")
         let lines = MetadataMerge.proposals(for: book, from: candidate())
         let bad = FieldProposal(
-            target: .field(.title), label: "Title", current: "Dune", proposed: "", kind: .replace,
-            isTickedByDefault: false)
+            target: .field(.title), label: "Title", current: "Dune", proposed: "",
+            sources: [.googleBooks], kind: .replace, isTickedByDefault: false)
         let applied = MetadataMerge.apply([bad, try line(lines, "authors")], to: book)
 
         #expect(applied.book.title == "Dune")
@@ -179,7 +181,7 @@ struct MetadataMergeTests {
         var loose = candidate(published: nil)
         loose.publishedText = "sometime in the sixties"
         let lines = MetadataMerge.proposals(for: Book(title: "Dune"), from: loose)
-        #expect(!lines.contains { $0.id == "published" })
+        #expect(!lines.contains { $0.targetID == "published" })
     }
 }
 
@@ -214,5 +216,189 @@ struct OnlineValueTests {
     @Test("a code Shelf has never seen is still what the service said")
     func unknownLanguage() {
         #expect(LanguageCode.normalised("xyz") == "xyz")
+    }
+}
+
+/// With two services, "what the service says" stops being a sentence. Every
+/// line names who said it, and where the two say different things there are two
+/// lines rather than one.
+@Suite("Two services on one comparison")
+struct TwoSourceComparisonTests {
+    private func openLibrary(
+        title: String = "Dune", publisher: String? = "Ace", subjects: [String] = ["science fiction"],
+        isbn: String? = "9780441013593"
+    ) -> MetadataCandidate {
+        MetadataCandidate(
+            id: "openlibrary:/works/OL893415W", source: .openLibrary, title: title,
+            authors: ["Frank Herbert"], publisher: publisher, subjects: subjects,
+            identifiers: isbn.map { ["isbn": $0] } ?? [:])
+    }
+
+    private func googleBooks(
+        title: String = "Dune", publisher: String? = "Ace", subjects: [String] = [],
+        isbn: String? = "9780441013593"
+    ) -> MetadataCandidate {
+        MetadataCandidate(
+            id: "googlebooks:B1PxDwAAQBAJ", source: .googleBooks, title: title,
+            authors: ["Frank Herbert"], publisher: publisher, subjects: subjects,
+            identifiers: isbn.map { ["isbn": $0] } ?? [:])
+    }
+
+    private func lines(_ all: [FieldProposal], _ field: String) -> [FieldProposal] {
+        all.filter { $0.targetID == field }
+    }
+
+    @Test("both services saying the same thing is one line that names both")
+    func agreementIsOneLine() throws {
+        let all = MetadataMerge.proposals(
+            for: Book(title: "Dune"), from: [openLibrary(), googleBooks()])
+        let publisher = lines(all, "publisher")
+
+        #expect(publisher.count == 1)
+        #expect(publisher[0].sources == [.openLibrary, .googleBooks])
+        #expect(publisher[0].sourceLabel == "Open Library · Google Books")
+        // Two catalogues agreeing still only fills a gap, and filling a gap is
+        // what is ticked.
+        #expect(publisher[0].isTickedByDefault)
+    }
+
+    @Test("two services that disagree are two lines, and neither is ticked")
+    func disagreementIsTwoLines() throws {
+        let all = MetadataMerge.proposals(
+            for: Book(title: "Dune"),
+            from: [openLibrary(publisher: "Ace"), googleBooks(publisher: "Gollancz")])
+        let publisher = lines(all, "publisher")
+
+        #expect(publisher.count == 2)
+        #expect(publisher.map(\.proposed) == ["Ace", "Gollancz"])
+        #expect(publisher.map(\.sourceLabel) == ["Open Library", "Google Books"])
+        // The field is empty on the book, so each line on its own would fill a
+        // gap. Together they are a question, and a question is not answered by
+        // ticking one of them for somebody.
+        #expect(publisher.allSatisfy { !$0.isTickedByDefault })
+        // Two lines, two ids — a set of ticks could not tell them apart
+        // otherwise.
+        #expect(Set(publisher.map(\.id)).count == 2)
+    }
+
+    @Test("ticking one of two answers unticks the other")
+    func rivalsAreExclusive() throws {
+        let all = MetadataMerge.proposals(
+            for: Book(title: "Dune"),
+            from: [openLibrary(publisher: "Ace"), googleBooks(publisher: "Gollancz")])
+        let publisher = lines(all, "publisher")
+        let ace = try #require(publisher.first)
+        let gollancz = try #require(publisher.last)
+
+        var ticked = MetadataMerge.ticking(ace, in: all, ticked: [])
+        #expect(ticked == [ace.id])
+
+        ticked = MetadataMerge.ticking(gollancz, in: all, ticked: ticked)
+        #expect(ticked == [gollancz.id], "a field holds one value, so the first tick has to go")
+
+        ticked = MetadataMerge.ticking(gollancz, in: all, ticked: ticked)
+        #expect(ticked.isEmpty, "ticking the same line again unticks it")
+    }
+
+    /// Tags are the exception, because applying them adds and removes nothing:
+    /// both catalogues' subjects can be wanted at once.
+    @Test("two services' tags are not exclusive")
+    func tagsFromBothCanBeTaken() throws {
+        let all = MetadataMerge.proposals(
+            for: Book(title: "Dune"),
+            from: [
+                openLibrary(subjects: ["science fiction"]), googleBooks(subjects: ["desert ecology"]),
+            ])
+        let tags = lines(all, "tags")
+        #expect(tags.count == 2)
+
+        var ticked = MetadataMerge.ticking(tags[0], in: all, ticked: [])
+        ticked = MetadataMerge.ticking(tags[1], in: all, ticked: ticked)
+        #expect(ticked.count == 2)
+
+        let applied = MetadataMerge.apply(all.filter { ticked.contains($0.id) }, to: Book(title: "Dune"))
+        #expect(applied.book.tags.sorted() == ["desert ecology", "science fiction"])
+    }
+
+    @Test("a line the two already agree about cannot be ticked at all")
+    func agreedLinesStayUnticked() throws {
+        let book = Book(title: "Dune", authors: ["Frank Herbert"])
+        let all = MetadataMerge.proposals(for: book, from: [openLibrary(), googleBooks()])
+        let authors = try #require(lines(all, "authors").first)
+
+        #expect(authors.kind == .same)
+        #expect(MetadataMerge.ticking(authors, in: all, ticked: []).isEmpty)
+    }
+}
+
+/// Which two records may stand on one comparison at all. Getting this wrong
+/// would offer one book's publisher under another book's name.
+@Suite("The same edition, or two different books")
+struct EditionMatchTests {
+    private func candidate(_ source: MetadataSource, title: String, isbn: String?) -> MetadataCandidate {
+        MetadataCandidate(
+            id: "\(source.slug):1", source: source, title: title, authors: ["Frank Herbert"],
+            identifiers: isbn.map { ["isbn": $0] } ?? [:])
+    }
+
+    @Test("two records carrying the same ISBN are the same edition")
+    func sameISBN() {
+        let ours = candidate(.openLibrary, title: "Dune", isbn: "9780441013593")
+        let theirs = candidate(.googleBooks, title: "Dune: 50th Anniversary", isbn: "9780441013593")
+        #expect(EditionMatch.sameEdition(ours, theirs, asked: .titleAuthor(title: "Dune", author: nil)))
+    }
+
+    @Test("two records carrying different ISBNs are two editions, ISBN question or not")
+    func differentISBN() {
+        let ours = candidate(.openLibrary, title: "Dune", isbn: "9780441013593")
+        let theirs = candidate(.googleBooks, title: "Dune Messiah", isbn: "9780441172696")
+        #expect(!EditionMatch.sameEdition(ours, theirs, asked: .isbn("9780441013593")))
+    }
+
+    /// Both services were asked that ISBN. A record that does not repeat it
+    /// back contradicts nothing — and `MetadataScore` already keeps such a
+    /// record at 85 rather than throwing it away.
+    @Test("a record silent about the ISBN it was asked for is still an answer to it")
+    func silentAboutTheISBN() {
+        let ours = candidate(.openLibrary, title: "Dune", isbn: "9780441013593")
+        let theirs = candidate(.googleBooks, title: "Dune", isbn: nil)
+        #expect(EditionMatch.sameEdition(ours, theirs, asked: .isbn("9780441013593")))
+    }
+
+    /// The one this rule exists for. `MetadataScore` scores "Dune" against
+    /// "Dune Messiah" at 87 and "Clean Code" against its own subtitle at 83, so
+    /// no threshold can pair the second without pairing the first. Two title
+    /// searches are two guesses, and two guesses do not go on one sheet.
+    @Test("two title-search answers with no ISBN are not paired")
+    func titleSearchesAreNotPaired() {
+        let ours = candidate(.openLibrary, title: "Dune", isbn: nil)
+        let theirs = candidate(.googleBooks, title: "Dune Messiah", isbn: nil)
+        #expect(!EditionMatch.sameEdition(ours, theirs, asked: .titleAuthor(title: "Dune", author: nil)))
+    }
+
+    @Test("the comparison takes the chosen record and one best answer per other service")
+    func comparisonPicksOnePerService() {
+        let chosen = candidate(.openLibrary, title: "Dune", isbn: "9780441013593")
+        let query = MetadataQuery.isbn("9780441013593")
+        let ranked = MetadataScore.ranked(
+            [
+                chosen,
+                candidate(.googleBooks, title: "Dune", isbn: "9780441013593"),
+                candidate(.googleBooks, title: "Dune (Paperback)", isbn: "9780441013593"),
+                candidate(.googleBooks, title: "Dune Messiah", isbn: "9780441172696"),
+            ], for: query)
+
+        let records = EditionMatch.comparison(of: chosen, among: ranked, asked: query)
+        #expect(records.count == 2, "one per service, not one per edition on offer")
+        #expect(records.map(\.source) == [.openLibrary, .googleBooks])
+        #expect(records[1].title == "Dune", "the sequel is a different edition and is left out")
+    }
+
+    @Test("a service that answered nothing about this edition adds no lines")
+    func nothingFromTheOtherService() {
+        let chosen = candidate(.openLibrary, title: "Dune", isbn: "9780441013593")
+        let query = MetadataQuery.isbn("9780441013593")
+        let ranked = MetadataScore.ranked([chosen], for: query)
+        #expect(EditionMatch.comparison(of: chosen, among: ranked, asked: query) == [chosen])
     }
 }

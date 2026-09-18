@@ -170,6 +170,7 @@ final class OnlineMetadataModel {
 
     private func search() {
         chosen = nil
+        comparing = []
         proposals = []
         ticked = []
         coverPreview = nil
@@ -212,10 +213,17 @@ final class OnlineMetadataModel {
 
     // MARK: Choosing
 
+    /// The records the comparison is built from: the one that was chosen, and
+    /// the other service's answer about the same edition where there is one
+    /// (`EditionMatch`). More than one means some lines come in pairs.
+    private(set) var comparing: [MetadataCandidate] = []
+
     func choose(_ candidate: MetadataCandidate) {
-        guard let book = currentBook?.book else { return }
+        guard let book = currentBook?.book, let query else { return }
         chosen = candidate
-        proposals = MetadataMerge.proposals(for: book, from: candidate)
+        comparing = EditionMatch.comparison(
+            of: candidate, among: result?.ranked ?? [], asked: query)
+        proposals = MetadataMerge.proposals(for: book, from: comparing)
         ticked = Set(proposals.filter(\.isTickedByDefault).map(\.id))
         loadCoverPreview(candidate)
     }
@@ -224,15 +232,17 @@ final class OnlineMetadataModel {
     /// here, and asking a service twice for one book would be rude twice.
     func backToCandidates() {
         chosen = nil
+        comparing = []
         proposals = []
         ticked = []
         coverPreview = nil
         coverNote = nil
     }
 
+    /// The rule is in the core, because "ticking one of two answers unticks the
+    /// other" is a rule and not a gesture.
     func toggle(_ proposal: FieldProposal) {
-        guard proposal.kind != .same else { return }
-        if ticked.contains(proposal.id) { ticked.remove(proposal.id) } else { ticked.insert(proposal.id) }
+        ticked = MetadataMerge.ticking(proposal, in: proposals, ticked: ticked)
     }
 
     var chosenProposals: [FieldProposal] { proposals.filter { ticked.contains($0.id) } }

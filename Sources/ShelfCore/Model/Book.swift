@@ -124,9 +124,16 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
     /// The author shown in one line: "Jane Austen" or "Gaiman & Pratchett".
     /// Three or more become "Gaiman et al.", because a grid caption has room
     /// for one line and a list of six names tells the reader nothing.
+    ///
+    /// A book with no author shows **nothing**, not a placeholder. A caption
+    /// reading "Unknown" is a word the library did not contain: it looks like
+    /// an author called Unknown, it sorts among the authors, and it says
+    /// nothing a blank line does not already say. Where a name is *required* —
+    /// a folder on disk, a file name on a device — `unknownAuthor` still
+    /// supplies one, because a path cannot be blank.
     public var authorLine: String {
         switch authors.count {
-        case 0: return Self.unknownAuthor
+        case 0: return ""
         case 1: return authors[0]
         case 2: return "\(authors[0]) & \(authors[1])"
         default: return "\(authors[0]) et al."
@@ -137,8 +144,10 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
     /// too, which is what keeps an imported library's paths unchanged.
     public var primaryAuthor: String { authors.first ?? Self.unknownAuthor }
 
-    /// What an author-less book is filed under. Calibre's own word, so a folder
-    /// tree stays compatible in both directions.
+    /// What an author-less book is **filed** under — a folder name, a device
+    /// file name, a duplicate key. Never something the window shows: see
+    /// `authorLine`. Calibre's own word, so a folder tree stays compatible in
+    /// both directions.
     public static let unknownAuthor = "Unknown"
 
     /// The rating as the five stars the inspector shows and the keys 1–5 set.

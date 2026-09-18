@@ -41,6 +41,13 @@ root = sys.argv[1]
 
 # Ten of the proof run's own ISBNs plus two books with none at all, so both
 # questions — by ISBN, and by title and author — are in the picture.
+#
+# The German title carries **no author at all** (""). It used to carry the word
+# "Unbekannt", which is how a German word got into an English window: the
+# sidebar's author list is the names in the library, so a placeholder typed into
+# a fixture is drawn as an author. A book with no author is the case worth
+# having here anyway — it shows that Shelf leaves the line blank rather than
+# inventing somebody (`Book.authorLine`).
 books = [
     ("Fantastic Mr Fox",                          "Roald Dahl",          "9780140328721"),
     ("The Fellowship of the Ring",                "J. R. R. Tolkien",    "9780261103573"),
@@ -50,7 +57,7 @@ books = [
     ("Clean Code",                                "Robert C. Martin",    "9780132350884"),
     ("The Left Hand of Darkness",                 "Ursula K. Le Guin",   None),
     ("The Dispossessed",                          "Ursula K. Le Guin",   None),
-    ("Ein deutscher Heyne-Titel",                 "Unbekannt",           "9783453319950"),
+    ("Ein deutscher Heyne-Titel",                 "",                    "9783453319950"),
     ("Nineteen Eighty-Four",                      "George Orwell",       "9780451524935"),
     ("Die Herren von Winterfell",                 "George R. R. Martin", "9783442267743"),
     ("Harry Potter and the Philosopher's Stone",  "J. K. Rowling",       "9780747532699"),

@@ -3,6 +3,56 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 7 – polish and release · 18 September 2026
+
+Measured on Erik's Mac (M-series, macOS 15.6) against
+`~/Library/Caches/Shelf/measure-library-7/`.
+
+### Fixed — a German word in an English window, and a sheet that would not say who said what
+
+Both came out of one look at `docs/screenshots/sprint-6/online-comparison.jpg`.
+
+**"Unbekannt" in the author list was fixture data, not a fallback.**
+`Scripts/online-library.sh` typed it as the author of its German test title, and
+the sidebar's author list is simply the names the library holds — so a
+placeholder typed into a fixture was drawn as an author. The fixture now gives
+that book **no author at all**, which is the more interesting case anyway.
+
+Every fallback in the code was read for the same fault; there was no other
+German string in any window. What there *was* is the fallback itself:
+`Book.authorLine` answered `"Unknown"` for a book with no author, so the grid
+caption and the table column said a word the library did not contain. **A book
+with no author now shows nothing.** Where a name is *required* — a folder on
+disk, a file name on a device, a duplicate key — `Book.unknownAuthor` still
+supplies "Unknown", because a path cannot be blank; it is Calibre's own word and
+keeps a folder tree compatible in both directions.
+
+**Every line of the comparison now names the service it came from**, and where
+the two services disagree there are **two lines, one each, with a box each**
+(`FieldProposal.sources`, `MetadataMerge.proposals(for:from:)` taking several
+records). With two services, "what the service says" had stopped being a
+sentence: a person was being asked to accept a publisher without being told
+whose publisher it was.
+
+Three rules came with it, all in the core and all tested:
+
+- **A contested field arrives unticked**, even where both answers would fill a
+  gap. Two catalogues disagreeing is the clearest possible sign that this one is
+  a person's decision.
+- **Rival lines are exclusive** (`MetadataMerge.ticking`): a field holds one
+  value, so ticking Google Books' publisher unticks Open Library's. Applying
+  both would have let whichever `apply` reached last win, quietly. **Tags are
+  exempt** — they are added, so both catalogues' subjects can be taken.
+- **Which two records may share one sheet is decided by ISBN and nothing else**
+  (`EditionMatch`). Pairing the two services' best answers to a *title* search
+  by how alike they look cannot be done safely: `MetadataScore` puts "Dune"
+  against "Dune Messiah" at **87** and "Clean Code" against its own subtitled
+  form at **83**, so the sequel scores *higher* than the subtitle and no
+  threshold separates them. A title search therefore shows one service's
+  answers, each named, and says so rather than guessing.
+
+12 new core tests, **600 in total**, up from 588.
+
 ## Sprint 6 – online metadata · 18 September 2026
 
 Measured on Erik's Mac (M-series, macOS 15.6) against

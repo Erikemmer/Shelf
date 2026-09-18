@@ -190,3 +190,59 @@ public enum MetadataScore {
         return calendar.component(.year, from: date)
     }
 }
+
+/// Which records may stand side by side in **one** comparison.
+///
+/// The sheet shows a person one book's fields. Putting two services' answers on
+/// it is only honest if both answers are about the same *edition* — otherwise a
+/// row would offer the publisher of a different printing under the name of a
+/// service that never claimed anything of the sort.
+///
+/// The test is an ISBN and nothing else. It was tempting to pair the two
+/// services' best answers to a title search by how alike they look, and
+/// `MetadataScore` cannot carry that weight: "Clean Code" against "Clean
+/// Code: A Handbook of Agile Software Craftsmanship" scores **83**, and "Dune"
+/// against "Dune Messiah" scores **87** — the sequel scores *higher* than the
+/// subtitle, because the author agrees in both. Any threshold that paired the
+/// first would pair the second, and a book's publisher would be offered from
+/// its sequel's record. So a title search shows one service's answers, each
+/// named, and that is the whole of it.
+public enum EditionMatch {
+    /// Whether two records describe the same edition.
+    ///
+    /// - Both carry an ISBN: they agree, or they do not.
+    /// - The question *was* an ISBN and one of them is silent about it: both
+    ///   services were asked that ISBN, so a record that contradicts nothing is
+    ///   an answer to it.
+    /// - Otherwise: no. Two title-search answers are two guesses.
+    public static func sameEdition(
+        _ one: MetadataCandidate, _ other: MetadataCandidate, asked query: MetadataQuery
+    ) -> Bool {
+        let ours = one.identifiers["isbn"].map(ISBN.normalised)
+        let theirs = other.identifiers["isbn"].map(ISBN.normalised)
+        if let ours, let theirs { return ours == theirs }
+        guard case .isbn(let wanted) = query else { return false }
+        return (ours ?? wanted) == wanted && (theirs ?? wanted) == wanted
+    }
+
+    /// The chosen record, plus each *other* service's best answer about the
+    /// same edition — in `MetadataSource` order, one per service.
+    ///
+    /// Best, not all: a service that offered four editions of one book has one
+    /// opinion about it as far as the comparison is concerned, and four lines
+    /// per field would be a table rather than a decision.
+    public static func comparison(
+        of chosen: MetadataCandidate,
+        among ranked: [(candidate: MetadataCandidate, score: Int)],
+        asked query: MetadataQuery
+    ) -> [MetadataCandidate] {
+        var records = [chosen]
+        for source in MetadataSource.allCases where source != chosen.source {
+            let best = ranked.first {
+                $0.candidate.source == source && sameEdition(chosen, $0.candidate, asked: query)
+            }
+            if let best { records.append(best.candidate) }
+        }
+        return records
+    }
+}

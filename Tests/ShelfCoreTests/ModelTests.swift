@@ -202,7 +202,17 @@ struct SortingTests {
         #expect(Book(title: "x", authors: ["A"]).authorLine == "A")
         #expect(Book(title: "x", authors: ["A", "B"]).authorLine == "A & B")
         #expect(Book(title: "x", authors: ["A", "B", "C"]).authorLine == "A et al.")
-        #expect(Book(title: "x").authorLine == Book.unknownAuthor)
+    }
+
+    @Test("a book with no author shows nothing, and is still filed under a name")
+    func authorLessBookShowsNothing() {
+        let book = Book(title: "x")
+        // What the window draws: blank. A placeholder in a caption reads as an
+        // author called Unknown.
+        #expect(book.authorLine.isEmpty)
+        // What the disk needs: a name, because a folder cannot be blank.
+        #expect(book.primaryAuthor == Book.unknownAuthor)
+        #expect(BookFolderName.authorComponent(for: book) == Book.unknownAuthor)
     }
 
     @Test("the sort orders the table offers put books without a series last")

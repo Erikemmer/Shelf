@@ -38,6 +38,15 @@ public struct FieldProposal: Identifiable, Equatable, Sendable {
     public let current: String
     /// What the service says.
     public let proposed: String
+    /// **Who** says it, in `MetadataSource`'s own order.
+    ///
+    /// Two entries when both services said the same thing, and the line names
+    /// both: two catalogues agreeing is a different fact from one catalogue
+    /// asserting, and a sheet that hid it was asking for a decision with half
+    /// the evidence. Where they *disagree* there is no combined line at all —
+    /// there are two lines, one per service, and `sameTarget` makes them
+    /// exclusive.
+    public let sources: [MetadataSource]
     public let kind: Kind
     /// Whether the line is ticked when the sheet opens.
     ///
@@ -58,13 +67,36 @@ public struct FieldProposal: Identifiable, Equatable, Sendable {
     /// "Accessible book" — and a person's tags are their own.
     public let isTickedByDefault: Bool
 
-    public var id: String {
+    public init(
+        target: Target, label: String, current: String, proposed: String,
+        sources: [MetadataSource], kind: Kind, isTickedByDefault: Bool
+    ) {
+        self.target = target
+        self.label = label
+        self.current = current
+        self.proposed = proposed
+        self.sources = sources
+        self.kind = kind
+        self.isTickedByDefault = isTickedByDefault
+    }
+
+    /// Which **field** the line is about. Two services that disagree make two
+    /// lines sharing this and differing in `id`.
+    public var targetID: String {
         switch target {
         case .field(let field): return field.rawValue
         case .tags: return "tags"
         case .identifier(let scheme): return "identifier:\(scheme)"
         }
     }
+
+    /// The field *and* who offered it, because the field alone is no longer
+    /// unique. Stable across runs: the sources are in `MetadataSource` order.
+    public var id: String { "\(targetID)@\(sources.map(\.slug).joined(separator: "+"))" }
+
+    /// What the sheet writes beside the field's name: "Open Library", or
+    /// "Open Library · Google Books" where the two agree.
+    public var sourceLabel: String { sources.map(\.name).joined(separator: " · ") }
 
     /// The three fields that belong to a *printing* rather than to a book, and
     /// so cannot be trusted from a work-level record.
@@ -86,19 +118,94 @@ public enum MetadataMerge {
     /// Every field the candidate has an opinion about, in the order the
     /// inspector shows them.
     public static func proposals(for book: Book, from candidate: MetadataCandidate) -> [FieldProposal] {
-        var lines: [FieldProposal] = []
+        proposals(for: book, from: [candidate])
+    }
+
+    /// The same, from **every** record the comparison covers — which is more
+    /// than one whenever both services answered about this edition.
+    ///
+    /// With two services, "what the service says" is not a sentence any more.
+    /// So each line names who said it, and where the two say *different*
+    /// things there are **two lines**, one per service, each with its own box.
+    /// Folding them into one line would have meant picking a winner without
+    /// saying so; showing one and dropping the other would have meant hiding an
+    /// answer that had already been fetched.
+    ///
+    /// Two consequences, both deliberate:
+    ///
+    /// - **A contested field arrives unticked**, even where both answers would
+    ///   fill a gap. Two catalogues disagreeing is the clearest possible signal
+    ///   that this one is a person's decision.
+    /// - **Rival lines are exclusive** (`ticking`): a field holds one value, so
+    ///   ticking Google Books' publisher unticks Open Library's. Tags are the
+    ///   exception — they are added, so both services' subjects can be taken.
+    ///
+    /// Which records belong in one comparison is `EditionMatch`'s decision, not
+    /// this function's: it draws whatever it is handed.
+    public static func proposals(for book: Book, from candidates: [MetadataCandidate]) -> [FieldProposal] {
+        let ordered = candidates.sorted {
+            (MetadataSource.allCases.firstIndex(of: $0.source) ?? 0)
+                < (MetadataSource.allCases.firstIndex(of: $1.source) ?? 0)
+        }
+        return lines(from: ordered.flatMap { offers(for: book, from: $0) })
+    }
+
+    /// One service's answer about one field, before the lines are built.
+    struct Offer: Equatable {
+        let target: FieldProposal.Target
+        let label: String
+        let current: String
+        let proposed: String
+        let source: MetadataSource
+        /// False for a publisher, a language or a year out of a *work* record:
+        /// they belong to some edition and not necessarily to this one.
+        let trustworthy: Bool
+    }
+
+    /// Everything one candidate has an opinion about, in the order the
+    /// inspector shows the fields.
+    static func offers(for book: Book, from candidate: MetadataCandidate) -> [Offer] {
+        var offers = bookFieldOffers(for: book, from: candidate)
 
         func add(_ target: FieldProposal.Target, _ label: String, current: String, proposed: String?) {
             guard let proposed, !proposed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 return
             }
-            let kind: FieldProposal.Kind =
-                current == proposed ? .same : (current.isEmpty ? .add : .replace)
-            let trustworthy = candidate.describesOneEdition || !FieldProposal.editionLevel.contains(target)
-            lines.append(
-                FieldProposal(
-                    target: target, label: label, current: current, proposed: proposed, kind: kind,
-                    isTickedByDefault: kind == .add && trustworthy))
+            offers.append(
+                Offer(
+                    target: target, label: label, current: current, proposed: proposed,
+                    source: candidate.source,
+                    trustworthy: candidate.describesOneEdition
+                        || !FieldProposal.editionLevel.contains(target)))
+        }
+
+        if let isbn = candidate.identifiers["isbn"], ISBN.isValid(isbn) {
+            add(
+                .identifier("isbn"), "ISBN", current: book.identifiers["isbn"] ?? "",
+                proposed: ISBN.normalised(isbn))
+        }
+        let newTags = tagsToAdd(for: book, from: candidate)
+        if !newTags.isEmpty {
+            add(
+                .tags, "Tags", current: book.tags.joined(separator: ", "),
+                proposed: newTags.joined(separator: ", "))
+        }
+        return offers
+    }
+
+    private static func bookFieldOffers(for book: Book, from candidate: MetadataCandidate) -> [Offer] {
+        var offers: [Offer] = []
+
+        func add(_ target: FieldProposal.Target, _ label: String, current: String, proposed: String?) {
+            guard let proposed, !proposed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return
+            }
+            offers.append(
+                Offer(
+                    target: target, label: label, current: current, proposed: proposed,
+                    source: candidate.source,
+                    trustworthy: candidate.describesOneEdition
+                        || !FieldProposal.editionLevel.contains(target)))
         }
 
         add(.field(.title), BookField.title.label, current: book.title, proposed: candidate.title)
@@ -130,27 +237,85 @@ public enum MetadataMerge {
         add(
             .field(.description), BookField.description.label,
             current: BookField.description.text(of: book), proposed: candidate.summary)
+        return offers
+    }
 
-        if let isbn = candidate.identifiers["isbn"], ISBN.isValid(isbn) {
-            add(
-                .identifier("isbn"), "ISBN", current: book.identifiers["isbn"] ?? "",
-                proposed: ISBN.normalised(isbn))
+    /// The offers grouped into lines: one line per distinct answer, naming
+    /// every service that gave it.
+    ///
+    /// The field order is the order the offers arrive in — the inspector's —
+    /// and within one field the answers are in the order the services are
+    /// asked, so the sheet reads the same way on every run.
+    static func lines(from offers: [Offer]) -> [FieldProposal] {
+        var order: [FieldProposal.Target] = []
+        var grouped: [FieldProposal.Target: [Offer]] = [:]
+        for offer in offers {
+            if grouped[offer.target] == nil { order.append(offer.target) }
+            grouped[offer.target, default: []].append(offer)
         }
+        return order.flatMap { rows(for: grouped[$0] ?? []) }
+    }
 
-        let newTags = tagsToAdd(for: book, from: candidate)
-        if !newTags.isEmpty {
-            lines.append(
-                FieldProposal(
-                    target: .tags, label: "Tags",
-                    current: book.tags.joined(separator: ", "),
-                    proposed: newTags.joined(separator: ", "),
-                    // Never a replacement: `apply` adds these and removes
-                    // nothing (`TagEdit`), so a line saying "would replace"
-                    // would be describing something that does not happen.
-                    kind: book.tags.isEmpty ? .add : .append,
-                    isTickedByDefault: false))
+    /// The lines for one field: one per distinct value.
+    static func rows(for offers: [Offer]) -> [FieldProposal] {
+        var representatives: [Offer] = []
+        var sources: [String: [MetadataSource]] = [:]
+        var trusted: [String: Bool] = [:]
+        for offer in offers {
+            if sources[offer.proposed] == nil { representatives.append(offer) }
+            sources[offer.proposed, default: []].append(offer.source)
+            trusted[offer.proposed] = (trusted[offer.proposed] ?? true) && offer.trustworthy
         }
-        return lines
+        // Two services with two different answers: neither is ticked. The
+        // disagreement is the thing worth showing, and resolving it silently in
+        // favour of whichever was asked first would be the opposite of showing
+        // it.
+        let contested = representatives.count > 1
+        return representatives.map { offer in
+            let kind = kind(of: offer)
+            let fillsAGap = kind == .add && (trusted[offer.proposed] ?? false) && !contested
+            return FieldProposal(
+                target: offer.target, label: offer.label, current: offer.current,
+                proposed: offer.proposed, sources: sources[offer.proposed] ?? [offer.source],
+                kind: kind,
+                // Tags are never ticked for somebody: a catalogue's subjects
+                // are catalogue vocabulary and a person's tags are their own.
+                isTickedByDefault: offer.target == .tags ? false : fillsAGap)
+        }
+    }
+
+    static func kind(of offer: Offer) -> FieldProposal.Kind {
+        // Tags are never a replacement: `apply` adds these and removes nothing
+        // (`TagEdit`), so a line saying "would replace" would be describing
+        // something that does not happen.
+        if offer.target == .tags { return offer.current.isEmpty ? .add : .append }
+        if offer.current == offer.proposed { return .same }
+        return offer.current.isEmpty ? .add : .replace
+    }
+
+    /// Ticking a line, with the rule that two answers to one field are a
+    /// choice between them.
+    ///
+    /// A field holds one value: applying Open Library's publisher *and* Google
+    /// Books' would let whichever `apply` reached last win, quietly. So ticking
+    /// one rival unticks the other. Tags are exempt — they are added, and two
+    /// catalogues' subjects can both be wanted.
+    public static func ticking(
+        _ proposal: FieldProposal, in proposals: [FieldProposal], ticked: Set<String>
+    ) -> Set<String> {
+        guard proposal.kind != .same else { return ticked }
+        var result = ticked
+        if result.contains(proposal.id) {
+            result.remove(proposal.id)
+            return result
+        }
+        if proposal.target != .tags {
+            for rival in proposals where rival.targetID == proposal.targetID && rival.id != proposal.id {
+                result.remove(rival.id)
+            }
+        }
+        result.insert(proposal.id)
+        return result
     }
 
     /// The subjects the book does not already carry, case-insensitively.
