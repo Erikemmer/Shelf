@@ -204,7 +204,15 @@ Nur über eigenen Menüpunkt mit Bestätigungsdialog, der jede Datei beim Namen 
 
 ## 9. Online-Metadaten
 
-Quellen: Open Library (`/api/books`, `/search.json`) und Google Books (`/volumes?q=isbn:`), beide ohne API-Schlüssel. Suche nach ISBN, sonst Titel + Autor. Ergebnis als Kandidatenliste; gewählter Kandidat wird Feld für Feld gegen den Bestand gestellt (Alt | Neu, Checkbox je Feld, Cover-Vorschau). Übernahme schreibt `metadata.opf` und Index, mit Undo. Kein automatischer Massenabgleich in v1.0; Batch nur mit Bestätigung pro Buch. Netzwerkfehler sind still (Meldung in der Statusleiste), nie modal.
+Quellen: Open Library (`/api/books`, `/search.json`) und Google Books (`/volumes?q=isbn:`), beide ohne API-Schlüssel.
+
+> **Nachtrag aus Sprint 6 (18.09.2026):** `/api/books` antwortete auf jede
+> geprüfte ISBN mit HTTP 404 und leerem Rumpf – auch auf ISBNs, deren Bücher die
+> Open-Library-Suche findet. Shelf fragt Open Library deshalb für beide Fragen
+> über `/search.json`; die Antwort hat dieselbe Form. Google Books antwortete am
+> selben Tag auf alle zehn ISBNs mit HTTP 429 (gemeinsames Kontingent ohne
+> Schlüssel). Begründung und Messwerte:
+> [ADR 0015](adr/0015-online-metadata-two-sources-field-by-field.md). Suche nach ISBN, sonst Titel + Autor. Ergebnis als Kandidatenliste; gewählter Kandidat wird Feld für Feld gegen den Bestand gestellt (Alt | Neu, Checkbox je Feld, Cover-Vorschau). Übernahme schreibt `metadata.opf` und Index, mit Undo. Kein automatischer Massenabgleich in v1.0; Batch nur mit Bestätigung pro Buch. Netzwerkfehler sind still (Meldung in der Statusleiste), nie modal.
 
 ## 10. Architektur
 

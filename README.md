@@ -18,6 +18,10 @@ and does it with the quiet and the speed Selector has for photographs.
   before it counts as taken over.
 * **A Calibre library is only ever read**, byte for byte unchanged.
 * **DRM is detected and then left alone.** Never removed, never worked around.
+* **Nothing from the net is taken over without being ticked.** ⌘E asks Open
+  Library and Google Books, shows every field old beside new, and ticks only
+  what fills a gap. A service that does not answer is one line in the status
+  bar, never a dialogue.
 
 ## Getting it running
 
@@ -43,6 +47,9 @@ make project       # regenerate Shelf.xcodeproj from project.yml
 make synthetic     # generate 5 000 synthetic EPUBs to measure against
 make proof         # import them, verify the digests, rebuild the index
 make synthetic-clean   # delete the test material, and say how much came back
+make online-proof  # ask both metadata services about ten ISBNs and refresh the
+                   # test fixtures. The only thing in the build that uses the
+                   # network — no test and no CI job does
 ```
 
 `make help` lists them all. Before every commit: **`make test && make app &&
@@ -72,3 +79,9 @@ Synthetic and generated. No borrowed book is in this repository, and none needs
 to be: the tests build their own EPUBs, and `make synthetic` writes a library of
 5 000 of them under `~/Library/Caches/Shelf/` — never under `~/Documents`, which
 is synced.
+
+The one exception is `Tests/ShelfCoreTests/Fixtures/online/`: answers Open
+Library and Google Books really gave, fetched once by `make online-proof` and
+trimmed by it, so the readers are checked against reality and the tests still
+never open a socket. Their provenance — including the one file that is *not* a
+live answer, and why — is in that folder's own `README.md`.

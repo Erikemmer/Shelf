@@ -14,7 +14,8 @@ SCRATCH ?= $(HOME)/Library/Caches/Shelf/build
 CACHE ?= $(HOME)/Library/Caches/Shelf
 SYNTHETIC ?= $(CACHE)/synthetic
 
-.PHONY: help bootstrap test build lint format project app app-debug smoke synthetic synthetic-clean proof clean
+.PHONY: help bootstrap test build lint format project app app-debug smoke synthetic synthetic-clean proof \
+	online-proof online-library online-shots clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -63,6 +64,15 @@ synthetic-clean: ## Delete the synthetic books and say how much space came back
 
 proof: ## Import the synthetic library twice (cold / warm) and print the timings
 	@Scripts/proof-run.sh "$(SYNTHETIC)"
+
+online-proof: ## Ask Open Library and Google Books about ten ISBNs and refresh the test fixtures (needs the network)
+	@Scripts/online-proof.sh
+
+online-library: ## Build the twelve-book library the Sprint 6 screenshots use
+	@Scripts/online-library.sh
+
+online-shots: online-library ## Photograph Fetch Metadata against the live services (needs an unlocked screen)
+	@Scripts/online-shot.sh
 
 clean: ## Remove build products
 	rm -rf .build Shelf.xcodeproj DerivedData
