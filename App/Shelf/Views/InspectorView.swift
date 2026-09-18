@@ -207,12 +207,16 @@ struct InspectorView: View {
     }
 
     private func seriesPosition(for entry: LibraryEntry) -> String? {
-        guard let series = entry.book.series, series.index != nil,
+        guard let series = entry.book.series, let index = series.index,
             let total = model.seriesCount(named: series.name)
         else { return nil }
-        // The index as the file spells it, so a novella reads "Book 3.5 of 7"
-        // rather than "Book 3 of 7" or "Book 3.5000 of 7".
-        return "Book \(BookField.seriesIndex.text(of: entry.book)) of \(total)"
+        // The wording is `SeriesPosition`'s, in the core, because it is a rule
+        // and not a format: a library that holds one book of a series a book
+        // claims to be the third of said "Book 3 of 1" here until Sprint 5.
+        // The index is passed as the file spells it, so a novella reads
+        // "Book 3.5" rather than "Book 3" or "Book 3.5000".
+        return SeriesPosition.text(
+            printedIndex: BookField.seriesIndex.text(of: entry.book), index: index, countInLibrary: total)
     }
 
     private func rating(for entry: LibraryEntry) -> some View {

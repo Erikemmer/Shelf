@@ -51,6 +51,38 @@ struct ComicMetadataTests {
         #expect(parsed.year == 2019)
     }
 
+    /// Found in the Sprint 4 screenshot: the grid showed "A Desolation #164 164"
+    /// next to "A Desolation #164". The file was `A Desolation #164 164 (2024).cbz`
+    /// — a name whose own title already carries the issue number and whose
+    /// scanner appended it a second time — and the composed title put the
+    /// number in twice.
+    @Test(
+        "a series name that already ends with the issue number does not carry it twice",
+        arguments: [
+            ("A Desolation #164 164 (2024)", "A Desolation #164"),
+            ("A Desolation #8 008 (2011)", "A Desolation #8"),
+            ("A Desolation Justice #119 119 (2019)", "A Desolation Justice #119"),
+            // Without the `#`, the same doubling.
+            ("Saga 12 12", "Saga 12"),
+        ])
+    func theIssueNumberIsNotWrittenTwice(name: String, title: String) {
+        #expect(ComicFileName.book(from: name).title == title)
+    }
+
+    /// The other side of the same rule: a number that is *part of* the series
+    /// name and a different issue number are two numbers, and both belong in
+    /// the title.
+    @Test(
+        "a number in the series name is still kept when the issue is a different one",
+        arguments: [
+            ("Battle 2000 15", "Battle 2000 15"),
+            ("A Desolation #164 165 (2024)", "A Desolation #164 165"),
+            ("Saga 012 (2019)", "Saga 12"),
+        ])
+    func aDifferentNumberIsKept(name: String, title: String) {
+        #expect(ComicFileName.book(from: name).title == title)
+    }
+
     @Test("a name with no number at all is a title, not a series of one")
     func noNumber() {
         let parsed = ComicFileName.parse("Watchmen")

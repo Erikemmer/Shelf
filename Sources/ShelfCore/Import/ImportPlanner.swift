@@ -280,6 +280,11 @@ public enum ImportPlanner {
         var plannedBooks: [String: (id: UUID, folder: String, title: String)] = [:]
         var plannedFormats: [UUID: Set<BookFileFormat>] = [:]
         var plannedDigests: Set<String> = []
+        // Which book each *stem* in each source folder has become. Only stems
+        // that more than one file shares are in here: a lone file is a book
+        // and needs no rule.
+        var plannedSiblings: [String: (id: UUID, folder: String, title: String)] = [:]
+        let siblingGroups = siblingKeys(of: candidates)
 
         // The order decides two things, so it is chosen rather than incidental.
         //
@@ -310,11 +315,20 @@ public enum ImportPlanner {
                 continue
             }
 
-            // 2. The same book, by ISBN and then by title + author.
+            // 2. The same book, by its neighbours in the folder, then by
+            //    ISBN, then by title + author.
             let key = DuplicateKey.titleAuthor(for: candidate.book)
-            let match = existingBook(for: candidate, key: key, knowledge: knowledge, planned: plannedBooks)
+            let sibling = siblingGroups[candidate.source.path]
+            let match = existingBook(
+                for: candidate, key: key, siblingKey: sibling, knowledge: knowledge, planned: plannedBooks,
+                siblings: plannedSiblings)
 
             if let match {
+                // A file that belongs to a book takes its neighbours with it,
+                // and it does so even when the file itself is skipped: a
+                // second copy of the EPUB the library already has still says
+                // which book the PDF beside it belongs to.
+                if let sibling { plannedSiblings[sibling] = (match.id, match.folder, match.title ?? "") }
                 let alreadyHas =
                     (knowledge.formatsByBook[match.id] ?? []).union(plannedFormats[match.id] ?? [])
                 if alreadyHas.contains(candidate.format) {
@@ -350,6 +364,7 @@ public enum ImportPlanner {
             }
             plannedFormats[candidate.book.id, default: []].insert(candidate.format)
             plannedDigests.insert(candidate.sha256)
+            if let sibling { plannedSiblings[sibling] = (candidate.book.id, folder, candidate.book.title) }
         }
 
         return ImportPlan(
@@ -366,8 +381,10 @@ public enum ImportPlanner {
     private static func existingBook(
         for candidate: ImportCandidate,
         key: String,
+        siblingKey: String?,
         knowledge: ImportKnowledge,
-        planned: [String: (id: UUID, folder: String, title: String)]
+        planned: [String: (id: UUID, folder: String, title: String)],
+        siblings: [String: (id: UUID, folder: String, title: String)]
     ) -> (id: UUID, folder: String, title: String?, reason: SkippedImport.Reason)? {
         // The UUID first, and only here: it is an identity, not a guess. An
         // ISBN names an *edition* and a title names a work, but a UUID names
@@ -375,6 +392,17 @@ public enum ImportPlanner {
         // rejoin its own books rather than making second copies of them.
         if let folder = knowledge.foldersByBook[candidate.book.id] {
             return (candidate.book.id, folder, title(of: candidate.book.id, in: knowledge), .sameBook)
+        }
+        // Then the file's own neighbours. `Emma - Jane Austen.epub` and
+        // `.pdf` in one folder are one book even when the PDF carries no
+        // metadata at all — which is the ordinary case, and which no rule
+        // below this one can see. It comes after the UUID because an identity
+        // outranks a file name, and before the ISBN and the title because it
+        // is the better evidence: two files somebody put side by side under
+        // one name are a statement about them, where a matching title is a
+        // guess (CONCEPT §7.2).
+        if let siblingKey, let sibling = siblings[siblingKey] {
+            return (sibling.id, sibling.folder, sibling.title, .duplicateWithinImport)
         }
         if let isbn = candidate.book.isbn {
             if let planned = planned["isbn:\(isbn)"] {
@@ -395,6 +423,38 @@ public enum ImportPlanner {
             return (id, knowledge.foldersByBook[id] ?? "", title(of: id, in: knowledge), .sameTitleAndAuthor)
         }
         return nil
+    }
+
+    /// The stem each candidate shares with a neighbour, by source path.
+    ///
+    /// Keyed by the source *folder* as well as the name, because two downloads
+    /// of one title in two folders are two files somebody kept apart — the
+    /// case the three duplicate rules exist for, and one this rule must not
+    /// pre-empt. A stem no second file shares is left out: one file is a book
+    /// and needs no rule.
+    static func siblingKeys(of candidates: [ImportCandidate]) -> [String: String] {
+        var byKey: [String: [String]] = [:]
+        for candidate in candidates {
+            byKey[siblingKey(for: candidate.source), default: []].append(candidate.source.path)
+        }
+        var result: [String: String] = [:]
+        for (key, paths) in byKey where paths.count > 1 {
+            for path in paths { result[path] = key }
+        }
+        return result
+    }
+
+    /// The folder a file is in and the name it carries without its extension,
+    /// folded the way two titles are folded — so `Emma - Jane Austen.epub` and
+    /// `Emma-Jane Austen.pdf` are still neighbours.
+    ///
+    /// A NUL between the two halves, because it is the one byte a path cannot
+    /// contain: without it a folder ending in the next key's first characters
+    /// could collide with it.
+    static func siblingKey(for source: URL) -> String {
+        let folder = source.deletingLastPathComponent().path
+        let stem = source.deletingPathExtension().lastPathComponent
+        return "\(folder)\u{0}\(DuplicateKey.fold(stem))"
     }
 
     private static func title(of id: UUID, in knowledge: ImportKnowledge) -> String? {

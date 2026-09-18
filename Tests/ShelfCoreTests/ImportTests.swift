@@ -62,6 +62,93 @@ struct ImportPlannerTests {
         #expect(numbers.sorted() == [10, 11, 12])
     }
 
+    // MARK: Files that lie next to each other
+
+    /// The rule the Sprint 4 screenshot asked for. A folder of downloads holds
+    /// `Title - Author.epub`, `.azw3`, `.mobi` and `.pdf`; only the EPUB has
+    /// metadata worth the name, and the PDF's is its file name. Before this
+    /// rule they became two, three or four books, because the only thing that
+    /// could have joined them was a title the PDF did not have.
+    @Test("files with one stem in one folder are one book, whatever they say about themselves")
+    func siblingsAreOneBook() {
+        let plan = ImportPlanner.plan(
+            candidates: [
+                candidate(name: "Emma - Jane Austen.epub", title: "Emma", author: "Jane Austen"),
+                // What a PDF with no metadata at all comes out as.
+                candidate(name: "Emma - Jane Austen.pdf", title: "Emma - Jane Austen", author: nil, format: .pdf),
+                candidate(name: "Emma - Jane Austen.mobi", title: "", author: nil, format: .mobi),
+            ],
+            startingNumber: 4)
+
+        #expect(plan.newBookCount == 1)
+        #expect(plan.addedFormatCount == 2)
+        #expect(plan.skipped.isEmpty)
+        // The EPUB is the one that becomes the book, so its metadata is the
+        // book's and the other two join the folder it named.
+        let folders = Set(
+            plan.operations.map { operation -> String in
+                switch operation {
+                case .newBook(let new): return new.folder
+                case .addFormat(let add): return add.folder
+                }
+            })
+        #expect(folders == ["Austen, Jane/Emma (4)"])
+    }
+
+    /// The same stem in a *different* folder is a different book: two
+    /// downloads of the same title in two places are exactly the case the
+    /// three duplicate rules are for, and this one must not pre-empt them.
+    @Test("the same stem in another folder is not the same book")
+    func siblingsAreFolderWide() {
+        var second = candidate(name: "Emma - Jane Austen.pdf", title: "Something Else", author: nil, format: .pdf)
+        second.source = URL(fileURLWithPath: "/elsewhere/Emma - Jane Austen.pdf")
+        let plan = ImportPlanner.plan(
+            candidates: [candidate(name: "Emma - Jane Austen.epub", title: "Emma", author: "Jane Austen"), second])
+
+        #expect(plan.newBookCount == 2)
+    }
+
+    /// Two files of the *same* format under one stem cannot both be the book's
+    /// EPUB, so the second is what it has always been: a duplicate inside the
+    /// import.
+    @Test("two files of one format under one stem are still a duplicate")
+    func siblingsOfTheSameFormat() {
+        var second = candidate(name: "Emma - Jane Austen.EPUB", title: "Emma", author: "Jane Austen")
+        second.source = URL(fileURLWithPath: "/source/Emma - Jane Austen.EPUB")
+        let plan = ImportPlanner.plan(
+            candidates: [candidate(name: "Emma - Jane Austen.epub", title: "Emma", author: "Jane Austen"), second])
+
+        #expect(plan.newBookCount == 1)
+        #expect(plan.skipped.map(\.reason) == [.duplicateWithinImport])
+    }
+
+    /// A book the library already holds still wins over a sibling: the file is
+    /// added to the book that is there rather than to a second copy of it.
+    @Test("a sibling group joins the book the library already has")
+    func siblingsJoinAnExistingBook() {
+        let existing = UUID()
+        let key = DuplicateKey.titleAuthor(title: "Emma", author: "Jane Austen")
+        let plan = ImportPlanner.plan(
+            candidates: [
+                candidate(name: "Emma - Jane Austen.epub", title: "Emma", author: "Jane Austen"),
+                candidate(name: "Emma - Jane Austen.pdf", title: "Emma - Jane Austen", author: nil, format: .pdf),
+            ],
+            knowledge: ImportKnowledge(
+                titleKeys: [key: [existing]],
+                formatsByBook: [existing: [.epub]],
+                foldersByBook: [existing: "Austen, Jane/Emma (2)"]))
+
+        #expect(plan.newBookCount == 0)
+        #expect(plan.addedFormatCount == 1)
+        #expect(plan.skipped.map(\.reason) == [.sameTitleAndAuthor])
+        guard case .addFormat(let add)? = plan.operations.first else {
+            Issue.record("expected the PDF to join the book already in the library")
+            return
+        }
+        #expect(add.bookID == existing)
+        #expect(add.folder == "Austen, Jane/Emma (2)")
+    }
+
     // MARK: The three duplicate tests (CONCEPT §2.4)
 
     /// The strongest of the three: two files with the same SHA-256 are the same

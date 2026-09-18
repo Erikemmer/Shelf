@@ -34,6 +34,9 @@ let usage = """
                                     Calibre folder is only ever read
       orphans <library>             list the folders no book points at – what a
                                     killed import leaves behind. Reads only
+      duplicates <library>          list what the Duplicates collection shows,
+                                    and which of the three rules found each
+                                    one. Reads only
       rebuild <library>             erase the index and rebuild it from the folders
       shelve <library> <path> <count> [offset]
                                     put <count> books on the shelf at <path>,
@@ -84,6 +87,7 @@ case "calibre-synthesise": try Commands.calibreSynthesise(Array(arguments.dropFi
 case "calibre-dry": try Commands.calibreDry(Array(arguments.dropFirst()))
 case "calibre-import": try await Commands.calibreImport(Array(arguments.dropFirst()))
 case "orphans": try await Commands.orphans(Array(arguments.dropFirst()))
+case "duplicates": try await Commands.duplicates(Array(arguments.dropFirst()))
 case "rebuild": try await Commands.rebuild(Array(arguments.dropFirst()))
 case "unshelve": try await Commands.unshelve(Array(arguments.dropFirst()))
 case "shelve": try await Commands.shelve(Array(arguments.dropFirst()))
@@ -198,12 +202,24 @@ enum Commands {
             let cover = SyntheticBooks.cover(index: index, using: &random)
             let name = stem(book)
 
+            // One stem, four extensions — what a folder of downloads actually
+            // looks like, and what the planner's sibling rule is for. The
+            // ` M` and ` A` the first version put on the MOBI and the AZW3
+            // were not needed (the extensions already differ) and they made
+            // the fixture unlike the case being measured.
             try write("\(name).epub", SyntheticEPUB(book: book, cover: cover).data(), as: "epub")
-            try write("\(name) M.mobi", SyntheticMobi(book: book, cover: cover).data(), as: "mobi")
-            try write("\(name) A.azw3", SyntheticMobi(book: book, cover: cover, isAZW3: true).data(), as: "azw3")
+            try write("\(name).mobi", SyntheticMobi(book: book, cover: cover).data(), as: "mobi")
+            try write("\(name).azw3", SyntheticMobi(book: book, cover: cover, isAZW3: true).data(), as: "azw3")
             try write("\(name).pdf", SyntheticPDF(book: book).data(), as: "pdf")
             // A comic is named the way a comic is named — the file name is the
             // only metadata most of them have.
+            //
+            // The issue number lands after a title that already ends with
+            // `#index`, so the name carries the number twice. That is kept on
+            // purpose: it is exactly the shape that made the Sprint 4
+            // screenshot show "A Desolation #164 164" beside
+            // "A Desolation #164", and a proof run over it is what shows the
+            // rule in `ComicFileName.title(series:number:)` working.
             //
             // The issue number is the index and **not** `index % 300`, which is
             // what it was first: that made two different books into the same
@@ -231,7 +247,13 @@ enum Commands {
         // would test nothing further — and would be a thing this repository
         // should not hold (ADR 0012).
         for index in 0..<3 {
-            let book = Book(title: "Protected Book \(index)", authors: ["A Publisher"])
+            // A person, not a publisher. The first version called this author
+            // "A Publisher", and the Sprint 4 screenshot then showed a
+            // publisher standing in the sidebar's *Authors* list — a picture
+            // of the fixture rather than of the app. The publisher goes where
+            // a publisher goes.
+            var book = Book(title: "Protected Book \(index)", authors: ["Ada Mercer"])
+            book.publisher = "Head of Zeus"
             let name = stem(book)
             try write("\(name).mobi", SyntheticMobi(book: book, withKindleDRM: true).data(), as: "mobi (DRM)")
             try write(
@@ -433,6 +455,32 @@ enum Commands {
             for file in folder.files { print("      \(file)") }
         }
         if found.isEmpty { print("  (every folder in the library belongs to a book)") }
+    }
+
+    /// What the *Duplicates* collection holds, from the command line.
+    ///
+    /// The sidebar shows a number and the inspector shows one line; this prints
+    /// the whole list with the rule that found each book, which is what a proof
+    /// run needs and what the Sprint 4 screenshot had no way of showing.
+    static func duplicates(_ arguments: [String]) async throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool duplicates <library folder>")
+            exit(2)
+        }
+        let libraryURL = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        let (library, _) = try Library.open(libraryURL)
+        let index = try LibraryIndex(library: library)
+        let found = try await index.duplicates()
+        let entries = try await index.allEntries()
+
+        print("books: \(entries.count) · duplicates: \(found.count)")
+        for entry in entries.sorted(by: { $0.book.title < $1.book.title }) {
+            guard let reasons = found[entry.id], let strongest = DuplicateReason.strongest(of: reasons) else {
+                continue
+            }
+            print("  \(strongest.label): \(entry.book.title) — \(entry.book.primaryAuthor) [\(entry.formatLine)]")
+        }
+        if found.isEmpty { print("  (no book in this library looks like a copy of another)") }
     }
 
     // MARK: calibre

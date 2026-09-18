@@ -164,16 +164,42 @@ public enum OPFDocument {
     /// one. Contributors (`opf:role` other than `aut`) are skipped – a
     /// translator is not the author, and Calibre files them separately too.
     private static func readAuthors(_ root: XMLTree.Element) -> (names: [String], sorts: [String: String]) {
+        let refined = refinedRoles(root)
         var names: [String] = []
         var sorts: [String: String] = [:]
         for element in root.descendants(named: "creator") {
             let name = element.text.trimmingCharacters(in: .whitespaces)
             guard !name.isEmpty else { continue }
-            if let role = element.attribute("role"), role.lowercased() != "aut" { continue }
+            // EPUB 2 puts the role in an attribute, EPUB 3 in a `<meta
+            // refines>` beside the element. Both have to be read, because the
+            // one that was not read let a publisher into the author list:
+            // `<dc:creator id="pub">Head of Zeus</dc:creator>` with a refined
+            // role of `pbl` is a publisher in every EPUB 3 built since 2011,
+            // and it went onto the spine.
+            //
+            // *No* role at all is an author — most EPUBs name theirs that way,
+            // and refusing them would empty the sidebar.
+            let role = element.attribute("role") ?? element.attribute("id").flatMap { refined[$0] }
+            if let role, role.lowercased() != "aut" { continue }
             names.append(name)
             if let fileAs = element.attribute("file-as") { sorts[name] = fileAs }
         }
         return (names, sorts)
+    }
+
+    /// EPUB 3's roles: `<meta refines="#pub" property="role">pbl</meta>`, by
+    /// the id it refines, with the `#` taken off.
+    private static func refinedRoles(_ root: XMLTree.Element) -> [String: String] {
+        var result: [String: String] = [:]
+        for meta in root.descendants(named: "meta") {
+            guard meta.attribute("property")?.lowercased() == "role",
+                let refines = meta.attribute("refines"), refines.hasPrefix("#")
+            else { continue }
+            let role = meta.text.trimmingCharacters(in: .whitespaces)
+            guard !role.isEmpty else { continue }
+            result[String(refines.dropFirst())] = role
+        }
+        return result
     }
 
     /// The series, from Calibre's metas first and EPUB 3's own vocabulary

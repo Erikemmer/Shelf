@@ -773,13 +773,65 @@ public final class LibraryIndex: Sendable {
         // accents, punctuation and runs of space, and `DuplicateKey` is where
         // that rule lives. A second spelling of it in a `WHERE` clause is a
         // second rule.
-        let byTitle = try await allTitleKeys().values.map { ($0, DuplicateReason.titleAuthor) }
+        let byTitle = try await suspectsByTitleAndAuthor().map { ($0, DuplicateReason.titleAuthor) }
 
         var found: [UUID: Set<DuplicateReason>] = [:]
         for group in groups + byTitle where group.0.count > 1 {
             for id in group.0 { found[id, default: []].insert(group.1) }
         }
         return found
+    }
+
+    /// Books that look like the same book by their title, grouped.
+    ///
+    /// **Why this is not `allTitleKeys()`.** That key is the *importer's*, and
+    /// it has to stay strict: joining two files into one book is a decision
+    /// about the disk, and a wrong one puts somebody else's book in a folder.
+    /// This collection only ever raises a suspicion, and the Sprint 4
+    /// screenshot showed what strictness costs it — the grid held
+    /// "A Desolation #164 164" beside "A Desolation #164" and the sidebar said
+    /// 0, because the two differed in a number the file name wrote twice *and*
+    /// in an author one of them never had.
+    ///
+    /// So two things are widened, and only here:
+    ///
+    /// - the title is `DuplicateKey.foldedTitle`, which collapses a repeated
+    ///   trailing number;
+    /// - **a book with no author matches any author.** "Unknown" is the
+    ///   absence of evidence, not evidence of a different person. Two *named*
+    ///   authors under one title stay two books, because Ulysses by Joyce and
+    ///   Ulysses by Tennyson are two books.
+    func suspectsByTitleAndAuthor() async throws -> [[UUID]] {
+        let rows: [(id: UUID, title: String, author: String?)] = try await pool.read { database in
+            try Row.fetchAll(
+                database,
+                sql: """
+                    SELECT b.id AS id, b.title AS title, a.name AS author
+                    FROM books b
+                    LEFT JOIN book_authors ba ON ba.book_id = b.id AND ba.position = 0
+                    LEFT JOIN authors a ON a.id = ba.author_id
+                    """
+            ).compactMap { row in
+                guard let id = UUID(uuidString: row["id"] as String) else { return nil }
+                return (id, row["title"] as String, row["author"] as String?)
+            }
+        }
+
+        var byTitle: [String: [(id: UUID, author: String?)]] = [:]
+        for row in rows {
+            let author = row.author.map(DuplicateKey.fold).flatMap { $0.isEmpty ? nil : $0 }
+            byTitle[DuplicateKey.foldedTitle(row.title), default: []].append((row.id, author))
+        }
+
+        return byTitle.values.compactMap { books -> [UUID]? in
+            guard books.count > 1 else { return nil }
+            let suspects = books.filter { book in
+                books.contains { other in
+                    other.id != book.id && (other.author == nil || book.author == nil || other.author == book.author)
+                }
+            }
+            return suspects.count > 1 ? suspects.map(\.id) : nil
+        }
     }
 
     /// `GROUP_CONCAT` gives a comma-separated list; UUID strings never contain
@@ -1124,6 +1176,27 @@ public enum DuplicateKey {
 
     public static func titleAuthor(for book: Book) -> String {
         titleAuthor(title: book.title, author: book.authors.first)
+    }
+
+    /// A title folded for the *Duplicates* collection, with a number the name
+    /// carries twice collapsed to one.
+    ///
+    /// `A Desolation #164 164` is what a file name makes of a book whose own
+    /// title already ends with the issue number and whose scanner appended it
+    /// again. Folded plainly it is "a desolation 164 164", which no comparison
+    /// can join to "a desolation 164" — and the Sprint 4 screenshot showed the
+    /// two of them side by side in the grid over a *Duplicates* that said 0.
+    ///
+    /// Only the *last* word, and only when it repeats the one before it, so
+    /// `Battle 2000 15` keeps both of its numbers.
+    public static func foldedTitle(_ title: String) -> String {
+        var words = fold(title).split(separator: " ").map(String.init)
+        while words.count >= 2, words[words.count - 1] == words[words.count - 2],
+            Double(words[words.count - 1]) != nil
+        {
+            words.removeLast()
+        }
+        return words.joined(separator: " ")
     }
 
     static func fold(_ text: String) -> String {

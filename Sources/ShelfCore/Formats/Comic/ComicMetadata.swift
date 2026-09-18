@@ -157,8 +157,11 @@ enum ComicInfo {
         let title: String
         switch (series, number, issueTitle) {
         case (let series?, let number?, _):
-            let printed = number == number.rounded() ? String(Int(number)) : String(number)
-            title = "\(series) \(printed)"
+            // The same composition the file-name route uses, and the same
+            // rule about not writing the number twice — one spelling of it,
+            // because a title that differs between the two routes is a book
+            // that looks like two.
+            title = ComicFileName.title(series: series, number: number)
         case (let series?, nil, let issueTitle?):
             title = "\(series): \(issueTitle)"
         case (let series?, nil, nil):

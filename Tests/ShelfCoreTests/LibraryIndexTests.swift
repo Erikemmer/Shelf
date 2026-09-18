@@ -391,6 +391,26 @@ struct LibraryIndexTests {
         #expect(DuplicateKey.fold("The  Left-Hand   of Darkness") == "the left hand of darkness")
     }
 
+    /// The other half of the "Book 3 of 1" finding: the count itself. It has
+    /// to be the books of *that* series, and the facet is what the inspector
+    /// reads.
+    @Test("the series facet counts the books of the series")
+    func seriesFacetCountsBooks() async throws {
+        let index = try LibraryIndex(inMemory: "series-facet")
+        try await index.save([
+            entry(title: "A", series: SeriesRef(name: "Wayfarers", index: 1), number: 1),
+            entry(title: "B", series: SeriesRef(name: "Wayfarers", index: 2), number: 2),
+            entry(title: "C", series: SeriesRef(name: "Wayfarers", index: 3), number: 3),
+            entry(title: "D", series: SeriesRef(name: "Hainish Cycle", index: 1), number: 4),
+            entry(title: "E", number: 5),
+        ])
+
+        let facets = try await index.seriesFacets()
+        #expect(facets.first { $0.name == "Wayfarers" }?.count == 3)
+        #expect(facets.first { $0.name == "Hainish Cycle" }?.count == 1)
+        #expect(facets.count == 2)
+    }
+
     // MARK: Duplicates
 
     /// The collection has to use the importer's three rules and say which one
@@ -436,6 +456,68 @@ struct LibraryIndexTests {
         #expect(found[six.id] == [.titleAuthor])
         #expect(found.count == 6)
         #expect(try await index.totals().duplicates == 0, "totals does not count duplicates itself")
+    }
+
+    /// What the Sprint 4 screenshot showed: "A Desolation #164 164" and
+    /// "A Desolation #164" stood next to each other in the grid and
+    /// *Duplicates* said 0. Two things kept them apart — a number the file
+    /// name wrote twice, and an author one of them did not have.
+    @Test("a title that carries its number twice is still the same title")
+    func duplicatesAcrossADoubledNumber() async throws {
+        let index = try LibraryIndex(inMemory: "doubled-number")
+        var named = entry(title: "A Desolation #164", number: 1)
+        named.book.authors = ["Becky Lefèvre"]
+        // What a file name alone makes of the sibling: the number twice, and
+        // nobody to put on the spine.
+        let anonymous = entry(title: "A Desolation #164 164", authors: [], number: 2)
+        try await index.save([named, anonymous])
+
+        let found = try await index.duplicates()
+        #expect(found[named.id] == [.titleAuthor])
+        #expect(found[anonymous.id] == [.titleAuthor])
+    }
+
+    /// The other half of the same sharpening: a book with no author is not
+    /// evidence of a *different* book, so it joins the suspicion rather than
+    /// escaping it.
+    @Test("a book with no author is a suspect against one with the same title")
+    func duplicatesWhereOneSideHasNoAuthor() async throws {
+        let index = try LibraryIndex(inMemory: "no-author")
+        var named = entry(title: "Emma", number: 1)
+        named.book.authors = ["Jane Austen"]
+        let anonymous = entry(title: "Emma", authors: [], number: 2)
+        try await index.save([named, anonymous])
+
+        #expect(try await index.duplicates().count == 2)
+    }
+
+    /// And the limit of it: two different people wrote two different books
+    /// with one title, and saying they are the same one would make the
+    /// collection useless.
+    @Test("one title and two named authors is not a duplicate")
+    func twoAuthorsOneTitleIsNotADuplicate() async throws {
+        let index = try LibraryIndex(inMemory: "two-authors")
+        var first = entry(title: "Ulysses", number: 1)
+        first.book.authors = ["James Joyce"]
+        var second = entry(title: "Ulysses", number: 2)
+        second.book.authors = ["Alfred Tennyson"]
+        try await index.save([first, second])
+
+        #expect(try await index.duplicates().isEmpty)
+    }
+
+    @Test(
+        "the folded title drops a number the name carries twice",
+        arguments: [
+            ("A Desolation #164 164", "a desolation 164"),
+            ("A Desolation #164", "a desolation 164"),
+            ("Saga 12 12", "saga 12"),
+            // Two different numbers are two numbers.
+            ("Battle 2000 15", "battle 2000 15"),
+            ("Catch 22", "catch 22"),
+        ])
+    func foldedTitle(raw: String, folded: String) {
+        #expect(DuplicateKey.foldedTitle(raw) == folded)
     }
 
     /// A book that holds the same file twice under two names is not a copy of

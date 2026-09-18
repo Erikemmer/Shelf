@@ -92,8 +92,7 @@ public enum ComicFileName {
         var book: Book
 
         if let series = parsed.series, let number = parsed.number {
-            let printed = number == number.rounded() ? String(Int(number)) : String(number)
-            book = Book(title: "\(series) \(printed)", series: SeriesRef(name: series, index: number))
+            book = Book(title: title(series: series, number: number), series: SeriesRef(name: series, index: number))
         } else if let title = parsed.title {
             book = Book(title: FileNameMetadata.title(from: title))
             let authors = FileNameMetadata.authors(from: title)
@@ -114,6 +113,40 @@ public enum ComicFileName {
             book.published = calendar.date(from: components)
         }
         return book
+    }
+
+    /// The title a series and an issue number make together, for both routes
+    /// into a comic: this one and `ComicInfo.xml`.
+    ///
+    /// "Saga" and 12 give "Saga 12" — bare "Saga" on forty books is a shelf
+    /// nobody can use. What this function exists for is the case where that
+    /// addition writes the number a second time: `A Desolation #164 164.cbz`
+    /// is a book whose own title carries the issue and whose scanner appended
+    /// it again, and composing blindly made "A Desolation #164 164". Two of
+    /// those stood next to each other in the Sprint 4 screenshot, and they
+    /// looked like two books.
+    public static func title(series: String, number: Double) -> String {
+        alreadyEnds(series, with: number) ? series : "\(series) \(printed(number))"
+    }
+
+    /// The issue number as a person writes it: `12`, and `12.5` when it really
+    /// is a half issue.
+    static func printed(_ number: Double) -> String {
+        number == number.rounded() ? String(Int(number)) : String(number)
+    }
+
+    /// Whether the name's last word *is* this number, with or without a
+    /// leading `#`.
+    ///
+    /// The last word only, and compared as a number rather than as text, so
+    /// `A Desolation #164` and 164 match while `Battle 2000` and 15 do not —
+    /// a number that is part of the series name is a different number and
+    /// belongs in the title.
+    static func alreadyEnds(_ name: String, with number: Double) -> Bool {
+        guard let last = name.split(separator: " ").last else { return false }
+        let digits = last.hasPrefix("#") ? last.dropFirst() : last[...]
+        guard let value = Double(digits) else { return false }
+        return value == number
     }
 
     // MARK: The small rules

@@ -3,6 +3,96 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 4a – three things the screenshot showed · 18 September 2026
+
+Found by looking at `docs/screenshots/sprint-4/formats-inspector-many.jpg`
+rather than at a test: the grid held two books where one belonged, the
+*Duplicates* collection said 0 over them, a publisher stood in the author list,
+and the inspector read "Book 3 of 1". 478 core tests, up from 457.
+
+### Fixed — one book arriving as two
+
+**A comic's title carried its issue number twice.** The file was
+`A Desolation #164 164 (2024).cbz`: a name whose own title already ends with the
+issue and whose scanner appended it again. `ComicFileName` parsed it correctly —
+series "A Desolation #164", issue 164 — and then composed the title by writing
+the number after the series, which put it in twice.
+`ComicFileName.title(series:number:)` is now one rule used by both routes into a
+comic (the file name and `ComicInfo.xml`), and it adds the number only when the
+series does not already end with it. `Battle 2000 15` keeps both of its numbers,
+because 2000 and 15 are two numbers.
+
+**Files lying side by side are one book.** `ImportPlanner` could join two files
+only through a UUID, an ISBN or a matching title and author — so a folder
+holding `Emma - Jane Austen.epub` and `Emma - Jane Austen.pdf` became two books
+whenever the PDF carried no metadata, which is the ordinary case. The planner
+now reads the neighbourhood first: **files sharing a stem in one source folder
+are one book**, and UUID, ISBN and title+author decide the rest as before. The
+folder is part of the key, so two downloads of one title kept in two places are
+still two candidates for the three duplicate rules. It sits after the UUID
+(an identity outranks a file name) and before the ISBN (two files somebody put
+side by side under one name are a statement; a matching title is a guess).
+
+Measured on the Sprint 4 fixture, regenerated with the sibling files sharing a
+stem the way a real download folder does: the EPUB, AZW3, MOBI and PDF of one
+book arrive as **one book with four formats**, and a broken pair
+(`… wrong bytes.cbz` / `… wrong bytes.mobi`) arrives as one book as well.
+
+### Fixed — Duplicates said 0 with the pairs on screen
+
+Two things kept the pairs apart, and both were in the third rule. The title
+`A Desolation #164 164` folds to "a desolation 164 164", which no comparison
+can join to "a desolation 164"; and the comic twin has **no author**, where the
+key spelt the absence as "Unknown" and compared it like a name.
+
+`DuplicateKey.foldedTitle` now collapses a trailing number the name carries
+twice, and `LibraryIndex.suspectsByTitleAndAuthor()` treats a missing author as
+matching any author — absence of evidence, not evidence of a different person.
+Two *named* authors under one title are still two books, because Ulysses by
+Joyce and Ulysses by Tennyson are two books.
+
+**The importer's key is deliberately not widened.** `allTitleKeys()` decides
+whether to write a file into somebody else's folder, and a wrong answer there
+costs data; this collection only ever raises a suspicion, and the inspector
+says which rule found it.
+
+Measured against the very library in the screenshot, copied and otherwise
+untouched: **16 duplicates where the sidebar said 0** — all eight pairs,
+including the five the doubled number had hidden.
+
+### Fixed — a publisher in the author list, and "Book 3 of 1"
+
+**The publisher.** The three books under "A Publisher" in the screenshot were
+the *fixture's* doing: `synthesise-mixed` gave its DRM books the author
+"A Publisher". They are now written the way a book is written — author
+"Ada Mercer", publisher "Head of Zeus" — so the picture shows the app rather
+than the generator.
+
+The question the screenshot raised was still worth answering, and one of the
+four reader paths did have the defect. EPUB 2 puts a creator's role in an
+attribute (`opf:role="pbl"`), which `OPFDocument` already honoured; **EPUB 3
+puts it in a `<meta refines="#id" property="role">` beside the element**, which
+it did not read — so a `<dc:creator>` naming the publisher went straight onto
+the spine. That spelling is what every EPUB 3 built since 2011 uses. MOBI
+(EXTH 101), PDF and `ComicInfo.xml` were already right, and
+`PublisherIsNotAnAuthorTests` now says so for all four: **a missing author stays
+missing.** An empty author field files a book under "Unknown", which a person
+can see and fix; a publisher in that field files a thousand books under Penguin,
+which looks like metadata and is not.
+
+**"Book 3 of 1".** The count was right — the library really did hold one book of
+"Wayfarers" — and the sentence was not: "of 1" reads as a claim about the series
+that its own neighbour contradicts. The wording is now `SeriesPosition` in the
+core, where it is tested: a library holding fewer books of the series than the
+index claims says **"Book 3"** and leaves the total out. A half-collected series
+is the ordinary case, not an error.
+
+### Added
+
+`shelf-tool duplicates <library>` prints what the *Duplicates* collection holds
+and which of the three rules found each book. Reads only. It is how the number
+above was measured, and the screenshot had no way of showing it.
+
 ## Sprint 4 – the other formats · 18 September 2026
 
 Measured on Erik's Mac (M-series, macOS 15.6) against
