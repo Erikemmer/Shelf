@@ -8,6 +8,36 @@ on and what was *not* measured.
 Measured on Erik's Mac (M-series, macOS 15.6) against
 `~/Library/Caches/Shelf/measure-library-7/`.
 
+### Fixed — declaring German made Shelf follow the Mac, which broke eleven scripts
+
+Naming `de` in `CFBundleLocalizations` is what makes a German Mac give Shelf
+German — the point of the whole change — and it means the menu bar reads
+"Ablage" and "Bibliothek". Every script here that drives the window by clicking
+`menu bar item "File"` then fails with a System Events error that blames System
+Events:
+
+```
+"menu bar item \"Library\" of menu bar 1 … kann nicht gelesen werden. (-1728)"
+```
+
+Nothing is wrong with the app, and the same script still works on an English
+Mac. It cost two runs of `Scripts/online-shot.sh` before the reason was found.
+
+`Scripts/app-language.sh`: a script that drives menus says which language it is
+written for, in Shelf's **own** defaults domain, and a trap puts it back — on a
+failure and on a ⌃C as well as on a clean finish. Eleven scripts pin English;
+`german-shots.sh` pins German.
+
+### Measured — the comparison sheet, photographed with its sources
+
+`docs/screenshots/sprint-7/online-comparison.jpg`: seven rows, each naming Open
+Library, and an author list with no German word in it.
+
+**The two-row case is still not in any picture.** Google Books answered HTTP 429
+again — the same shared anonymous quota as in Sprint 6 — so no lookup in this
+repository has ever had both services answering at once. The rule has five tests
+against constructed candidates; the picture is owed.
+
 ### Added — `make release`: archive, sign, notarise, staple, assess
 
 Seven steps, each of which says what it did, in `Scripts/release.sh`

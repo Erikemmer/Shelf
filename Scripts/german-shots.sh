@@ -21,7 +21,6 @@ ROOT="$(cd "$HERE/.." && pwd)"
 CACHE="$HOME/Library/Caches/Shelf/measure-library-7"
 LIB="${1:-$CACHE/online-library}"
 OUT="${2:-$ROOT/docs/screenshots/sprint-7}"
-DOMAIN="de.erikemmer.shelf"
 WINDOW_RECT="30,40,1440,877"
 
 say() { echo "german-shots: $1"; }
@@ -31,14 +30,11 @@ fail() {
     exit 1
 }
 
-# The language goes back however this ends. A script that leaves an app stuck
-# in a language the person did not choose is worse than one that took no
+# The language goes back however this ends — the trap is in app-language.sh,
+# which every window-driving script here now shares. One that left an app stuck
+# in a language the person did not choose would be worse than one that took no
 # pictures.
-restore_language() {
-    defaults delete "$DOMAIN" AppleLanguages 2>/dev/null
-    say "language override removed from $DOMAIN"
-}
-trap restore_language EXIT
+. "$HERE/app-language.sh"
 
 . "$HERE/screen-awake.sh"
 require_awake_screen "$@"
@@ -66,8 +62,7 @@ fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
 pgrep -x Shelf >/dev/null && fail "a Shelf is already running – close it yourself, then run this again"
 
-defaults write "$DOMAIN" AppleLanguages -array de
-say "Shelf will start in German (its own defaults domain, not the system's)"
+pin_app_language de
 
 PID=""
 start_shelf() { # [library path, or nothing for the welcome screen]

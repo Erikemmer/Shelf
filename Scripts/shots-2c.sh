@@ -39,6 +39,11 @@ say() { echo "shots-2c: $1"; }
 mkdir -p "$OUT"
 
 # ── Is anybody looking at this screen? ───────────────────────────────────────
+# Shelf speaks two languages now and follows the Mac's. Every menu name in
+# this script is English, so the run says so (Scripts/app-language.sh).
+. "$HERE/app-language.sh"
+pin_app_language en
+
 . "$HERE/screen-awake.sh"
 require_awake_screen "$@"
 

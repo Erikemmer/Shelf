@@ -40,6 +40,11 @@ fail() {
 
 # A locked screen breaks everything below without failing any of it – see
 # `screen-awake.sh`, which also holds the display awake for the run.
+# Shelf speaks two languages now and follows the Mac's. Every menu name in
+# this script is English, so the run says so (Scripts/app-language.sh).
+. "$HERE/app-language.sh"
+pin_app_language en
+
 . "$HERE/screen-awake.sh"
 require_awake_screen "$@"
 
