@@ -199,22 +199,18 @@ struct ShelfApp: App {
     /// The way in when no marker matches — a reader Shelf has never heard of,
     /// or a card taken out of one (CONCEPT §8.1).
     ///
-    /// A submenu of the volumes that are mounted and not recognised, each with
-    /// the profiles to treat it as, rather than a sheet: the two things that
-    /// have to be picked are a volume and a profile, and a menu picks two
-    /// things without a window.
+    /// One item per profile, each opening a panel to choose the volume.
+    ///
+    /// The profile is picked in the menu and the volume in an **open panel**,
+    /// rather than both in the menu, and that is not a matter of taste: the
+    /// sandbox treats choosing a folder in a panel as permission to read it,
+    /// and there are volumes Shelf cannot look inside without that — a mounted
+    /// disk image is one, measured in Sprint 5. A menu of volume names could
+    /// list them and not get in.
     private var treatVolumeMenu: some View {
         Menu("Treat Volume as Device") {
-            let volumes = model.devices.unrecognisedVolumes
-            if volumes.isEmpty {
-                Text("No other volume is mounted")
-            }
-            ForEach(volumes, id: \.url) { volume in
-                Menu(volume.name) {
-                    ForEach(DeviceProfiles.all) { profile in
-                        Button(profile.name) { model.treatVolumeAsDevice(volume, as: profile.id) }
-                    }
-                }
+            ForEach(DeviceProfiles.all) { profile in
+                Button("\(profile.name)…") { model.presentDeviceVolumePanel(as: profile.id) }
             }
         }
     }

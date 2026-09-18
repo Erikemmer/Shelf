@@ -80,6 +80,26 @@ final class DeviceWatcher {
         .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
+    /// One volume, described. For a URL the user chose in an open panel,
+    /// where there is no listing to take it from.
+    static func volume(at url: URL) -> MountedVolume {
+        let keys: [URLResourceKey] = [
+            .volumeNameKey, .volumeAvailableCapacityKey, .volumeTotalCapacityKey,
+            .volumeIsRemovableKey, .volumeIsEjectableKey,
+        ]
+        let values = try? url.resourceValues(forKeys: Set(keys))
+        return MountedVolume(
+            url: url,
+            name: values?.volumeName ?? url.lastPathComponent,
+            freeBytes: values?.volumeAvailableCapacity.map(Int64.init),
+            totalBytes: values?.volumeTotalCapacity.map(Int64.init),
+            // The person chose it, which is the whole of what "removable"
+            // stands in for here: something Shelf may write books onto and
+            // then eject.
+            isRemovable: true,
+            fileSystem: fileSystemName(of: url))
+    }
+
     /// The readers among them.
     static func connectedDevices(manual: [String: String] = [:]) -> [ConnectedDevice] {
         mountedVolumes().compactMap { volume in

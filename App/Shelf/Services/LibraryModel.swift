@@ -341,6 +341,33 @@ final class LibraryModel {
         devices.treat(volume, as: profileID, entries: entries)
     }
 
+    /// The same, through an open panel — and the only route that works for a
+    /// volume the sandbox has not already let Shelf into.
+    ///
+    /// **Why there is a panel at all.** The app sandbox grants
+    /// `files.removable-volumes` for real removable media; it does **not** cover
+    /// a mounted disk image, and it is not a promise about every volume a person
+    /// might plug in. Measured in Sprint 5: with the entitlement in place, the
+    /// app could read a disk image's *name and free space* and could not list
+    /// its directory, so a Kobo made out of an image showed "0 books" with five
+    /// on it. Choosing the volume in an open panel is what the sandbox takes as
+    /// permission, and it is the same act the library folder already needs.
+    ///
+    /// It is therefore not only the way in when no marker matches. It is also
+    /// the way in when the sandbox will not let Shelf look.
+    func presentDeviceVolumePanel(as profileID: String) {
+        guard let profile = DeviceProfiles.profile(id: profileID) else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: "/Volumes", isDirectory: true)
+        panel.prompt = "Use as \(profile.name)"
+        panel.message = "Choose the volume to treat as a \(profile.name)."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        devices.treat(DeviceWatcher.volume(at: url), as: profileID, entries: entries)
+    }
+
     func showDeviceContents(_ device: ConnectedDevice?) {
         guard let device = device ?? devices.selectedDevice else { return }
         devices.selectedDeviceID = device.id
