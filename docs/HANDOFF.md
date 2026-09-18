@@ -216,6 +216,30 @@ Aus Sprint 5, weiter gültig:
 - **Ein Check gegen den ganzen Accessibility-Baum beantwortet „steht das Wort
   irgendwo im Fenster"** – nicht „hat *dieses Buch* mehrere Dateien".
 
+## Was Erik ansehen muss: die CI läuft seit Sprint 4 überhaupt nicht
+
+Jeder Lauf der letzten zwölf Commits endet nach sieben Sekunden mit
+
+> The job was not started because recent account payments have failed or your
+> spending limit needs to be increased.
+
+Das ist keine Code-Sache und nichts in diesem Repository kann es beheben –
+GitHub startet die Jobs nicht. **Vier Sprints ohne CI**, und sie hat sofort
+etwas gekostet: der Linux-Build war seit Sprint 5 kaputt (`import Darwin` in
+`shelf-tool`), und genau dafür gibt es den Linux-Job.
+
+Bis das geklärt ist, ist der Ersatz ein Container auf diesem Mac:
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src swift:6.1 bash -c \
+  "apt-get update -qq && apt-get install -y -qq libsqlite3-dev && swift test"
+```
+
+Achtung: `Package.resolved` liegt neben dem Repo und der Container kann sie
+nicht lesen (I/O-Fehler). Ein `git archive HEAD | tar -x -C <ordner>` und
+*dieser* Ordner als Mount umgeht es und prüft obendrein genau das, was
+committet ist. Gemessen am 18.09.2026: Build 36,9 s, **588 Tests grün**.
+
 ## Eine Entscheidung, die dir gehört: SlateKit und CI
 
 `Erikemmer/SlateKit` ist **privat**. Der Kern braucht es nicht – seine Tests

@@ -3,6 +3,16 @@ import Testing
 
 @testable import ShelfCore
 
+/// What a request that never got an answer throws.
+///
+/// **Not `URLError`.** That type lives in `FoundationNetworking` on Linux, which
+/// `ShelfCore` does not import and must not need — the core builds on Linux and
+/// the tests run there. A struct of three lines costs nothing and keeps the
+/// test target as portable as the target it tests.
+struct NoAnswer: Error, LocalizedError {
+    var errorDescription: String? { "the request did not get an answer" }
+}
+
 /// A transport that answers from a script instead of from a socket.
 ///
 /// This is the seam the whole online feature is testable through: everything
@@ -26,7 +36,7 @@ actor ScriptedTransport: MetadataTransport {
         asked.append(url)
         askedAt.append(ContinuousClock.now)
         let answer = answers.isEmpty ? Answer(status: 200, body: Data("{}".utf8)) : answers.removeFirst()
-        if answer.silent { throw URLError(.timedOut) }
+        if answer.silent { throw NoAnswer() }
         return (answer.body, answer.status)
     }
 }

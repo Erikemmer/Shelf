@@ -88,6 +88,35 @@ are merged, never overwritten. They now read `would add`, and they are not
 ticked for anybody either: a catalogue's subjects are catalogue vocabulary and a
 person's tags are their own.
 
+### Fixed — the Linux build had been broken since Sprint 5, and nothing said so
+
+`swift build` on Linux — which is the guard rail that keeps AppKit and friends
+out of the core — has been failing since the device work: `Sources/shelf-tool`
+gained an unconditional `import Darwin` for `statfs`, and `shelf-tool` is a
+target of the same package, so a plain `swift build` builds it too. **`ShelfCore`
+itself was and is fine**; what was broken was the build the CI job runs.
+
+It was not noticed because **GitHub Actions has not started a job on this
+repository since Sprint 4**: every run of the last twelve commits ends in 7
+seconds with *"The job was not started because recent account payments have
+failed or your spending limit needs to be increased."* That is an account
+matter, not a code one, and it means the last four sprints have had no CI at
+all. Erik has to look at the billing page; nothing in this repository can fix it.
+
+Found instead by running the Linux job here, in a `swift:6.1` container. Both
+the import and `fileSystemName(of:)` are now `#if canImport(Darwin)`, and on
+Linux the file system reads as unknown — which every caller already handles, and
+which is honest: a device proof run happens on the Mac the reader is plugged
+into. A second implementation over `/proc/mounts` that nothing would exercise
+would be code that is wrong and unnoticed.
+
+**Measured on Linux** (`swift:6.1`, `libsqlite3-dev`, the committed tree):
+`swift build` complete in 36.9 s, **588 tests passed in 3.7 s**. That includes
+everything Sprint 6 added — the stored fixtures come out of `Bundle.module` on
+Linux exactly as on macOS, and one Linux-only trap was removed on the way:
+`URLError` lives in `FoundationNetworking` there, so the fake transport in the
+tests throws a three-line error of its own instead.
+
 ### Fixed — a field taken over from the net could not be undone at all
 
 `Scripts/online-apply-proof.sh` drives the real window against the live

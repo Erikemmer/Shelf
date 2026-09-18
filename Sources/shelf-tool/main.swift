@@ -1,6 +1,15 @@
-import Darwin
 import Foundation
 import ShelfCore
+
+// `statfs`, and the only thing in this tool that is not portable. The tool is a
+// target of the same package as `ShelfCore`, so `swift build` on Linux builds it
+// too, and an unconditional `import Darwin` breaks that build. It did break it,
+// from Sprint 5 until a container was used to notice: the CI job that exists to
+// catch exactly this has not been able to start since Sprint 4, because GitHub
+// Actions is blocked on the account's billing.
+#if canImport(Darwin)
+    import Darwin
+#endif
 
 /// Command-line proof that the library, the EPUB reader and the importer agree
 /// with the file system – before there is any window to click.
@@ -629,13 +638,23 @@ enum Commands {
 
     /// `msdos`, `exfat`, `hfs`, `apfs` — from `statfs`, never from a localized
     /// description string.
+    ///
+    /// macOS only. On Linux the answer is "unknown", which every caller already
+    /// handles: the file system decides the 4 GB limit and the name rules, and a
+    /// device proof run happens on the Mac the reader is plugged into. The
+    /// alternative — a second implementation over `/proc/mounts` that nothing
+    /// would ever exercise — would be code that is wrong and unnoticed.
     static func fileSystemName(of url: URL) -> String? {
-        var buffer = statfs()
-        guard statfs(url.path, &buffer) == 0 else { return nil }
-        return withUnsafeBytes(of: &buffer.f_fstypename) { raw in
-            guard let base = raw.baseAddress else { return nil }
-            return String(cString: base.assumingMemoryBound(to: CChar.self))
-        }
+        #if canImport(Darwin)
+            var buffer = statfs()
+            guard statfs(url.path, &buffer) == 0 else { return nil }
+            return withUnsafeBytes(of: &buffer.f_fstypename) { raw in
+                guard let base = raw.baseAddress else { return nil }
+                return String(cString: base.assumingMemoryBound(to: CChar.self))
+            }
+        #else
+            return nil
+        #endif
     }
 
     static func connectedDevice(at path: String) -> ConnectedDevice? {
