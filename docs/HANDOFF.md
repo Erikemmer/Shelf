@@ -10,6 +10,7 @@ Du arbeitest mit mir (Erik Emmer) an **Shelf**, einem Mac-only eBook-Manager im
 Look & Feel von Selector. Repo: https://github.com/Erikemmer/Shelf (lokal
 `~/Documents/Shelf`). Shelf ist ein modern aussehendes Calibre: Bibliothek,
 Metadaten, Calibre-Import, Geräte – kein Reader, keine Konvertierung in v1.0.
+Stand: Sprints 1–4 fertig, `main` grün, 457 Kern-Tests, SlateKit-Pin 0.3.1.
 
 **Lies zuerst, in dieser Reihenfolge:** `Programmier-Leitlinie.md` (bindend),
 `CLAUDE.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG.md`, `CHANGELOG.md` (oben
@@ -54,37 +55,46 @@ die Entscheidungen in `docs/adr/`.
 
 ---
 
-## Nächster Schritt: Sprint 4 – weitere Formate
+## Nächster Schritt: Sprint 5 – Geräte
 
-**Sprint 3 ist fertig, mit einer Ausnahme.** `CalibreReader` liest `metadata.db`
-über eine Kopie samt WAL, das Zählprotokoll steht im Sheet und in
-`shelf-tool calibre-dry`, der Import läuft über den vorhandenen `ImportRunner`
-mit Wiederaufnahme, und Calibres eigene Spalten kommen nur lesend mit. Die
-Zahlen stehen im `CHANGELOG.md`, die Belege in `docs/screenshots/sprint-3/`,
-die Entscheidungen in ADR 0009 und 0010.
+**Sprint 4 ist fertig.** Shelf liest jetzt EPUB, KEPUB, MOBI, AZW3, PDF, CBZ und
+CBR; KFX wird als Datei geführt und nicht geöffnet. Mehrere Dateien je Buch
+stehen einzeln im Inspector, mit Größe, DRM-Badge und „Show in Finder“;
+`Add Format…` geht durch denselben `ImportPlanner` wie ein hineingezogenes File.
+Quick Look liegt auf der Leertaste. DRM wird erkannt, gebadgt und in Ruhe
+gelassen. Die Zahlen stehen im `CHANGELOG.md`, die Bilder samt Einordnung in
+`docs/screenshots/sprint-4/README.md`, die Entscheidungen in ADR 0011 und 0012.
 
-**Die Ausnahme: es hat noch keine echte Calibre-Bibliothek gesehen.** Alles
-oben ist gegen eine synthetische gemessen, deren Tabellenformen diese Sitzung
-von Hand geschrieben hat — mit Absicht so, damit die Fixture dem Leser nicht
-per Konstruktion recht gibt, aber eine handgeschriebene Form ist trotzdem eine
-Behauptung. `~/Downloads/Calibre Library Erik` enthält nur `metadata.db` ohne
-Buchordner; das prüft das Schema und nicht den Import. **Erik muss den Pfad
-nennen.**
+**Zwei Ausnahmen, beide von Erik abhängig.**
 
-Was als Nächstes ansteht (CONCEPT §11, Sprint 4):
+1. **Es hat immer noch keine echte Calibre-Bibliothek gesehen** (offen seit
+   Sprint 3). `~/Downloads/Calibre Library Erik` enthält nur `metadata.db` ohne
+   Buchordner; das prüft das Schema und nicht den Import. **Erik muss den Pfad
+   nennen.**
+2. **Es hat auch keine echten Bücher gesehen.** Alles in Sprint 4 ist gegen
+   synthetisches Material gemessen, das diese Sitzung selbst schreibt. Konkret
+   ungeprüft: ein bei Amazon gekauftes MOBI oder AZW3, ein echtes CBR (RAR ist
+   ein proprietäres Format, dieser Mac kann keins schreiben), und eine wirklich
+   DRM-geschützte Datei — die Fixtures *kündigen* Schutz an, ohne verschlüsselt
+   zu sein, weil genau das Shelfs Anspruch ist. **Vier Dateien von Erik würden
+   reichen.**
 
-1. **MOBI/AZW3** — PalmDB-Header und EXTH-Records (100 Autor, 503 Titel,
-   104 ISBN, 106 Datum, 201 Cover-Offset) in `ShelfCore/Formats/Mobi`.
-2. **PDF** — `documentAttributes` und Seite 1 gerendert, in der App-Schicht:
-   PDFKit ist nicht Linux-fähig und der Kern muss es bleiben.
-3. **CBZ** — Dateiname per Regex, optional `ComicInfo.xml`, erstes Bild als
-   Cover. **CBR** — libarchive in der App-Schicht, RAR5 zur Laufzeit geprüft
-   ([ADR 0003](adr/0003-zip-in-the-core.md)).
-4. **DRM-Erkennung** — Adobe ADEPT über `META-INF/encryption.xml`, Kindle über
-   EXTH 209. Erkennen, badgen, in Ruhe lassen (CONCEPT §12).
-5. **`BookFileFormat.hasReadableMetadata`** wird für diese wahr — das ist die
-   eine Stelle, die sich ändert.
-6. **Quick Look** (␛).
+Was als Nächstes ansteht (CONCEPT §8, Sprint 5):
+
+1. **Erkennung** über `NSWorkspace`-Volume-Benachrichtigungen und Markerpfade;
+   Geräteprofile als JSON-**Daten** in `ShelfCore/Devices/Profiles/`, nicht als
+   Code, damit ein neues Modell ohne Release nachgetragen werden kann.
+2. **Übertragen** mit SHA-256 und Rückleseprüfung, Formatpräferenz je Gerät
+   (Kindle: AZW3 > MOBI > PDF), „cannot be sent: no compatible format“ für den
+   Rest. Dateinamen für FAT32 bereinigt, 4-GB-Grenze vorher geprüft.
+3. **Geräteinhalt anzeigen**; beim Kobo zusätzlich Lesefortschritt und Regale
+   **nur lesend** aus einer Kopie von `KoboReader.sqlite`.
+4. **Löschen auf dem Gerät nur hinter einer Bestätigung, die jede Datei beim
+   Namen nennt.** Der Sheet dafür existiert schon in anderer Gestalt:
+   `OrphanSheet` macht genau das für verwaiste Ordner und ist die Vorlage — zwei
+   Schritte, Dateinamen im zweiten, und was verschwindet, geht in den Papierkorb.
+5. **Auswerfen**, nur wenn kein Transfer läuft.
+6. Beweislauf mit jedem Gerät, das Erik hat.
 
 ### Was dabei zu beachten ist
 
@@ -113,6 +123,20 @@ Was als Nächstes ansteht (CONCEPT §11, Sprint 4):
 - **SlateKit steht auf `0.3.1`**, und der Weg zu einer Änderung steht jetzt in
   `CLAUDE.md`: eigener Arbeitsbaum, Dateien namentlich stagen, bestehende
   Komponenten behalten ihren Default, das Paket bleibt zweisprachig.
+- **Welches Format wer liest, ist eine Tabelle, kein `if`.**
+  `BookFileFormat.readerLayer` sagt `.core`, `.app` oder `.none`;
+  `BookFileReader` im Kern verteilt die erste Gruppe, `FileReader` in der App die
+  zweite. Ein Test prüft, dass `hasReadableMetadata` und `readerLayer` nicht
+  auseinanderlaufen können. Ein neues Format ist zwei Zeilen dort und ein Reader.
+- **Was im Index steht, muss aus dem Ordner wieder herleitbar sein** — sonst ist
+  der Index keine Cache mehr (ADR 0001). Das DRM-Flag war es nicht, und der
+  Rebuild hat neun Badges lautlos auf null gesetzt. Wer ein Feld zum Index
+  hinzufügt, beantwortet zuerst: woher kommt das nach `Rebuild Index from
+  Folders` wieder?
+- **`ImportRunner` kennt nur Bücher, die er selbst angelegt hat.** Für ein Buch,
+  das schon in der Bibliothek stand, muss ihm der Aufrufer den vorhandenen
+  Eintrag geben (`existingEntry`) — sonst schreibt er einen frischen mit nur der
+  neuen Datei darin, und der Index vergisst die anderen.
 
 ### Fallstricke, die diese Sitzung bezahlt hat
 
@@ -134,6 +158,24 @@ Was als Nächstes ansteht (CONCEPT §11, Sprint 4):
 - **`UInt8(n)` trapt über 255.** Die Calibre-Fixture schrieb 255 Ordner, stürzte
   mit SIGTRAP ab und ließ eine `metadata.db` von null Bytes zurück, die das
   Zählprotokoll dann korrekt und nutzlos als „Bibliothek ohne Tabellen“ las.
+- **libarchive stürzt ab, wenn man ein Format zweimal registriert.**
+  `archive_read_support_format_all` registriert rar und rar5 bereits; wer sie
+  „sicherheitshalber“ noch einmal namentlich registriert, bekommt SIGSEGV in
+  `rar5_cleanup` — die Fehlerbehandlung der zweiten Registrierung dereferenziert
+  einen Null-Kontext. Die App starb an der ersten CBR-Datei überhaupt.
+- **Eine Fixture, die mit sich selbst kollidiert, misst die Duplikatprüfung.**
+  Dreimal in einem Lauf passiert: gleiche Heftnummern, byte-gleiche kaputte
+  Dateien, gleicher Seed für den Comic-Inhalt. Jedes Mal sah der Lauf grün aus
+  und die Zahl war zu klein. Jede generierte Datei trägt ihren Index jetzt in
+  den Bytes.
+- **`scroll-at.swift` scrollt bei *negativer* Klickzahl nach unten.** Steht in
+  seinem eigenen Kopf; eine positive Zahl scrollt nach oben, und oben war das
+  Panel schon — der Screenshot zeigte zweimal brav den Anfang des Inspectors.
+- **Ein Check gegen den ganzen Accessibility-Baum beantwortet „steht das Wort
+  irgendwo im Fenster“.** `tree_has "AZW3"` traf die Formats-Sektion der
+  Seitenleiste, also war jede Zelle „richtig“, und das Bild zeigte einen Comic
+  mit einem Format. Die Frage war „hat *dieses Buch* mehrere Dateien“ — die
+  steht im Hilfetext der Zelle.
 
 ## Eine Entscheidung, die dir gehört: SlateKit und CI
 
