@@ -120,6 +120,13 @@ Was als Nächstes ansteht (CONCEPT §11, Sprint 7):
   Sprints stammen aus genau einem Blick auf je einen Screenshot: das
   vorangehakte Jahr 1917 und „Tags – would replace" über einer Zeile, die nichts
   ersetzt.
+- **Ein Blatt (`.sheet`) hat keinen UndoManager.** `@Environment(\.undoManager)`
+  ist darin `nil`, weil ein Blatt eine eigene Präsentation ist. Übernehmen hat
+  `metadata.opf` geschrieben, nichts registriert, und ⌘Z tat nichts – lautlos.
+  `ContentView` reicht den UndoManager des Fensters jetzt hinein.
+  `Scripts/online-apply-proof.sh` hat es gefunden, indem es die Datei von der
+  Platte liest statt der App zu glauben. **Wer ein neues Blatt baut, das etwas
+  ändert, reicht den UndoManager hinein.**
 
 ### Was dabei zu beachten ist
 

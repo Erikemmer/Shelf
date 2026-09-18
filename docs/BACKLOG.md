@@ -342,6 +342,9 @@ is currently assumed.
 - [x] Proof run against both services with ten ISBNs; its answers are the test
       fixtures. Numbers in `CHANGELOG.md`
 - [x] Screenshots in `docs/screenshots/sprint-6/`, each looked at and judged
+- [x] `Scripts/online-apply-proof.sh`: the real window, a real lookup, a box
+      ticked, Apply pressed — then the EPUB's digest, the OPF's `<dc:date>` and
+      ⌘Z read off the disk. It found that a sheet has no undo manager
 
 ### What Sprint 6 found and did not finish
 
@@ -370,6 +373,13 @@ is currently assumed.
 - [ ] **A real disagreement between the two services has never been seen**, so
       the proof run's "where the two disagree" table is one column of dashes.
       That is the same 429
+- [ ] **The Edit menu reads a bare "Undo" after a fetch**, not "Undo Published".
+      The undo itself works — `Scripts/online-apply-proof.sh` writes the field,
+      presses ⌘Z and reads it gone off the disk — and `setActionName` is called
+      on the same `UndoManager` that `registerUndo` was called on, which is the
+      manager ⌘Z reaches. So the name is set and the menu shows the generic
+      title anyway. Unexplained, cosmetic, and written down rather than guessed
+      at. An edit made in the inspector still names itself
 
 ## Sprint 7 – Polish and release
 

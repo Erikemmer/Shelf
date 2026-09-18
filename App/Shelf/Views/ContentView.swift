@@ -73,7 +73,9 @@ struct ContentView: View {
                 get: { model.isFetchMetadataSheetPresented },
                 set: { model.isFetchMetadataSheetPresented = $0 })
         ) {
-            FetchMetadataSheet().environment(model)
+            // The window's undo manager, handed down: a sheet has none of its
+            // own, so a fetched field would be written with no way back.
+            FetchMetadataSheet(undoManager: undoManager).environment(model)
         }
         .onAppear {
             editingKeys.start(handleEditingKey)

@@ -18,6 +18,7 @@
 //          search    the search field
 //          row       the nth row of the table
 //          text=…    the nth element whose value or title is exactly this
+//          starts=…  the nth element whose title or value starts with this
 //          desc=…    the nth element whose description or help starts with this
 import ApplicationServices
 import Foundation
@@ -89,6 +90,15 @@ func matches(_ element: AXUIElement, into found: inout [AXUIElement], depth: Int
     default:
         if let wanted = what.dropPrefix("text=") {
             for key in [kAXValueAttribute, kAXTitleAttribute] where string(element, key as String) == wanted {
+                found.append(element)
+                break
+            }
+        } else if let wanted = what.dropPrefix("starts=") {
+            // A button whose title carries a number — "Apply 1 field", "Apply 2
+            // fields" — cannot be matched exactly by a script that does not
+            // know how many fields are ticked.
+            for key in [kAXTitleAttribute, kAXValueAttribute]
+            where string(element, key as String)?.hasPrefix(wanted) ?? false {
                 found.append(element)
                 break
             }

@@ -20,8 +20,17 @@ import SwiftUI
 /// undo-then-write path an inspector edit goes through.
 struct FetchMetadataSheet: View {
     @Environment(LibraryModel.self) private var model
-    @Environment(\.undoManager) private var undoManager
     @Environment(\.dismiss) private var dismiss
+
+    /// The **window's** undo manager, handed in by `ContentView`.
+    ///
+    /// Not `@Environment(\.undoManager)`: a sheet is its own presentation and
+    /// SwiftUI gives it no undo manager at all, so the environment value here is
+    /// `nil`. The symptom is silent and complete — Apply writes the file, the
+    /// Edit menu reads a bare "Undo", and ⌘Z does nothing. Found by
+    /// `Scripts/online-apply-proof.sh`, which reads the Edit menu's own title
+    /// and the file on disk; nothing in the window said anything was wrong.
+    let undoManager: UndoManager?
 
     private var online: OnlineMetadataModel? { model.onlineMetadata }
 

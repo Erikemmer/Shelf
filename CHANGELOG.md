@@ -88,6 +88,28 @@ are merged, never overwritten. They now read `would add`, and they are not
 ticked for anybody either: a catalogue's subjects are catalogue vocabulary and a
 person's tags are their own.
 
+### Fixed — a field taken over from the net could not be undone at all
+
+`Scripts/online-apply-proof.sh` drives the real window against the live
+services, ticks a box, presses Apply and then reads the files off the disk. It
+found this, and nothing in the window said anything was wrong:
+
+**A sheet has no undo manager.** `@Environment(\.undoManager)` inside a
+`.sheet` is `nil` — a sheet is its own presentation and SwiftUI gives it none —
+so Apply wrote `metadata.opf`, registered nothing, and ⌘Z did nothing. Silent
+and complete. The window's manager is now handed into the sheet by
+`ContentView`, and the proof run reads the date out of the OPF after Apply and
+reads it gone again after ⌘Z.
+
+Measured, end to end at the window: the EPUB's SHA-256 **unchanged**
+(`83ab7b05…` before and after), `metadata.opf` gained
+`<dc:date>2008-01-01T00:00:00+00:00</dc:date>`, and ⌘Z removed it again.
+
+One thing about it is unexplained and cosmetic: the Edit menu reads a bare
+**"Undo"** rather than "Undo Published", although `setActionName` is called on
+the same manager `registerUndo` was called on and the undo itself works. It is
+in `docs/BACKLOG.md`.
+
 ### Added — a cover from the net, when the file has none
 
 Only on the explicit **Use This Cover**, only when the book's folder has no
