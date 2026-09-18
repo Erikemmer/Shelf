@@ -149,7 +149,8 @@ final class OnlineMetadataModel {
     /// "Book 3 of 12" — drawn only when there is more than one, because a
     /// count of one is noise.
     var progressLabel: String? {
-        books.count > 1 ? "Book \(position + 1) of \(books.count)" : nil
+        books.count > 1
+            ? Loc.string("Book %1$@ of %2$@", Loc.number(position + 1), Loc.number(books.count)) : nil
     }
 
     var query: MetadataQuery? { currentBook.flatMap { MetadataQuery.about($0.book) } }
@@ -180,7 +181,7 @@ final class OnlineMetadataModel {
         wantsCover = currentBook.map { OnlineCover.isWanted(in: folder(of: $0)) } ?? false
 
         guard let query else {
-            note = "This book has no ISBN and no title to look it up by, so nothing was asked."
+            note = Loc.string("This book has no ISBN and no title to look it up by, so nothing was asked.")
             return
         }
         isSearching = true
@@ -195,7 +196,7 @@ final class OnlineMetadataModel {
             self.note = found.statusLine
             self.briefNote = found.briefProblem(found.failedSources)
             if found.isEmpty, found.problems.isEmpty {
-                self.note = "Neither service has anything for \(query.description)."
+                self.note = Loc.string("Neither service has anything for %@.", query.description)
                 self.briefNote = self.note
             }
             // One candidate that is plainly the edition is chosen for the
@@ -275,13 +276,13 @@ final class OnlineMetadataModel {
             let data = try await transport.image(at: url, userAgent: NetworkPolicy.standard.userAgent)
             let written = try OnlineCover.write(data, into: folder(of: entry))
             wantsCover = false
-            coverNote = "Saved as \(written.lastPathComponent) next to the book."
+            coverNote = Loc.string("Saved as %@ next to the book.", written.lastPathComponent)
             Self.logger.info("cover written for \(entry.id, privacy: .public)")
             return entry.id
         } catch let refusal as OnlineCover.Refusal {
             coverNote = refusal.message
         } catch {
-            coverNote = "The cover could not be fetched: \(error.localizedDescription)"
+            coverNote = Loc.string("The cover could not be fetched: %@", error.localizedDescription)
         }
         return nil
     }

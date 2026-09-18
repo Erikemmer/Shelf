@@ -30,7 +30,7 @@ struct SidebarView: View {
                             // is a drop target and a thing to eject.
                             DevicesSection()
                         } else {
-                            SlateSidebarSection(section.rawValue)
+                            SlateSidebarSection(section.title)
                             rows(for: section)
                         }
                     }
@@ -50,17 +50,17 @@ struct SidebarView: View {
 
     private var collections: some View {
         Group {
-            SlateSidebarSection("Library")
+            SlateSidebarSection(Loc.string("Library"))
             ForEach(SmartCollection.allCases, id: \.self) { collection in
                 let available = !Self.stillToCome.contains(collection)
                 SlateSidebarRow(
-                    collection.title,
+                    Loc.core(collection.title),
                     icon: collection.icon,
                     count: count(of: collection),
                     isActive: model.filter.collection == collection && !isNarrowed,
                     help: available
                         ? Self.help(for: collection)
-                        : "\(collection.title) is not available yet",
+                        : Loc.string("%@ is not available yet", Loc.core(collection.title)),
                     titleColor: available ? Slate.textPrimary : Slate.textSecondary,
                     // Named, not a trailing closure: SlateKit 0.2.0 gained an
                     // `accessory` view builder before `action`, so a trailing
@@ -82,12 +82,13 @@ struct SidebarView: View {
     private static func help(for collection: SmartCollection) -> String {
         switch collection {
         case .duplicates:
-            return "Books that share a file, byte for byte, or an ISBN with another book"
+            return Loc.string("Books that share a file, byte for byte, or an ISBN with another book")
         case .possibleDuplicates:
-            return "Books that share only a title and a first author — editions, "
-                + "translations and namesakes look like this too"
+            return Loc.string(
+                "Books that share only a title and a first author — editions, translations and "
+                    + "namesakes look like this too")
         default:
-            return "Show \(collection.title.lowercased())"
+            return Loc.string("Show %@", Loc.core(collection.title).lowercased())
         }
     }
 
@@ -134,12 +135,12 @@ struct SidebarView: View {
                     icon: Theme.icon(for: section),
                     count: facet.count,
                     isActive: isActive(facet, in: section),
-                    help: "Show only \(displayName(facet, in: section))",
+                    help: Loc.string("Show only %@", displayName(facet, in: section)),
                     action: { _ in apply(facet, from: section) }
                 )
             }
             if facets.count > Self.maximumRowsPerSection {
-                Text("+ \(facets.count - Self.maximumRowsPerSection) more — use ⌘F")
+                Text(Loc.count("+ %lld more — use ⌘F", facets.count - Self.maximumRowsPerSection))
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
                     .padding(.horizontal, 12)
@@ -215,7 +216,7 @@ struct SidebarView: View {
         if let progress = model.warmer.progress {
             SlateStatusBar(progress.label)
         } else if model.isLoading {
-            SlateStatusBar("Reading the library")
+            SlateStatusBar(Loc.string("Reading the library"))
         } else if let note = model.onlineMetadata?.briefNote {
             // A service that did not answer is a line here and nowhere else:
             // never a dialogue, never a stop (CONCEPT §9). Click to dismiss.
@@ -227,8 +228,8 @@ struct SidebarView: View {
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .onTapGesture { model.onlineMetadata?.clearNote() }
-                .help((model.onlineMetadata?.note ?? note) + " Click to dismiss")
-                .accessibilityLabel("Network note: \(note)")
+                .help(Loc.string("%@ Click to dismiss", model.onlineMetadata?.note ?? note))
+                .accessibilityLabel(Loc.string("Network note: %@", note))
         } else {
             Text(model.statusLine)
                 .font(.caption2)

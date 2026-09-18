@@ -17,14 +17,14 @@ struct ImportSheet: View {
             // The sheet is one flow with two sources, and it says which one it
             // is looking at: a person who chose Import from Calibre and is then
             // asked to confirm something headed "Add Books" has to check.
-            Text(model.importModel?.calibreCensus == nil ? "Add Books" : "Import from Calibre")
+            Text(model.importModel?.calibreCensus == nil ? Loc.string("Add Books") : Loc.string("Import from Calibre"))
                 .font(.title3)
                 .foregroundStyle(Slate.textPrimary)
 
             if let importModel = model.importModel {
                 content(importModel)
             } else {
-                Text("No library open.").foregroundStyle(Slate.textSecondary)
+                Text(Loc.string("No library open.")).foregroundStyle(Slate.textSecondary)
             }
         }
         .padding(20)
@@ -44,7 +44,9 @@ struct ImportSheet: View {
             case .idle:
                 idle(importModel)
             case .examining(let done, let total):
-                progressRow("Reading \(done) of \(total) files", fraction: fraction(done, total))
+                progressRow(
+                    Loc.string("Reading %1$@ of %2$@ files", Loc.number(done), Loc.number(total)),
+                    fraction: fraction(done, total))
             case .ready:
                 plan(importModel)
             case .running(let progress):
@@ -65,7 +67,7 @@ struct ImportSheet: View {
 
     @ViewBuilder
     private func idle(_ importModel: ImportModel) -> some View {
-        Text("Choose books or a folder, or drop them on the window.")
+        Text(Loc.string("Choose books or a folder, or drop them on the window."))
             .foregroundStyle(Slate.textSecondary)
     }
 
@@ -79,29 +81,33 @@ struct ImportSheet: View {
     /// got, and the files on the disk it has never heard of.
     @ViewBuilder
     private func calibre(_ census: CalibreCensus) -> some View {
-        SlateInspectorSection("In the Calibre library") {
+        SlateInspectorSection(Loc.string("In the Calibre library")) {
             VStack(alignment: .leading, spacing: 3) {
-                SlateValueRow(name: "Books", value: "\(census.books)")
-                SlateValueRow(name: "Authors", value: "\(census.authors)")
-                SlateValueRow(name: "Series", value: "\(census.series)")
-                SlateValueRow(name: "Tags", value: "\(census.tags)")
+                SlateValueRow(name: Loc.string("Books"), value: "\(census.books)")
+                SlateValueRow(name: Loc.string("Authors"), value: "\(census.authors)")
+                SlateValueRow(
+                    name: Loc.contextual("Series [counted in a Calibre library]", english: Loc.string("Series")),
+                    value: "\(census.series)")
+                SlateValueRow(name: Loc.string("Tags"), value: "\(census.tags)")
                 ForEach(census.customColumns, id: \.label) { column in
                     SlateValueRow(name: column.hashLabel, value: column.kind.label)
                 }
                 ForEach(census.unknownColumns, id: \.label) { column in
-                    SlateValueRow(name: "#" + column.label, value: "\(column.datatype) – not imported")
+                    SlateValueRow(
+                        name: "#" + column.label,
+                        value: Loc.string("%@ – not imported", column.datatype))
                 }
                 if !census.missingFiles.isEmpty {
                     SlateValueRow(
-                        name: "Listed in metadata.db, not on the disk",
+                        name: Loc.string("Listed in metadata.db, not on the disk"),
                         value: "\(census.missingFiles.count)")
                 }
                 if !census.orphanFiles.isEmpty {
                     SlateValueRow(
-                        name: "On the disk, not in metadata.db", value: "\(census.orphanFiles.count)")
+                        name: Loc.string("On the disk, not in metadata.db"), value: "\(census.orphanFiles.count)")
                 }
                 if census.booksWithoutCover > 0 {
-                    SlateValueRow(name: "Without a cover", value: "\(census.booksWithoutCover)")
+                    SlateValueRow(name: Loc.string("Without a cover"), value: "\(census.booksWithoutCover)")
                 }
             }
         }
@@ -113,7 +119,7 @@ struct ImportSheet: View {
         ForEach(census.warnings.filter { $0 != census.schema.warning }, id: \.self) { warning in
             SlateFieldNote(warning)
         }
-        Text("Nothing in the Calibre library is changed, moved or deleted.")
+        Text(Loc.string("Nothing in the Calibre library is changed, moved or deleted."))
             .font(.caption2)
             .foregroundStyle(Slate.textSecondary)
     }
@@ -126,14 +132,14 @@ struct ImportSheet: View {
                 .foregroundStyle(Slate.textPrimary)
 
             VStack(alignment: .leading, spacing: 3) {
-                SlateValueRow(name: "New books", value: "\(plan.newBookCount)")
-                SlateValueRow(name: "Formats added to existing books", value: "\(plan.addedFormatCount)")
+                SlateValueRow(name: Loc.string("New books"), value: "\(plan.newBookCount)")
+                SlateValueRow(name: Loc.string("Formats added to existing books"), value: "\(plan.addedFormatCount)")
                 ForEach(BookFileFormat.allCases.filter { plan.count(of: $0) > 0 }, id: \.self) { format in
                     SlateValueRow(
                         name: format.rawValue.uppercased(), value: "\(plan.count(of: format))")
                 }
-                SlateValueRow(name: "To copy", value: ByteCount.format(plan.totalBytes))
-                SlateValueRow(name: "Room needed", value: ByteCount.format(plan.requiredBytes))
+                SlateValueRow(name: Loc.string("To copy"), value: ByteCount.format(plan.totalBytes))
+                SlateValueRow(name: Loc.string("Room needed"), value: ByteCount.format(plan.requiredBytes))
             }
 
             if let census = importModel.calibreCensus { calibre(census) }
@@ -141,12 +147,12 @@ struct ImportSheet: View {
             // Skipped files are named, not only counted: a skip is a decision
             // the user may disagree with, and they cannot if they cannot see it.
             if !plan.skipped.isEmpty {
-                SlateInspectorSection("Will be skipped") {
+                SlateInspectorSection(Loc.string("Will be skipped")) {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(SkippedImport.Reason.allCases, id: \.self) { reason in
                             let group = plan.skipped(for: reason)
                             if !group.isEmpty {
-                                SlateValueRow(name: reason.label, value: "\(group.count)")
+                                SlateValueRow(name: Loc.core(reason.label), value: Loc.number(group.count))
                             }
                         }
                     }
@@ -167,7 +173,7 @@ struct ImportSheet: View {
             // Only when the Calibre block has not already said it. The promise
             // is worth making once and looks careless twice.
             if importModel.calibreCensus == nil {
-                Text("The files you chose are only read. Nothing there is changed, moved or deleted.")
+                Text(Loc.string("The files you chose are only read. Nothing there is changed, moved or deleted."))
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
             }
@@ -177,14 +183,16 @@ struct ImportSheet: View {
     private func running(_ progress: ImportRunner.Progress) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             progressRow(
-                "Copying and verifying \(progress.filesDone) of \(progress.filesTotal)",
+                Loc.string(
+                    "Copying and verifying %1$@ of %2$@", Loc.number(progress.filesDone),
+                    Loc.number(progress.filesTotal)),
                 fraction: progress.fractionDone)
             Text(progress.currentTitle)
                 .font(.caption)
                 .foregroundStyle(Slate.textSecondary)
                 .lineLimit(1)
             if let remaining = progress.estimatedRemaining {
-                Text("about \(ImportReport.duration(remaining)) left")
+                Text(Loc.string("about %@ left", ImportReport.duration(remaining)))
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
             }
@@ -196,28 +204,31 @@ struct ImportSheet: View {
             Text(report.headline)
                 .font(.headline)
                 .foregroundStyle(report.everythingVerified ? Slate.affirm : Slate.deny)
-            SlateValueRow(name: "Copied", value: ByteCount.format(report.copiedBytes))
+            SlateValueRow(name: Loc.string("Copied"), value: ByteCount.format(report.copiedBytes))
             if !report.warnings.isEmpty {
-                SlateValueRow(name: "Imported with something missing", value: "\(report.warnings.count)")
+                SlateValueRow(name: Loc.string("Imported with something missing"), value: "\(report.warnings.count)")
             }
             if !report.failures.isEmpty {
-                SlateValueRow(name: "Not verified", value: "\(report.failures.count)")
+                SlateValueRow(name: Loc.string("Not verified"), value: "\(report.failures.count)")
             }
             // What a previous, killed run left and this one took back — the
             // difference between a resume and a second copy of everything.
             if !report.reclaimedFolders.isEmpty {
                 SlateValueRow(
-                    name: "Re-used from an interrupted run", value: "\(report.reclaimedFolders.count)")
+                    name: Loc.string("Re-used from an interrupted run"), value: "\(report.reclaimedFolders.count)")
             }
             if !report.orphanedFolders.isEmpty {
-                SlateValueRow(name: "Orphaned folders", value: "\(report.orphanedFolders.count)")
-                Text("Nothing was removed. Library ▸ Find Orphaned Folders… shows them.")
+                SlateValueRow(name: Loc.string("Orphaned folders"), value: "\(report.orphanedFolders.count)")
+                Text(Loc.string("Nothing was removed. Library ▸ Find Orphaned Folders… shows them."))
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
             }
-            Text("The full report is in \(Library.privateFolderName)/\(ImportReport.fileName).")
-                .font(.caption2)
-                .foregroundStyle(Slate.textSecondary)
+            Text(
+                Loc.string(
+                    "The full report is in %1$@/%2$@.", Library.privateFolderName, ImportReport.fileName)
+            )
+            .font(.caption2)
+            .foregroundStyle(Slate.textSecondary)
         }
     }
 
@@ -241,23 +252,23 @@ struct ImportSheet: View {
             Spacer()
             switch importModel.phase {
             case .finished:
-                SlatePrimaryButton("Done") {
+                SlatePrimaryButton(Loc.string("Done")) {
                     importModel.reset()
                     dismiss()
                 }
             case .running:
-                SlateSecondaryButton("Cancel") { importModel.cancel() }
+                SlateSecondaryButton(Loc.string("Cancel")) { importModel.cancel() }
             case .ready:
-                SlateSecondaryButton("Cancel") {
+                SlateSecondaryButton(Loc.string("Cancel")) {
                     importModel.reset()
                     dismiss()
                 }
-                SlatePrimaryButton(importModel.plan.isEmpty ? "Nothing to Import" : "Import") {
+                SlatePrimaryButton(importModel.plan.isEmpty ? Loc.string("Nothing to Import") : Loc.string("Import")) {
                     Task { await model.runImport() }
                 }
                 .disabled(importModel.plan.isEmpty)
             case .idle, .examining:
-                SlateSecondaryButton("Cancel") {
+                SlateSecondaryButton(Loc.string("Cancel")) {
                     importModel.cancel()
                     importModel.reset()
                     dismiss()

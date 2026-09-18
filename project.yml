@@ -70,6 +70,12 @@ targets:
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         LSApplicationCategoryType: public.app-category.productivity
         NSHumanReadableCopyright: "© 2026 Erik Emmer"
+        # English and German (CONCEPT §3.4). Named here as well as carried by
+        # the string catalogue, because this is the list macOS matches the
+        # reader's preferred languages against: without `de` a German Mac is
+        # given the development region and the catalogue is never consulted.
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, de]
         NSPrincipalClass: NSApplication
         NSHighResolutionCapable: true
     settings:

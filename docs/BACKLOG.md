@@ -383,9 +383,28 @@ is currently assumed.
 
 ## Sprint 7 – Polish and release
 
-- [ ] German localisation
+- [x] **German localisation.** 429 catalogue entries, English and German, eight
+      with plural variations; every drawn word through `Loc`; `FormatStyle` for
+      numbers, dates and sizes; five tests, one of which refuses a sentence
+      drawn without the catalogue at all
+      ([ADR 0016](adr/0016-the-core-answers-in-english-the-window-translates.md)).
+      Photographed in German: `docs/screenshots/sprint-7/`
 - [ ] Accessibility: keyboard, contrast, labels
 - [ ] Signing, notarisation, direct download, runbook → **v1.0**
+
+### What the localisation did not cover
+
+- [ ] **The device profiles' `note`** (`ShelfCore/Devices/Profiles/*.json`) is
+      data, and still English. Translating a data file is a different decision
+      from translating a program, and it wants its own line rather than a
+      sentence smuggled into this one
+- [ ] **Five sheets have never been photographed in German**: Send to Device,
+      Delete from Device, the Calibre import protocol, Fetch Metadata and the
+      orphaned-folders sheet. Their strings are in the catalogue and covered by
+      the tests; nothing has looked at their *layout* in German, which is the
+      only thing a picture can answer. `Scripts/online-shot.sh` and
+      `Scripts/device-shot.sh` would take them with the same defaults-domain
+      trick `german-shots.sh` uses
 
 ## Housekeeping, when it is next convenient
 

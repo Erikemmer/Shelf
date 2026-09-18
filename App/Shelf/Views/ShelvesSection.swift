@@ -40,15 +40,15 @@ struct ShelvesSection: View {
         .confirmationDialog(
             deletionQuestion, isPresented: isAskingAboutDeletion, titleVisibility: .visible
         ) {
-            Button("Remove Shelf", role: .destructive) {
+            Button(Loc.string("Remove Shelf"), role: .destructive) {
                 if let pendingDeletion { model.removeShelf(pendingDeletion, undoManager: undoManager) }
                 pendingDeletion = nil
             }
-            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+            Button(Loc.string("Cancel"), role: .cancel) { pendingDeletion = nil }
         } message: {
             // Says what is *not* happening, because "delete" beside a list of
             // books is the one word that makes people hesitate.
-            Text("The books stay in the library. Only the shelf goes.")
+            Text(Loc.string("The books stay in the library. Only the shelf goes."))
         }
     }
 
@@ -56,7 +56,7 @@ struct ShelvesSection: View {
 
     private var header: some View {
         HStack(spacing: 4) {
-            SlateSidebarSection(SidebarSection.shelves.rawValue)
+            SlateSidebarSection(SidebarSection.shelves.title)
             Spacer(minLength: 0)
             Button {
                 addShelf(under: nil)
@@ -66,8 +66,8 @@ struct ShelvesSection: View {
             .buttonStyle(.plain)
             .focusable()
             .foregroundStyle(Slate.textSecondary)
-            .help("New shelf")
-            .accessibilityLabel("New shelf")
+            .help(Loc.string("New shelf"))
+            .accessibilityLabel(Loc.string("New shelf"))
             .padding(.trailing, 12)
         }
         // A shelf dragged onto the heading comes out of whatever it was in.
@@ -77,7 +77,7 @@ struct ShelvesSection: View {
     }
 
     private var empty: some View {
-        Text("No shelves yet — use + to make one")
+        Text(Loc.string("No shelves yet — use + to make one"))
             .font(.caption2)
             .foregroundStyle(Slate.textSecondary)
             .padding(.horizontal, 12)
@@ -93,7 +93,7 @@ struct ShelvesSection: View {
             icon: row.hasChildren ? "folder" : "books.vertical.fill",
             count: model.shelfCount(path),
             isActive: model.filter.shelfPath == path,
-            help: "Show \(path) — drop books here to shelve them",
+            help: Loc.string("Show %@ — drop books here to shelve them", path),
             title: {
                 HStack(spacing: 2) {
                     // The indent is drawn here rather than by padding the whole
@@ -124,7 +124,9 @@ struct ShelvesSection: View {
         // leaves the accessibility tree with an element that has no name of its
         // own. Said here rather than left to SwiftUI to guess.
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(row.shelf.name), \(Self.books(model.shelfCount(path)))")
+        .accessibilityLabel(
+            Loc.string("%1$@, %2$@", row.shelf.name, Self.books(model.shelfCount(path)))
+        )
         .draggable(Self.shelfDragPrefix + row.shelf.id.uuidString)
         .dropDestination(for: String.self) { items, _ in
             // One drop target, two kinds of thing: books land *on* the shelf,
@@ -152,7 +154,8 @@ struct ShelvesSection: View {
             .foregroundStyle(Slate.textSecondary)
             .accessibilityLabel(
                 model.collapsedShelves.contains(row.shelf.id)
-                    ? "Show what is in \(row.shelf.name)" : "Fold \(row.shelf.name) away")
+                    ? Loc.string("Show what is in %@", row.shelf.name)
+                    : Loc.string("Fold %@ away", row.shelf.name))
         } else {
             // Holds the place of the triangle, so names line up whether or not
             // a shelf has anything in it.
@@ -188,11 +191,11 @@ struct ShelvesSection: View {
 
     @ViewBuilder
     private func menu(for shelf: Shelf) -> some View {
-        Button("Rename") {
+        Button(Loc.string("Rename")) {
             draft = shelf.name
             renaming = shelf.id
         }
-        Button("New Shelf Inside") { addShelf(under: shelf.id) }
+        Button(Loc.string("New Shelf Inside")) { addShelf(under: shelf.id) }
         Divider()
         if let path = model.shelfTree.storedPath(of: shelf.id), !model.selection.isEmpty {
             Button(addLabel(for: path)) {
@@ -200,12 +203,14 @@ struct ShelvesSection: View {
             }
         }
         Divider()
-        Button("Remove Shelf…", role: .destructive) { pendingDeletion = shelf.id }
+        Button(Loc.string("Remove Shelf…"), role: .destructive) { pendingDeletion = shelf.id }
     }
 
     private func addLabel(for path: String) -> String {
         let count = model.selection.count
-        return count == 1 ? "Add the Selected Book" : "Add the \(count) Selected Books"
+        return count == 1
+            ? Loc.string("Add the Selected Book")
+            : Loc.string("Add the %lld Selected Books", count)
     }
 
     // MARK: Doing things
@@ -244,7 +249,7 @@ struct ShelvesSection: View {
     /// "1 book", "12 books". Spelt out because this is read aloud, and
     /// "1 books" is the kind of thing a screen reader makes very obvious.
     static func books(_ count: Int) -> String {
-        count == 1 ? "1 book" : "\(count) books"
+        Loc.count("%lld books", count)
     }
 
     /// What marks a dragged shelf apart from a dragged book. A plain UUID
@@ -258,12 +263,14 @@ struct ShelvesSection: View {
 
     private var deletionQuestion: String {
         guard let pendingDeletion, let warning = model.removalWarning(for: pendingDeletion) else {
-            return "Remove this shelf?"
+            return Loc.string("Remove this shelf?")
         }
         switch warning.books {
-        case 0: return "Remove “\(warning.name)”? It holds no books."
-        case 1: return "Remove “\(warning.name)”? One book comes off it."
-        default: return "Remove “\(warning.name)”? \(warning.books) books come off it."
+        case 0: return Loc.string("Remove “%@”? It holds no books.", warning.name)
+        case 1: return Loc.string("Remove “%@”? One book comes off it.", warning.name)
+        default:
+            return Loc.string(
+                "Remove “%1$@”? %2$lld books come off it.", warning.name, warning.books)
         }
     }
 }
@@ -283,9 +290,9 @@ struct BookMenu: View {
     var body: some View {
         let books = subject
         if model.shelfTree.isEmpty {
-            Text("No shelves yet")
+            Text(Loc.string("No shelves yet"))
         } else {
-            Menu("Add to Shelf") {
+            Menu(Loc.string("Add to Shelf")) {
                 ForEach(model.shelfTree.inDrawnOrder(), id: \.shelf.id) { row in
                     Button(indented(row)) {
                         model.addToShelf(row.shelf.id, books: books, undoManager: undoManager)
@@ -294,18 +301,22 @@ struct BookMenu: View {
             }
         }
         if !shelvesOf(books).isEmpty {
-            Menu("Remove from Shelf") {
+            Menu(Loc.string("Remove from Shelf")) {
                 ForEach(shelvesOf(books), id: \.self) { path in
                     Button(path) { model.removeFromShelf(path, books: books, undoManager: undoManager) }
                 }
             }
         }
         Divider()
-        Button(model.selection.count > 1 ? "Mark \(model.selection.count) Read" : "Toggle Read") {
+        Button(
+            model.selection.count > 1
+                ? Loc.string("Mark %lld Read", model.selection.count)
+                : Loc.string("Toggle Read")
+        ) {
             model.toggleRead(undoManager: undoManager)
         }
         Divider()
-        Button("Show in Finder") { model.revealSelectedInFinder() }
+        Button(Loc.string("Show in Finder")) { model.revealSelectedInFinder() }
     }
 
     /// The books the menu acts on: the whole selection when this book is in it,

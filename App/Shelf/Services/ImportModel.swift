@@ -71,7 +71,7 @@ final class ImportModel {
     func examineCalibre(_ folder: URL) async {
         task?.cancel()
         reset()
-        sourceDescription = "Calibre library \(folder.lastPathComponent)"
+        sourceDescription = Loc.string("Calibre library %@", folder.lastPathComponent)
         phase = .examining(done: 0, total: 0)
 
         let destination = library.root
@@ -115,12 +115,13 @@ final class ImportModel {
     static func describe(_ error: any Error, folder: URL) -> String {
         switch error as? CalibreReader.Failure {
         case .noDatabase:
-            return "\(folder.lastPathComponent) holds no metadata.db, so it is not a Calibre library. "
-                + "Choose the folder that has metadata.db in it."
+            return Loc.string(
+                "%@ holds no metadata.db, so it is not a Calibre library. Choose the folder that "
+                    + "has metadata.db in it.", folder.lastPathComponent)
         case .cannotCopy(let reason):
-            return "Shelf could not copy metadata.db in order to read it: \(reason)"
+            return Loc.string("Shelf could not copy metadata.db in order to read it: %@", reason)
         case .cannotOpen(let reason):
-            return "Shelf could not read metadata.db: \(reason)"
+            return Loc.string("Shelf could not read metadata.db: %@", reason)
         case nil:
             return (error as NSError).localizedDescription
         }
@@ -138,8 +139,10 @@ final class ImportModel {
         guard !files.isEmpty else {
             phase = .idle
             errorMessage =
-                "No books in what you chose. Shelf reads "
-                + BookFileFormat.importable.map { $0.rawValue.uppercased() }.joined(separator: ", ") + "."
+                Loc.string(
+                    "No books in what you chose. Shelf reads %@.",
+                    BookFileFormat.importable.map { $0.rawValue.uppercased() }
+                        .joined(separator: ", "))
             return
         }
 
@@ -205,7 +208,7 @@ final class ImportModel {
                 existingFolders: Self.existingFolders(library))
             phase = .ready
         } catch {
-            errorMessage = "Could not read the library index: \((error as NSError).localizedDescription)"
+            errorMessage = Loc.string("Could not read the library index: %@", (error as NSError).localizedDescription)
             phase = .idle
         }
     }
@@ -423,15 +426,21 @@ final class ImportModel {
     private static func describe(_ urls: [URL], fileCount: Int) -> String {
         if urls.count == 1, let first = urls.first {
             return first.hasDirectoryPath
-                ? first.path : "\(fileCount) file(s) from \(first.deletingLastPathComponent().path)"
+                ? first.path
+                : Loc.string(
+                    "%1$@ from %2$@", Loc.count("%lld files", fileCount),
+                    first.deletingLastPathComponent().path)
         }
-        return "\(fileCount) file(s) from \(urls.count) place(s)"
+        return Loc.string(
+            "%1$@ from %2$@", Loc.count("%lld files", fileCount),
+            Loc.count("%lld places", urls.count))
     }
 
     private static func describe(_ error: any Error) -> String {
         if case ImportRunner.Failure.notEnoughSpace(let needed, let available) = error {
-            return "Not enough room: \(ByteCount.format(needed)) needed, \(ByteCount.format(available)) free. "
-                + "Nothing was copied."
+            return Loc.string(
+                "Not enough room: %1$@ needed, %2$@ free. Nothing was copied.", Loc.size(needed),
+                Loc.size(available))
         }
         return (error as NSError).localizedDescription
     }

@@ -16,7 +16,7 @@ public struct DeviceFile: Equatable, Sendable, Identifiable {
     public var id: String { path }
     public var name: String { (path as NSString).lastPathComponent }
 
-    public enum Match: String, Equatable, Sendable {
+    public enum Match: String, Equatable, Sendable, CaseIterable {
         /// The manifest Shelf wrote when it sent the file. The digest in it
         /// was read back off the device, so this is as strong as it gets.
         case manifest

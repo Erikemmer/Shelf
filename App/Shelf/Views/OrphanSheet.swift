@@ -28,7 +28,7 @@ struct OrphanSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(isConfirming ? "Move These to the Trash?" : "Orphaned Folders")
+            Text(isConfirming ? Loc.string("Move These to the Trash?") : Loc.string("Orphaned Folders"))
                 .font(.title3)
                 .foregroundStyle(Slate.textPrimary)
 
@@ -62,7 +62,7 @@ struct OrphanSheet: View {
     private var scanning: some View {
         VStack(alignment: .leading, spacing: 6) {
             ProgressView().progressViewStyle(.linear)
-            Text("Reading the library's folders. Nothing is being changed.")
+            Text(Loc.string("Reading the library's folders. Nothing is being changed."))
                 .font(.caption)
                 .foregroundStyle(Slate.textSecondary)
         }
@@ -70,11 +70,12 @@ struct OrphanSheet: View {
 
     private var nothingFound: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Every folder in this library belongs to a book.")
+            Text(Loc.string("Every folder in this library belongs to a book."))
                 .foregroundStyle(Slate.textPrimary)
             Text(
-                "Orphans appear when an import is killed part-way through. "
-                    + "A resumed import takes its own back by itself; this is for what is left."
+                Loc.string(
+                    "Orphans appear when an import is killed part-way through. A resumed import "
+                        + "takes its own back by itself; this is for what is left.")
             )
             .font(.caption)
             .foregroundStyle(Slate.textSecondary)
@@ -84,14 +85,16 @@ struct OrphanSheet: View {
     private var listing: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(
-                "\(Plural.folders(model.orphanedFolders.count)) hold files that no book in this library "
-                    + "points at — \(ByteCount.format(totalBytes)) in all."
+                Loc.string(
+                    "%1$@ hold files that no book in this library points at — %2$@ in all.",
+                    Plural.folders(model.orphanedFolders.count), Loc.size(totalBytes))
             )
             .foregroundStyle(Slate.textPrimary)
 
             Text(
-                "They are usually what an import that was interrupted left behind. "
-                    + "Nothing has been changed, and nothing will be until you say so."
+                Loc.string(
+                    "They are usually what an import that was interrupted left behind. Nothing "
+                        + "has been changed, and nothing will be until you say so.")
             )
             .font(.caption)
             .foregroundStyle(Slate.textSecondary)
@@ -129,9 +132,10 @@ struct OrphanSheet: View {
                 // be told about than one holding a stray cover, so it says so
                 // rather than making the two look alike.
                 Text(
-                    "\(Plural.files(folder.files.count)), \(ByteCount.format(folder.byteSize))"
-                        + (folder.holdsABook ? " · holds a book file" : "")
-                        + (folder.bookID == nil ? " · no metadata.opf" : "")
+                    Loc.string(
+                        "%1$@, %2$@", Plural.files(folder.files.count), Loc.size(folder.byteSize))
+                        + (folder.holdsABook ? Loc.string(" · holds a book file") : "")
+                        + (folder.bookID == nil ? Loc.string(" · no metadata.opf") : "")
                 )
                 .font(.caption2)
                 .foregroundStyle(Slate.textSecondary)
@@ -145,7 +149,9 @@ struct OrphanSheet: View {
     private var confirmation: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(
-                "\(Plural.folders(chosenFolders.count)), \(Plural.files(chosenFileCount)), \(ByteCount.format(chosenBytes))"
+                Loc.string(
+                    "%1$@, %2$@, %3$@", Plural.folders(chosenFolders.count),
+                    Plural.files(chosenFileCount), Loc.size(chosenBytes))
             )
             .foregroundStyle(Slate.textPrimary)
 
@@ -159,7 +165,7 @@ struct OrphanSheet: View {
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                             ForEach(folder.files, id: \.self) { file in
-                                Text("    \(file)")
+                                Text(verbatim: "    \(file)")
                                     .font(.caption2)
                                     .foregroundStyle(Slate.textSecondary)
                                     .lineLimit(1)
@@ -171,7 +177,7 @@ struct OrphanSheet: View {
             }
             .frame(maxHeight: 280)
 
-            Text("They go to the Trash, not away: you can put any of them back from there.")
+            Text(Loc.string("They go to the Trash, not away: you can put any of them back from there."))
                 .font(.caption2)
                 .foregroundStyle(Slate.textSecondary)
         }
@@ -184,8 +190,8 @@ struct OrphanSheet: View {
         HStack {
             Spacer()
             if isConfirming {
-                SlateSecondaryButton("Back") { isConfirming = false }
-                SlatePrimaryButton("Move \(Plural.folders(chosenFolders.count)) to Trash") {
+                SlateSecondaryButton(Loc.string("Back")) { isConfirming = false }
+                SlatePrimaryButton(Loc.string("Move %@ to Trash", Plural.folders(chosenFolders.count))) {
                     let folders = chosenFolders
                     Task {
                         await model.trashOrphanedFolders(folders)
@@ -194,12 +200,12 @@ struct OrphanSheet: View {
                 }
                 .disabled(chosenFolders.isEmpty)
             } else {
-                SlateSecondaryButton("Done") {
+                SlateSecondaryButton(Loc.string("Done")) {
                     model.isOrphanSheetPresented = false
                     dismiss()
                 }
                 if !model.orphanedFolders.isEmpty {
-                    SlatePrimaryButton("Move to Trash…") { isConfirming = true }
+                    SlatePrimaryButton(Loc.string("Move to Trash…")) { isConfirming = true }
                         .disabled(chosenFolders.isEmpty || model.isScanningForOrphans)
                 }
             }

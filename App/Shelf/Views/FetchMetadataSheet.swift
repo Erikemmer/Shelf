@@ -40,7 +40,7 @@ struct FetchMetadataSheet: View {
             Divider()
             if let online {
                 if online.isSearching {
-                    SlateStatusBar("Asking Open Library and Google Books")
+                    SlateStatusBar(Loc.string("Asking Open Library and Google Books"))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else if online.chosen == nil {
                     candidates(online)
@@ -54,7 +54,7 @@ struct FetchMetadataSheet: View {
                         .font(.caption)
                         .foregroundStyle(Slate.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityLabel("Network note")
+                        .accessibilityLabel(Loc.string("Network note"))
                 }
             }
             Divider()
@@ -71,7 +71,7 @@ struct FetchMetadataSheet: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Fetch Metadata")
+                Text(Loc.string("Fetch Metadata"))
                     .font(.headline)
                     .foregroundStyle(Slate.textPrimary)
                 Spacer()
@@ -89,7 +89,7 @@ struct FetchMetadataSheet: View {
                     .lineLimit(1)
             }
             if let query = online?.query {
-                Text("Looking for \(query.description)")
+                Text(Loc.string("Looking for %@", query.description))
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
                     .lineLimit(2)
@@ -103,7 +103,7 @@ struct FetchMetadataSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
                 if let result = online.result, result.isEmpty {
-                    Text("Nothing came back. The book keeps everything it has.")
+                    Text(Loc.string("Nothing came back. The book keeps everything it has."))
                         .font(.callout)
                         .foregroundStyle(Slate.textSecondary)
                 }
@@ -125,7 +125,7 @@ struct FetchMetadataSheet: View {
                 // The score in figures, because "best first" alone hides how
                 // good the best is. 48 at the top of the list is a different
                 // thing from 100 at the top of the list.
-                Text("\(score)")
+                Text(Loc.number(score))
                     .font(.caption)
                     .monospacedDigit()
                     .foregroundStyle(score >= 80 ? Slate.accent : Slate.textSecondary)
@@ -149,11 +149,14 @@ struct FetchMetadataSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("Compare this one with the book, field by field")
+        .help(Loc.string("Compare this one with the book, field by field"))
         // "Candidate:" first, so the row is recognisable as one in the
         // accessibility tree — where the title alone is also the grid's
         // caption, the inspector's heading and, often, the window's subject.
-        .accessibilityLabel("Candidate: \(candidate.title), \(candidate.source.name), match \(score) of 100")
+        .accessibilityLabel(
+            Loc.string(
+                "Candidate: %1$@, %2$@, match %3$lld of 100", candidate.title, candidate.source.name,
+                score))
     }
 
     // MARK: Step two — old beside new
@@ -164,7 +167,7 @@ struct FetchMetadataSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     if online.proposals.isEmpty {
-                        Text("This candidate says nothing the book does not already say.")
+                        Text(Loc.string("This candidate says nothing the book does not already say."))
                             .font(.callout)
                             .foregroundStyle(Slate.textSecondary)
                     }
@@ -189,7 +192,8 @@ struct FetchMetadataSheet: View {
             .labelsHidden()
             // A field the two already agree about has nothing to take over.
             .disabled(proposal.kind == .same)
-            .accessibilityLabel("Take over \(proposal.label) from \(proposal.sourceLabel)")
+            .accessibilityLabel(
+                Loc.string("Take over %1$@ from %2$@", Loc.core(proposal.label), proposal.sourceLabel))
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -238,26 +242,32 @@ struct FetchMetadataSheet: View {
 
     private static func kindLabel(_ kind: FieldProposal.Kind) -> String {
         switch kind {
-        case .add: return "not set"
-        case .replace: return "would replace"
-        case .append: return "would add"
-        case .same: return "already the same"
+        case .add: return Loc.string("not set")
+        case .replace: return Loc.string("would replace")
+        case .append: return Loc.string("would add")
+        case .same: return Loc.string("already the same")
         }
     }
 
     private static func help(for proposal: FieldProposal, contested: Bool) -> String {
         if contested {
-            return "\(proposal.sourceLabel) says this; the other service says something else. "
-                + "Ticked neither, because that is a decision. Ticking one unticks the other"
+            return Loc.string(
+                "%@ says this; the other service says something else. Ticked neither, because "
+                    + "that is a decision. Ticking one unticks the other", proposal.sourceLabel)
         }
         switch proposal.kind {
-        case .add: return "\(proposal.label) is empty on this book — ticked because it fills a gap"
+        case .add:
+            return Loc.string(
+                "%@ is empty on this book — ticked because it fills a gap", Loc.core(proposal.label))
         case .replace:
-            return "\(proposal.label) would be replaced. Not ticked for you: that is your library's answer"
+            return Loc.string(
+                "%@ would be replaced. Not ticked for you: that is your library's answer",
+                Loc.core(proposal.label))
         case .append:
-            return "These would be added to the tags the book has. Nothing is taken off it — "
-                + "and nothing is ticked for you: a catalogue's subjects are not your vocabulary"
-        case .same: return "\(proposal.label) already says this"
+            return Loc.string(
+                "These would be added to the tags the book has. Nothing is taken off it — and "
+                    + "nothing is ticked for you: a catalogue's subjects are not your vocabulary")
+        case .same: return Loc.string("%@ already says this", Loc.core(proposal.label))
         }
     }
 
@@ -272,7 +282,9 @@ struct FetchMetadataSheet: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 140)
                     .clipShape(RoundedRectangle(cornerRadius: Slate.cornerRadius))
-                    .accessibilityLabel("Cover from \(online.chosen?.source.name ?? "the service")")
+                    .accessibilityLabel(
+                        Loc.string(
+                            "Cover from %@", online.chosen?.source.name ?? Loc.string("the service")))
             } else {
                 RoundedRectangle(cornerRadius: Slate.cornerRadius)
                     .fill(Slate.contentBackground)
@@ -282,19 +294,19 @@ struct FetchMetadataSheet: View {
                             .font(.system(size: 24))
                             .foregroundStyle(Slate.textSecondary.opacity(0.35))
                     }
-                    .accessibilityLabel("No cover from the service")
+                    .accessibilityLabel(Loc.string("No cover from the service"))
             }
 
             if online.wantsCover, online.chosen?.coverURL != nil {
-                SlateSecondaryButton(online.isFetchingCover ? "Saving…" : "Use This Cover") {
+                SlateSecondaryButton(online.isFetchingCover ? Loc.string("Saving…") : Loc.string("Use This Cover")) {
                     Task { await model.fetchCoverFromTheNet() }
                 }
                 .disabled(online.isFetchingCover)
                 // The one thing here that writes a file without Apply, so it
                 // says exactly what it writes and where.
-                .help("Writes cover.jpg next to the book. The book file is not touched")
+                .help(Loc.string("Writes cover.jpg next to the book. The book file is not touched"))
             } else if !online.wantsCover {
-                Text("This book already has a cover file.")
+                Text(Loc.string("This book already has a cover file."))
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
                     .frame(width: 140)
@@ -314,11 +326,11 @@ struct FetchMetadataSheet: View {
     private var buttons: some View {
         HStack {
             if online?.chosen != nil {
-                SlateSecondaryButton("Other Candidates") { online?.backToCandidates() }
-                    .help("Back to the list")
+                SlateSecondaryButton(Loc.string("Other Candidates")) { online?.backToCandidates() }
+                    .help(Loc.string("Back to the list"))
             }
             Spacer()
-            Button("Cancel") {
+            Button(Loc.string("Cancel")) {
                 online?.cancel()
                 dismiss()
             }
@@ -338,7 +350,7 @@ struct FetchMetadataSheet: View {
             } else if let online, online.hasMoreBooks {
                 // Nothing chosen for this book: skipping is the answer, and it
                 // is not the same button as Apply.
-                Button("Skip This Book") { online.next() }
+                Button(Loc.string("Skip This Book")) { online.next() }
             }
         }
     }
@@ -347,10 +359,11 @@ struct FetchMetadataSheet: View {
     /// is disabled then, and "Apply nothing" is a sentence no button should
     /// have to say.
     private var applyLabel: String {
-        guard let online = model.onlineMetadata else { return "Apply" }
+        guard let online = model.onlineMetadata else { return Loc.string("Apply") }
         guard let fields = model.fetchedMetadataSummary() else {
-            return online.hasMoreBooks ? "Apply and Continue" : "Apply"
+            return online.hasMoreBooks ? Loc.string("Apply and Continue") : Loc.string("Apply")
         }
-        return online.hasMoreBooks ? "Apply \(fields) and Continue" : "Apply \(fields)"
+        return online.hasMoreBooks
+            ? Loc.string("Apply %@ and Continue", fields) : Loc.string("Apply %@", fields)
     }
 }

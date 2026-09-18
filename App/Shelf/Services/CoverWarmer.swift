@@ -42,7 +42,9 @@ final class CoverWarmer {
         var done: Int
         var total: Int
 
-        var label: String { "Building covers · \(done) of \(total)" }
+        var label: String {
+            Loc.string("Building covers · %1$@ of %2$@", Loc.number(done), Loc.number(total))
+        }
     }
 
     @ObservationIgnored private var task: Task<Void, Never>?

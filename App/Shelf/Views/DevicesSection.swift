@@ -36,7 +36,9 @@ struct DevicesSection: View {
             icon: icon(for: device),
             count: nil,
             isActive: model.devices.selectedDeviceID == device.id,
-            help: "\(device.profile.name) at \(device.volume.url.path) — drop books here to send them",
+            help: Loc.string(
+                "%1$@ at %2$@ — drop books here to send them", device.profile.name,
+                device.volume.url.path),
             title: {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(device.name)
@@ -65,10 +67,10 @@ struct DevicesSection: View {
                 .disabled(model.devices.phase.isRunning)
                 .help(
                     model.devices.phase.isRunning
-                        ? "A transfer is running — it has to finish or be stopped first"
-                        : "Eject “\(device.name)”"
+                        ? Loc.string("A transfer is running — it has to finish or be stopped first")
+                        : Loc.string("Eject “%@”", device.name)
                 )
-                .accessibilityLabel("Eject \(device.name)")
+                .accessibilityLabel(Loc.string("Eject %@", device.name))
             },
             action: { _ in model.devices.selectedDeviceID = device.id }
         )
@@ -81,14 +83,14 @@ struct DevicesSection: View {
             return true
         }
         .contextMenu {
-            Button("Send Selected Books to “\(device.name)”") { model.sendSelectionToDevice(device) }
+            Button(Loc.string("Send Selected Books to “%@”", device.name)) { model.sendSelectionToDevice(device) }
                 .disabled(model.selection.isEmpty)
-            Button("Show What Is on “\(device.name)”…") { model.showDeviceContents(device) }
+            Button(Loc.string("Show What Is on “%@”…", device.name)) { model.showDeviceContents(device) }
             Divider()
-            Button("Eject “\(device.name)”") { model.devices.eject(device) }
+            Button(Loc.string("Eject “%@”", device.name)) { model.devices.eject(device) }
                 .disabled(model.devices.phase.isRunning)
             if device.wasChosenByHand {
-                Button("Stop Treating This as a Device") {
+                Button(Loc.string("Stop Treating This as a Device")) {
                     model.devices.forgetManualAssignment(for: device)
                 }
             }

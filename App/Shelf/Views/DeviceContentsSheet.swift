@@ -22,10 +22,10 @@ struct DeviceContentsSheet: View {
             if let device = model.devices.selectedDevice {
                 content(device)
             } else {
-                Text("No device is connected.").foregroundStyle(Slate.textSecondary)
+                Text(Loc.string("No device is connected.")).foregroundStyle(Slate.textSecondary)
                 HStack {
                     Spacer()
-                    Button("Close") { model.isDeviceContentsSheetPresented = false }
+                    Button(Loc.string("Close")) { model.isDeviceContentsSheetPresented = false }
                         .keyboardShortcut(.defaultAction)
                 }
             }
@@ -38,7 +38,7 @@ struct DeviceContentsSheet: View {
     @ViewBuilder
     private func content(_ device: ConnectedDevice) -> some View {
         let files = model.devices.files(on: device)
-        Text("On “\(device.name)”")
+        Text(Loc.string("On “%@”", device.name))
             .font(.title3)
             .foregroundStyle(Slate.textPrimary)
         Text(model.devices.subtitle(for: device))
@@ -46,7 +46,7 @@ struct DeviceContentsSheet: View {
             .foregroundStyle(Slate.textSecondary)
 
         if files.isEmpty {
-            Text("No book files Shelf recognises are on this device.")
+            Text(Loc.string("No book files Shelf recognises are on this device."))
                 .font(.caption)
                 .foregroundStyle(Slate.textSecondary)
         } else {
@@ -94,15 +94,19 @@ struct DeviceContentsSheet: View {
     /// delete confirmation shows the same word.
     private func detail(for file: DeviceFile, device: ConnectedDevice) -> String {
         var parts = [ByteCount.format(file.byteSize)]
-        if let match = file.matchedBy { parts.append(match.label) }
+        if let match = file.matchedBy { parts.append(Loc.core(match.label)) }
         if device.profile.readBack == .kobo,
             let reading = model.devices.readingByDevice[device.id]?.book(at: file.path)
         {
             parts.append(
                 reading.percentRead > 0
-                    ? "\(reading.status.label) · \(reading.percentRead)%" : reading.status.label)
+                    ? Loc.string("%1$@ · %2$lld%%", Loc.core(reading.status.label), reading.percentRead)
+                    : Loc.core(reading.status.label))
             if !reading.shelves.isEmpty {
-                parts.append("on the device's shelves: \(reading.shelves.joined(separator: ", "))")
+                parts.append(
+                    Loc.string(
+                        "on the device's shelves: %@",
+                        reading.shelves.joined(separator: ", ")))
             }
         }
         return parts.joined(separator: " · ")
@@ -110,16 +114,16 @@ struct DeviceContentsSheet: View {
 
     private func buttons(files: [DeviceFile], device: ConnectedDevice) -> some View {
         HStack {
-            Button(chosen.count == files.count ? "Select None" : "Select All") {
+            Button(chosen.count == files.count ? Loc.string("Select None") : Loc.string("Select All")) {
                 chosen = chosen.count == files.count ? [] : Set(files.map(\.path))
             }
             .disabled(files.isEmpty)
             Spacer()
-            Button("Close") { model.isDeviceContentsSheetPresented = false }
+            Button(Loc.string("Close")) { model.isDeviceContentsSheetPresented = false }
                 .keyboardShortcut(.cancelAction)
             // The only route to deleting. It opens the confirmation; it does
             // not delete (ADR 0014).
-            Button("Delete from Device…") {
+            Button(Loc.string("Delete from Device…")) {
                 model.askToDeleteFromDevice(files.filter { chosen.contains($0.path) }, on: device)
             }
             .disabled(chosen.isEmpty || model.devices.phase.isRunning)

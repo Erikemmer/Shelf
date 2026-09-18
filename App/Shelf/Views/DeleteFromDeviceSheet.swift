@@ -27,10 +27,10 @@ struct DeleteFromDeviceSheet: View {
             } else if let confirmation = model.devices.deleteConfirmation {
                 asking(confirmation)
             } else {
-                Text("Nothing is selected on the device.").foregroundStyle(Slate.textSecondary)
+                Text(Loc.string("Nothing is selected on the device.")).foregroundStyle(Slate.textSecondary)
                 HStack {
                     Spacer()
-                    Button("Close") { model.devices.closeDeleteSheet() }.keyboardShortcut(.defaultAction)
+                    Button(Loc.string("Close")) { model.devices.closeDeleteSheet() }.keyboardShortcut(.defaultAction)
                 }
             }
         }
@@ -65,7 +65,7 @@ struct DeleteFromDeviceSheet: View {
         .frame(maxHeight: 300)
 
         Toggle(
-            "I have read the list above",
+            Loc.string("I have read the list above"),
             isOn: $hasUnderstood
         )
         .font(.caption)
@@ -73,22 +73,22 @@ struct DeleteFromDeviceSheet: View {
 
         HStack {
             Spacer()
-            Button("Cancel") { model.devices.closeDeleteSheet() }
+            Button(Loc.string("Cancel")) { model.devices.closeDeleteSheet() }
                 .keyboardShortcut(.cancelAction)
-            Button("Delete from Device") { model.confirmDeleteFromDevice() }
+            Button(Loc.string("Delete from Device")) { model.confirmDeleteFromDevice() }
                 .disabled(!hasUnderstood)
         }
     }
 
     @ViewBuilder
     private func done(_ outcome: DeviceDeletion.Outcome) -> some View {
-        Text("Deleted").font(.title3).foregroundStyle(Slate.textPrimary)
+        Text(Loc.string("Deleted")).font(.title3).foregroundStyle(Slate.textPrimary)
         Text(outcome.summary).font(.caption).foregroundStyle(Slate.textSecondary)
         if !outcome.failed.isEmpty {
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(outcome.failed.keys.sorted(), id: \.self) { path in
-                        Text("\(path): \(outcome.failed[path] ?? "")")
+                        Text(verbatim: "\(path): \(outcome.failed[path] ?? "")")
                             .font(.caption2)
                             .foregroundStyle(Slate.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -97,10 +97,10 @@ struct DeleteFromDeviceSheet: View {
             }
             .frame(maxHeight: 160)
         }
-        Text("Your library was not touched.").font(.caption2).foregroundStyle(Slate.textSecondary)
+        Text(Loc.string("Your library was not touched.")).font(.caption2).foregroundStyle(Slate.textSecondary)
         HStack {
             Spacer()
-            Button("Close") { model.devices.closeDeleteSheet() }.keyboardShortcut(.defaultAction)
+            Button(Loc.string("Close")) { model.devices.closeDeleteSheet() }.keyboardShortcut(.defaultAction)
         }
     }
 }

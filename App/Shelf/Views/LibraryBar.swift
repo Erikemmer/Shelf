@@ -13,6 +13,16 @@ struct LibraryBar: View {
     @Environment(LibraryModel.self) private var model
     @FocusState.Binding var focus: WindowFocus?
 
+    /// What the window says it is showing.
+    ///
+    /// Only a *collection's* name is a word Shelf chose — "Unread", "Missing
+    /// Cover" — and only that is translated. A tag, an author, a series or a
+    /// shelf is the library's own name for something, and translating one of
+    /// those would rename somebody's data on the screen.
+    private var filterTitle: String {
+        model.filter.isNarrowed ? model.filter.title : Loc.core(model.filter.collection.title)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             modeToggle
@@ -20,7 +30,7 @@ struct LibraryBar: View {
 
             Spacer(minLength: 8)
 
-            Text(model.filter.title)
+            Text(filterTitle)
                 .font(.callout)
                 .foregroundStyle(Slate.textSecondary)
                 .lineLimit(1)
@@ -36,7 +46,7 @@ struct LibraryBar: View {
                     in: LibraryModel.coverSideRange
                 )
                 .frame(width: 110)
-                .help("Cover size (⌘+ / ⌘−)")
+                .help(Loc.string("Cover size (⌘+ / ⌘−)"))
             }
 
             SearchField(focus: $focus)
@@ -60,6 +70,6 @@ struct LibraryBar: View {
         .pickerStyle(.segmented)
         .labelsHidden()
         .frame(width: 72)
-        .help("Covers (⌘1) or a table (⌘2)")
+        .help(Loc.string("Covers (⌘1) or a table (⌘2)"))
     }
 }

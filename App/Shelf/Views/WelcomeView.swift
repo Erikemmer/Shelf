@@ -15,24 +15,33 @@ struct WelcomeView: View {
     var body: some View {
         SlateWelcomeLayout {
             SlateWelcomeHeader(
-                title: "Shelf",
-                subtitle: "Your eBooks, with their covers, metadata and devices in one place.")
+                title: Loc.string("Shelf"),
+                subtitle: Loc.string("Your eBooks, with their covers, metadata and devices in one place."))
 
-            SlatePrimaryButton("Open Library…") { model.presentOpenPanel() }
+            SlatePrimaryButton(Loc.string("Open Library…")) { model.presentOpenPanel() }
                 .keyboardShortcut("o", modifiers: .command)
-                .help("Choose a Shelf library folder (⌘O)")
+                .help(Loc.string("Choose a Shelf library folder (⌘O)"))
 
-            SlateSecondaryButton("New Library…") { model.presentNewLibraryPanel() }
-                .help("Make an empty library in a folder you choose (⇧⌘N)")
+            SlateSecondaryButton(Loc.string("New Library…")) { model.presentNewLibraryPanel() }
+                .help(Loc.string("Make an empty library in a folder you choose (⇧⌘N)"))
 
-            // Disabled until Sprint 3, and visible anyway: it is the reason
-            // most people will open this app at all, and hiding it would make
-            // them wonder whether Shelf can do it (CONCEPT §7).
-            SlateSecondaryButton("Import from Calibre…") {}
+            // Still disabled here, and visible anyway: it is the reason most
+            // people will open this app at all, and hiding it would make them
+            // wonder whether Shelf can do it (CONCEPT §7).
+            //
+            // The import itself has worked since Sprint 3; what it needs is a
+            // library to import *into*, and there is none on this screen. The
+            // help text said "Arrives in Sprint 3" for three sprints after it
+            // had. It now says what to do instead, which is the one thing a
+            // disabled button owes the person looking at it.
+            SlateSecondaryButton(Loc.string("Import from Calibre…")) {}
                 .disabled(true)
-                .help("Reads an existing Calibre library. Arrives in Sprint 3.")
+                .help(
+                    Loc.string(
+                        "Make or open a library first, then Library ▸ Import from Calibre…. The "
+                            + "Calibre folder itself is only ever read."))
 
-            SlateDropZone(title: "Drop a library folder here", isTargeted: isDropTargeted)
+            SlateDropZone(title: Loc.string("Drop a library folder here"), isTargeted: isDropTargeted)
                 .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
                     FolderDrop.handle(providers, into: model)
                 }
@@ -45,7 +54,7 @@ struct WelcomeView: View {
     }
 
     private var recentList: some View {
-        SlateRecentList(title: "Recent Libraries") {
+        SlateRecentList(title: Loc.string("Recent Libraries")) {
             ForEach(model.recents.entries) { entry in
                 RecentLibraryRow(entry: entry, isReachable: model.recents.isReachable(entry))
             }
@@ -62,7 +71,8 @@ struct RecentLibraryRow: View {
     var body: some View {
         SlateRecentRow(
             name: entry.name, detail: summary, path: entry.path, isReachable: isReachable,
-            help: isReachable ? entry.path : "\(entry.path) — not available right now"
+            help: isReachable
+                ? entry.path : Loc.string("%@ — not available right now", entry.path)
         ) {
             model.open(recent: entry)
         }
@@ -70,7 +80,7 @@ struct RecentLibraryRow: View {
 
     private var summary: String? {
         guard let count = entry.bookCount else { return nil }
-        return "\(count) book\(count == 1 ? "" : "s")"
+        return Loc.count("%lld books", count)
     }
 }
 

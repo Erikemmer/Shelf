@@ -8,6 +8,55 @@ on and what was *not* measured.
 Measured on Erik's Mac (M-series, macOS 15.6) against
 `~/Library/Caches/Shelf/measure-library-7/`.
 
+### Added — German, and a test for each of the three ways of losing it
+
+Every word Shelf draws is now in `App/Shelf/Resources/Localizable.xcstrings`:
+**429 entries, English and German, eight of them with plural variations.** The
+key is the English sentence itself, so the source still reads as what a person
+sees ([ADR 0016](docs/adr/0016-the-core-answers-in-english-the-window-translates.md)).
+
+**Everything drawn goes through `Loc`, including the plain literals.** Leaving
+`Text("Add Books…")` to SwiftUI was the first plan and it does not survive two
+things Shelf's own code does: `Text("one " + "two")` is a `String` rather than a
+key and is drawn **verbatim and never translated** — a dozen help texts are
+written across two lines with a `+` — and an interpolated key is built by the
+compiler out of the interpolation's *types*, so no test can read it off the
+source.
+
+**ShelfCore did not gain a bundle.** It answers in English and the window looks
+that English up. Where a core sentence has a value in it — "“2,5x” is not a
+number" — the core now answers *which* refusal it is and the window says it in
+words: `BookFieldRejection` and `ShelfEdit.Rejection` were already enumerations,
+and `SeriesPosition` gained a `Place` beside its `text`.
+
+**Numbers, dates and sizes come from `FormatStyle`.** "18.09.2026" and
+"134,5 kB" on a German Mac. `ByteCount.format` keeps the C locale, because it
+writes the reports and `Scripts/proof-run.sh` greps them — reports stay English
+on purpose, and so do the readers' own warnings.
+
+Five tests, because none of the three failures shows: a missing entry, a missing
+German and a literal that never reached `Loc` all draw perfectly good English.
+Four of them check the catalogue and what asks for it; the fifth is blunt and
+says **no sentence anywhere in `App/Shelf` may be drawn without going through
+`Loc`**. That one exists because the first German run came out with an **English
+sidebar** — `SlateSidebarRow` takes its title as the first argument, which was
+on no list of call shapes, so seven smart collections and six section headings
+stayed English while every other word in the window turned over. It found six
+more places at the same time. 606 core tests, up from 600.
+
+`Scripts/german-shots.sh` starts Shelf in German **through its own defaults
+domain, never the Mac's**, and removes the override however the run ends.
+Pictures and what looking at them found — a label that wrapped in the ⌘? sheet,
+"Book 9.5" that was still English — in
+[`docs/screenshots/sprint-7/README.md`](docs/screenshots/sprint-7/README.md).
+
+### Fixed — the welcome screen's Calibre button had said "Arrives in Sprint 3" for three sprints
+
+The import has worked since Sprint 3; what it needs is a library to import
+*into*, and there is none on that screen. The button stays disabled and its help
+now says what to do instead, which is the one thing a disabled button owes the
+person looking at it.
+
 ### Fixed — a German word in an English window, and a sheet that would not say who said what
 
 Both came out of one look at `docs/screenshots/sprint-6/online-comparison.jpg`.

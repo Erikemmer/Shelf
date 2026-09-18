@@ -223,17 +223,17 @@ final class LibraryModel {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Open Library"
-        panel.message = "Choose a Shelf library folder."
+        panel.prompt = Loc.string("Open Library")
+        panel.message = Loc.string("Choose a Shelf library folder.")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         open(url)
     }
 
     func presentNewLibraryPanel() {
         let panel = NSSavePanel()
-        panel.prompt = "Create Library"
-        panel.message = "Choose where the new library folder goes."
-        panel.nameFieldStringValue = "My Library"
+        panel.prompt = Loc.string("Create Library")
+        panel.message = Loc.string("Choose where the new library folder goes.")
+        panel.nameFieldStringValue = Loc.string("My Library")
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         createLibrary(at: url)
@@ -245,7 +245,7 @@ final class LibraryModel {
             _ = try Library.create(at: url)
             open(url)
         } catch {
-            show(error, doing: "create a library at \(url.lastPathComponent)")
+            show(error, doing: Loc.string("create a library at %@", url.lastPathComponent))
         }
     }
 
@@ -257,8 +257,9 @@ final class LibraryModel {
             // A plain folder is a reasonable thing to drop; say what is missing
             // and what to do rather than only refusing.
             errorMessage =
-                "“\(url.lastPathComponent)” is not a Shelf library. "
-                + "Use New Library… to make one there, or open a folder that already holds one."
+                Loc.string(
+                    "“%@” is not a Shelf library. Use New Library… to make one there, or open a "
+                        + "folder that already holds one.", url.lastPathComponent)
             return
         }
         Task { await load(url) }
@@ -266,7 +267,7 @@ final class LibraryModel {
 
     func open(recent entry: RecentLibrary) {
         guard let url = recents.openable(entry) else {
-            errorMessage = "“\(entry.name)” is not available right now. Is the disk connected?"
+            errorMessage = Loc.string("“%@” is not available right now. Is the disk connected?", entry.name)
             return
         }
         open(url)
@@ -310,7 +311,7 @@ final class LibraryModel {
             // trimmed oldest first.
             Task.detached(priority: .background) { await loader.trimDiskCache() }
         } catch {
-            show(error, doing: "open \(url.lastPathComponent)")
+            show(error, doing: Loc.string("open %@", url.lastPathComponent))
         }
     }
 
@@ -376,8 +377,8 @@ final class LibraryModel {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.directoryURL = URL(fileURLWithPath: "/Volumes", isDirectory: true)
-        panel.prompt = "Use as \(profile.name)"
-        panel.message = "Choose the volume to treat as a \(profile.name)."
+        panel.prompt = Loc.string("Use as %@", profile.name)
+        panel.message = Loc.string("Choose the volume to treat as a %@.", profile.name)
         guard panel.runModal() == .OK, let url = panel.url else { return }
         devices.treat(DeviceWatcher.volume(at: url), as: profileID, entries: entries)
     }
@@ -445,7 +446,7 @@ final class LibraryModel {
             // devices and never writes to them.
             await devices.refresh(entries: entries)
         } catch {
-            show(error, doing: "read the library index")
+            show(error, doing: Loc.string("read the library index"))
         }
     }
 
@@ -697,8 +698,8 @@ final class LibraryModel {
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = true
-        panel.prompt = "Choose"
-        panel.message = "Choose books or a folder of books to add."
+        panel.prompt = Loc.string("Choose")
+        panel.message = Loc.string("Choose books or a folder of books to add.")
         panel.allowedContentTypes = []
         guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
         isImportSheetPresented = true
@@ -724,10 +725,10 @@ final class LibraryModel {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = true
-        panel.prompt = "Add"
-        panel.message =
+        panel.prompt = Loc.string("Add")
+        panel.message = Loc.string(
             "Choose another file for this book. It is copied in beside the ones that are there; "
-            + "nothing is written over."
+                + "nothing is written over.")
         guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
         isImportSheetPresented = true
         Task { await importModel.examine(panel.urls) }
@@ -763,10 +764,9 @@ final class LibraryModel {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        panel.message =
-            "Choose your Calibre library – the folder that holds metadata.db. "
-            + "Shelf only reads it."
+        panel.prompt = Loc.string("Choose")
+        panel.message = Loc.string(
+            "Choose your Calibre library – the folder that holds metadata.db. Shelf only reads it.")
         guard panel.runModal() == .OK, let folder = panel.url else { return }
         isImportSheetPresented = true
         Task { await importModel.examineCalibre(folder) }
@@ -835,7 +835,7 @@ final class LibraryModel {
         if let refusal = applied.refused.first {
             // One refused value does not cost the others: the rest is applied
             // and the refusal is said out loud.
-            fieldRejection = FieldRejection(key: "online", message: refusal.message)
+            fieldRejection = FieldRejection(key: "online", message: Loc.message(for: refusal.why))
         }
         let change = MetadataChange.make(from: entry.book) { $0 = applied.book }
         apply(change, to: entry, undoManager: undoManager)
@@ -846,7 +846,7 @@ final class LibraryModel {
         guard let online = onlineMetadata else { return nil }
         let count = online.chosenProposals.count
         guard count > 0 else { return nil }
-        return "\(count) field\(count == 1 ? "" : "s")"
+        return Loc.count("%lld fields", count)
     }
 
     /// Fetches the cover and forgets the cached thumbnail for that book, so the
@@ -927,7 +927,7 @@ final class LibraryModel {
             refilter()
             errorMessage = nil
         } catch {
-            show(error, doing: "save the change to “\(entry.book.title)”")
+            show(error, doing: Loc.string("save the change to “%@”", entry.book.title))
         }
     }
 
@@ -958,12 +958,12 @@ final class LibraryModel {
         // three, because "make these all three" is the useful half.
         let shared = AcrossBooks.sharedStars(books.map(\.book))
         let wanted = shared == stars ? 0 : stars
-        edit(books, actionName: "Rating", undoManager: undoManager) { $0.stars = wanted }
+        edit(books, actionName: Loc.string("Rating"), undoManager: undoManager) { $0.stars = wanted }
     }
 
     /// The 0 key: unrated, whatever it was.
     func clearRating(undoManager: UndoManager?) {
-        edit(selectedEntries, actionName: "Rating", undoManager: undoManager) { $0.stars = 0 }
+        edit(selectedEntries, actionName: Loc.string("Rating"), undoManager: undoManager) { $0.stars = 0 }
     }
 
     /// R, and the checkbox in the inspector.
@@ -971,7 +971,7 @@ final class LibraryModel {
         let books = selectedEntries
         guard !books.isEmpty else { return }
         let wanted = AcrossBooks.readStatusAfterToggle(books.map(\.book))
-        edit(books, actionName: "Read Status", undoManager: undoManager) { $0.isRead = wanted }
+        edit(books, actionName: Loc.string("Read Status"), undoManager: undoManager) { $0.isRead = wanted }
     }
 
     // MARK: Editing the text fields
@@ -1032,7 +1032,7 @@ final class LibraryModel {
         // rule. A book that already has the tag comes back `.unchanged` and is
         // not rewritten.
         let known = knownTags
-        edit(books, actionName: "Tags", undoManager: undoManager) { book in
+        edit(books, actionName: Loc.string("Tags"), undoManager: undoManager) { book in
             if case .changed(let edited) = TagEdit.add(name, to: book, knownTags: known) {
                 book = edited
             }
@@ -1041,7 +1041,7 @@ final class LibraryModel {
     }
 
     func removeTag(_ name: String, undoManager: UndoManager?) {
-        edit(selectedEntries, actionName: "Tags", undoManager: undoManager) { book in
+        edit(selectedEntries, actionName: Loc.string("Tags"), undoManager: undoManager) { book in
             book.tags.removeAll { $0 == name }
         }
     }
@@ -1056,7 +1056,7 @@ final class LibraryModel {
             // field now holds something acceptable.
             if fieldRejection?.key == key { fieldRejection = nil }
         case .rejected(let why):
-            fieldRejection = FieldRejection(key: key, message: why.message)
+            fieldRejection = FieldRejection(key: key, message: Loc.message(for: why))
         case .changed(let edited):
             fieldRejection = nil
             apply(
@@ -1192,7 +1192,7 @@ final class LibraryModel {
     func addShelf(named name: String, under parent: UUID? = nil) -> UUID? {
         switch ShelfEdit.add(name: name, under: parent, to: shelfTree) {
         case .failure(let why):
-            errorMessage = why.message
+            errorMessage = Loc.message(for: why)
             return nil
         case .success(let made):
             // A new shelf inside a folded one would be invisible, which reads
@@ -1207,7 +1207,7 @@ final class LibraryModel {
     /// "New Shelf", "New Shelf 2", … – the first name that is free among the
     /// shelf's sisters, so adding two in a row is not a refusal.
     func freeShelfName(under parent: UUID?) -> String {
-        let base = "New Shelf"
+        let base = Loc.string("New Shelf")
         let tree = shelfTree
         if ShelfEdit.check(name: base, under: parent, in: tree) == nil { return base }
         for number in 2...99 where ShelfEdit.check(name: "\(base) \(number)", under: parent, in: tree) == nil {
@@ -1228,9 +1228,9 @@ final class LibraryModel {
         let before = shelfTree
         switch ShelfEdit.rename(id, to: name, in: before) {
         case .failure(let why):
-            errorMessage = why.message
+            errorMessage = Loc.message(for: why)
         case .success(let after):
-            apply(before, after, moving: id, actionName: "Rename Shelf", undoManager: undoManager)
+            apply(before, after, moving: id, actionName: Loc.string("Rename Shelf"), undoManager: undoManager)
         }
     }
 
@@ -1238,9 +1238,9 @@ final class LibraryModel {
         let before = shelfTree
         switch ShelfEdit.move(id, under: parent, in: before) {
         case .failure(let why):
-            errorMessage = why.message
+            errorMessage = Loc.message(for: why)
         case .success(let after):
-            apply(before, after, moving: id, actionName: "Move Shelf", undoManager: undoManager)
+            apply(before, after, moving: id, actionName: Loc.string("Move Shelf"), undoManager: undoManager)
         }
     }
 
@@ -1268,7 +1268,7 @@ final class LibraryModel {
             )
         }
         commitShelfChange(
-            tree: after, previousTree: before, changes: changes, actionName: "Delete Shelf",
+            tree: after, previousTree: before, changes: changes, actionName: Loc.string("Delete Shelf"),
             undoManager: undoManager)
     }
 
@@ -1310,7 +1310,9 @@ final class LibraryModel {
             apply(change, to: entry, undoManager: undoManager)
         }
         undoManager?.setActionName(
-            changes.count > 1 ? "\(actionName) (\(changes.count) books)" : actionName)
+            changes.count > 1
+                ? Loc.string("%1$@ (%2$@)", actionName, Loc.count("%lld books", changes.count))
+                : actionName)
         undoManager?.endUndoGrouping()
         errorMessage = nil
     }
@@ -1323,7 +1325,7 @@ final class LibraryModel {
         do {
             try library.write(descriptor)
         } catch {
-            show(error, doing: "save the shelves")
+            show(error, doing: Loc.string("save the shelves"))
             return
         }
         self.descriptor = descriptor
@@ -1337,14 +1339,14 @@ final class LibraryModel {
     /// Adds books to a shelf. One undo step for however many books it is.
     func addToShelf(_ shelfID: UUID, books: [LibraryEntry], undoManager: UndoManager?) {
         guard let path = shelfTree.storedPath(of: shelfID) else { return }
-        edit(books, actionName: "Add to Shelf", undoManager: undoManager) { book in
+        edit(books, actionName: Loc.string("Add to Shelf"), undoManager: undoManager) { book in
             guard !book.shelves.contains(path) else { return }
             book.shelves = (book.shelves + [path]).sorted()
         }
     }
 
     func removeFromShelf(_ path: String, books: [LibraryEntry], undoManager: UndoManager?) {
-        edit(books, actionName: "Remove from Shelf", undoManager: undoManager) { book in
+        edit(books, actionName: Loc.string("Remove from Shelf"), undoManager: undoManager) { book in
             book.shelves.removeAll { $0 == path }
         }
     }
@@ -1367,7 +1369,9 @@ final class LibraryModel {
         undoManager?.beginUndoGrouping()
         for (entry, made) in changes { apply(made, to: entry, undoManager: undoManager) }
         undoManager?.setActionName(
-            changes.count > 1 ? "\(actionName) (\(changes.count) books)" : actionName)
+            changes.count > 1
+                ? Loc.string("%1$@ (%2$@)", actionName, Loc.count("%lld books", changes.count))
+                : actionName)
         undoManager?.endUndoGrouping()
     }
 
@@ -1462,7 +1466,7 @@ final class LibraryModel {
             }.value
         } catch {
             orphanedFolders = []
-            show(error, doing: "look for orphaned folders")
+            show(error, doing: Loc.string("look for orphaned folders"))
         }
     }
 
@@ -1487,8 +1491,10 @@ final class LibraryModel {
             errorMessage = nil
         } else {
             errorMessage =
-                "\(Plural.folders(moved)) moved to the Trash, \(failures.count) could not be: "
-                + failures.map { "\($0.path) – \($0.message)" }.joined(separator: "; ")
+                Loc.string(
+                    "%1$@ moved to the Trash, %2$lld could not be: %3$@", Plural.folders(moved),
+                    failures.count,
+                    failures.map { "\($0.path) – \($0.message)" }.joined(separator: "; "))
         }
         await reload()
     }
@@ -1552,11 +1558,12 @@ final class LibraryModel {
 
             if !result.unreadableFolders.isEmpty {
                 errorMessage =
-                    "\(result.unreadableFolders.count) folder(s) hold no readable book. "
-                    + "Nothing was changed or removed – see \(ImportReport.fileName)."
+                    Loc.string(
+                        "%1$lld folder(s) hold no readable book. Nothing was changed or removed – "
+                            + "see %2$@.", result.unreadableFolders.count, ImportReport.fileName)
             }
         } catch {
-            show(error, doing: "rebuild the index")
+            show(error, doing: Loc.string("rebuild the index"))
         }
     }
 
@@ -1575,41 +1582,45 @@ final class LibraryModel {
         default:
             detail = (error as NSError).localizedDescription
         }
-        errorMessage = "Could not \(what): \(detail)"
+        errorMessage = Loc.string("Could not %1$@: %2$@", what, detail)
         Self.logger.error("\(self.errorMessage ?? "", privacy: .public)")
     }
 
     private static func describe(_ failure: Library.Failure) -> String {
         switch failure {
         case .notALibrary(let name):
-            return "“\(name)” is not a Shelf library. Use New Library… to make one there."
+            return Loc.string("“%@” is not a Shelf library. Use New Library… to make one there.", name)
         case .alreadyALibrary(let name):
-            return "“\(name)” already holds a library. Open it instead."
+            return Loc.string("“%@” already holds a library. Open it instead.", name)
         case .cannotCreate(let name):
-            return "the folder “\(name)” could not be created. Is the disk writable?"
+            return Loc.string("the folder “%@” could not be created. Is the disk writable?", name)
         case .cannotWriteDescriptor(let name):
-            return "library.json in “\(name)” could not be written. Is the disk full or read-only?"
+            return Loc.string(
+                "library.json in “%@” could not be written. Is the disk full or read-only?", name)
         case .newerSchema(let found, let supported):
-            return "it was written by a newer Shelf (format \(found); this one reads \(supported)). "
-                + "Update Shelf to open it."
+            return Loc.string(
+                "it was written by a newer Shelf (format %1$@; this one reads %2$@). Update Shelf "
+                    + "to open it.", String(found), String(supported))
         }
     }
 
     private static func describe(_ failure: LibraryIndex.Failure) -> String {
         switch failure {
         case .cannotOpen(let name, let reason):
-            return "the index of “\(name)” could not be opened (\(reason)). "
-                + "The books are safe – the index can be rebuilt from the folders."
+            return Loc.string(
+                "the index of “%1$@” could not be opened (%2$@). The books are safe – the index "
+                    + "can be rebuilt from the folders.", name, reason)
         }
     }
 
     private static func describe(_ failure: ImportRunner.Failure) -> String {
         switch failure {
         case .notEnoughSpace(let needed, let available):
-            return "there is not enough room: \(ByteCount.format(needed)) needed, "
-                + "\(ByteCount.format(available)) free. Nothing was copied."
+            return Loc.string(
+                "there is not enough room: %1$@ needed, %2$@ free. Nothing was copied.",
+                Loc.size(needed), Loc.size(available))
         case .cannotCreateFolder(let name):
-            return "the folder for “\(name)” could not be created."
+            return Loc.string("the folder for “%@” could not be created.", name)
         }
     }
 
@@ -1627,12 +1638,12 @@ final class LibraryModel {
         guard library != nil else { return "" }
         var parts: [String] = []
         if filter.isNarrowed || visible.count != entries.count {
-            parts.append("\(grouped(visible.count)) of \(grouped(entries.count)) books")
+            parts.append(Loc.string("%1$@ of %2$@ books", grouped(visible.count), grouped(entries.count)))
         } else {
-            parts.append("\(grouped(entries.count)) book\(entries.count == 1 ? "" : "s")")
+            parts.append(Loc.count("%lld books", entries.count))
         }
-        if !authorFacets.isEmpty { parts.append("\(grouped(authorFacets.count)) authors") }
-        if !seriesFacets.isEmpty { parts.append("\(grouped(seriesFacets.count)) series") }
+        if !authorFacets.isEmpty { parts.append(Loc.count("%lld authors", authorFacets.count)) }
+        if !seriesFacets.isEmpty { parts.append(Loc.count("%lld series", seriesFacets.count)) }
         return parts.joined(separator: " · ")
     }
 

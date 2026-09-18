@@ -92,15 +92,15 @@ struct CoverGridView: View {
             Image(systemName: "books.vertical")
                 .font(.system(size: 40))
                 .foregroundStyle(Slate.textSecondary.opacity(0.5))
-            Text(model.entries.isEmpty ? "This library is empty." : "Nothing matches.")
+            Text(model.entries.isEmpty ? Loc.string("This library is empty.") : Loc.string("Nothing matches."))
                 .foregroundStyle(Slate.textSecondary)
             if model.entries.isEmpty {
-                SlatePrimaryButton("Add Books…") { model.presentAddBooksPanel() }
-                Text("Or drop books anywhere in the window.")
+                SlatePrimaryButton(Loc.string("Add Books…")) { model.presentAddBooksPanel() }
+                Text(Loc.string("Or drop books anywhere in the window."))
                     .font(.caption)
                     .foregroundStyle(Slate.textSecondary)
             } else {
-                SlateSecondaryButton("Show All Books") { model.filter = .everything }
+                SlateSecondaryButton(Loc.string("Show All Books")) { model.filter = .everything }
             }
             Spacer()
         }
@@ -118,7 +118,7 @@ struct SearchField: View {
         HStack(spacing: 4) {
             Image(systemName: "magnifyingglass").foregroundStyle(Slate.textSecondary)
             TextField(
-                "Search",
+                Loc.string("Search"),
                 text: Binding(
                     get: { model.filter.searchText },
                     set: { model.filter.searchText = $0 })
@@ -144,13 +144,13 @@ struct SearchField: View {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(Slate.textSecondary)
                 }
                 .buttonStyle(.plain)
-                .help("Clear the search")
+                .help(Loc.string("Clear the search"))
             }
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
         .background(Slate.contentBackground, in: RoundedRectangle(cornerRadius: Slate.cornerRadius))
-        .help("Search titles, authors, series, tags and descriptions (⌘F); Escape clears it")
+        .help(Loc.string("Search titles, authors, series, tags and descriptions (⌘F); Escape clears it"))
     }
 }
 
@@ -192,7 +192,7 @@ struct BookCell: View {
             }
         } bottomLeading: {
             if let drm = entry.drm {
-                SlateBadgePlate { Text(drm.label).font(.caption2) }
+                SlateBadgePlate { Text(Loc.core(drm.label)).font(.caption2) }
             }
         }
         .contentShape(Rectangle())
@@ -302,20 +302,20 @@ struct SortMenu: View {
                     model.order = model.order.field == field ? model.order.reversed : BookOrder(field)
                 } label: {
                     Label(
-                        field.label,
+                        Loc.core(field.label),
                         systemImage: model.order.field == field
                             ? (model.order.ascending ? "arrow.up" : "arrow.down") : "")
                 }
             }
         } label: {
-            Text(model.order.label)
+            Text(Loc.core(model.order.field.label) + (model.order.ascending ? " ↑" : " ↓"))
                 .font(.callout)
                 .foregroundStyle(Slate.textSecondary)
         }
         .menuStyle(.borderlessButton)
         .frame(width: 150)
-        .help("How the library is ordered — the same field again turns it round")
-        .accessibilityLabel("Sort order")
-        .accessibilityValue(model.order.label)
+        .help(Loc.string("How the library is ordered — the same field again turns it round"))
+        .accessibilityLabel(Loc.string("Sort order"))
+        .accessibilityValue(Loc.core(model.order.field.label) + (model.order.ascending ? " ↑" : " ↓"))
     }
 }

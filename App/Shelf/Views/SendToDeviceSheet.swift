@@ -21,7 +21,7 @@ struct SendToDeviceSheet: View {
             if let device = model.devices.selectedDevice {
                 content(device)
             } else {
-                Text("No device is connected.").foregroundStyle(Slate.textSecondary)
+                Text(Loc.string("No device is connected.")).foregroundStyle(Slate.textSecondary)
             }
             buttons
         }
@@ -32,9 +32,9 @@ struct SendToDeviceSheet: View {
 
     private var title: String {
         switch model.devices.phase {
-        case .finished: return "Sent"
-        case .running: return "Sending…"
-        default: return "Send to Device"
+        case .finished: return Loc.string("Sent")
+        case .running: return Loc.string("Sending…")
+        default: return Loc.string("Send to Device")
         }
     }
 
@@ -44,7 +44,7 @@ struct SendToDeviceSheet: View {
             header(device)
             switch model.devices.phase {
             case .idle, .planning:
-                SlateStatusBar("Working out what would be sent")
+                SlateStatusBar(Loc.string("Working out what would be sent"))
             case .ready(let plan):
                 plannedView(plan, device: device)
             case .running(let progress):
@@ -60,11 +60,11 @@ struct SendToDeviceSheet: View {
 
     private func header(_ device: ConnectedDevice) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("\(device.name) — \(device.profile.name)")
+            Text(verbatim: "\(device.name) — \(device.profile.name)")
                 .font(.caption)
                 .foregroundStyle(Slate.textSecondary)
             if let free = device.volume.freeBytes {
-                Text("\(ByteCount.format(free)) free").font(.caption2).foregroundStyle(Slate.textSecondary)
+                Text(Loc.string("%@ free", Loc.size(free))).font(.caption2).foregroundStyle(Slate.textSecondary)
             }
             // The one sentence a profile has to say about itself — "a Kindle
             // does not read EPUB over USB". Shown before the list rather than
@@ -86,14 +86,15 @@ struct SendToDeviceSheet: View {
 
         if !plan.fits(freeBytes: device.volume.freeBytes) {
             SlateBanner(
-                "Not enough room: \(ByteCount.format(plan.requiredBytes)) needed, "
-                    + "\(ByteCount.format(device.volume.freeBytes ?? 0)) free.")
+                Loc.string(
+                    "Not enough room: %1$@ needed, %2$@ free.", Loc.size(plan.requiredBytes),
+                    Loc.size(device.volume.freeBytes ?? 0)))
         }
 
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
                 if !plan.operations.isEmpty {
-                    Text("Will be sent").font(.caption).foregroundStyle(Slate.textSecondary)
+                    Text(Loc.string("Will be sent")).font(.caption).foregroundStyle(Slate.textSecondary)
                     ForEach(plan.operations) { operation in
                         row(operation.title, detail: "\(operation.format.label) · \(operation.destinationPath)")
                     }
@@ -103,7 +104,7 @@ struct SendToDeviceSheet: View {
                 ForEach(SkippedTransfer.Reason.allCases, id: \.self) { reason in
                     let group = plan.skipped(for: reason)
                     if !group.isEmpty {
-                        Text(reason.label).font(.caption).foregroundStyle(Slate.textSecondary)
+                        Text(Loc.core(reason.label)).font(.caption).foregroundStyle(Slate.textSecondary)
                             .padding(.top, 4)
                         ForEach(group) { skipped in row(skipped.title, detail: nil) }
                     }
@@ -129,11 +130,15 @@ struct SendToDeviceSheet: View {
     private func runningView(_ progress: TransferRunner.Progress) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             ProgressView(value: progress.fractionDone)
-            Text("\(progress.filesDone) of \(progress.filesTotal) · \(progress.currentTitle)")
-                .font(.caption)
-                .foregroundStyle(Slate.textSecondary)
-                .lineLimit(1)
-            Text("Every file is read back off the device and checked before it counts.")
+            Text(
+                Loc.string(
+                    "%1$@ of %2$@ · %3$@", Loc.number(progress.filesDone),
+                    Loc.number(progress.filesTotal), progress.currentTitle)
+            )
+            .font(.caption)
+            .foregroundStyle(Slate.textSecondary)
+            .lineLimit(1)
+            Text(Loc.string("Every file is read back off the device and checked before it counts."))
                 .font(.caption2)
                 .foregroundStyle(Slate.textSecondary)
         }
@@ -155,7 +160,7 @@ struct SendToDeviceSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxHeight: 220)
-            Text("The report is on the device, in .shelf/\(TransferReport.fileName).")
+            Text(Loc.string("The report is on the device, in .shelf/%@.", TransferReport.fileName))
                 .font(.caption2)
                 .foregroundStyle(Slate.textSecondary)
         }
@@ -171,14 +176,14 @@ struct SendToDeviceSheet: View {
             case .running:
                 // Stopping is safe at any moment: what is verified stays, and
                 // nothing half-written is left behind.
-                Button("Stop") { model.devices.cancelTransfer() }
+                Button(Loc.string("Stop")) { model.devices.cancelTransfer() }
             case .ready(let plan):
-                Button("Cancel") { model.devices.closeSendSheet() }
-                Button("Send") { model.runTransfer() }
+                Button(Loc.string("Cancel")) { model.devices.closeSendSheet() }
+                Button(Loc.string("Send")) { model.runTransfer() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(plan.isEmpty)
             default:
-                Button("Close") { model.devices.closeSendSheet() }
+                Button(Loc.string("Close")) { model.devices.closeSendSheet() }
                     .keyboardShortcut(.defaultAction)
             }
         }

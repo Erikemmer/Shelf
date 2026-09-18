@@ -61,8 +61,9 @@ struct DRMBadge: View {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .fill(Slate.textSecondary.opacity(0.14))
         )
-        .accessibilityLabel("\(drm.label), not touched")
-        .help("\(drm.label). Shelf shows it and leaves the file exactly as it is.")
+        .accessibilityLabel(Loc.string("%@, not touched", Loc.core(drm.label)))
+        .help(
+            Loc.string("%@. Shelf shows it and leaves the file exactly as it is.", Loc.core(drm.label)))
     }
 }
 
@@ -76,6 +77,23 @@ enum SidebarSection: String, CaseIterable, Identifiable {
     case devices = "Devices"
 
     var id: String { rawValue }
+
+    /// What the sidebar writes above the section.
+    ///
+    /// Not the raw value: a raw value has to be a literal, and it is also the
+    /// identity this section is stored and compared by. Translating it would
+    /// have made a German window and an English one disagree about which
+    /// section is which.
+    var title: String {
+        switch self {
+        case .shelves: return Loc.string("Shelves")
+        case .tags: return Loc.string("Tags")
+        case .authors: return Loc.string("Authors")
+        case .series: return Loc.contextual("Series [a sidebar section]", english: "Series")
+        case .formats: return Loc.string("Formats")
+        case .devices: return Loc.string("Devices")
+        }
+    }
 
     /// Whether Sprint 1 can fill this section. The empty ones are still drawn,
     /// because a sidebar that grows section by section between versions is
@@ -91,19 +109,29 @@ enum SidebarSection: String, CaseIterable, Identifiable {
     /// unexplained.
     var emptyNote: String {
         switch self {
-        case .shelves: return "No shelves yet — use + to make one"
-        case .devices: return "No reader connected — plug one in over USB"
-        case .tags: return "No tags yet"
-        case .authors: return "No authors yet"
-        case .series: return "No series yet"
-        case .formats: return "No formats yet"
+        case .shelves: return Loc.string("No shelves yet — use + to make one")
+        case .devices: return Loc.string("No reader connected — plug one in over USB")
+        case .tags: return Loc.string("No tags yet")
+        case .authors: return Loc.string("No authors yet")
+        case .series: return Loc.string("No series yet")
+        case .formats: return Loc.string("No formats yet")
         }
     }
 }
 
 extension Shortcut {
     /// The package draws shortcuts; the table of them is Shelf's.
+    ///
+    /// The keys are not translated — ⌘F is ⌘F in every language — and the
+    /// action and the group are, because they are sentences (ADR 0016).
     var slate: SlateShortcut {
-        SlateShortcut(keys: keys, action: action, group: group.rawValue)
+        SlateShortcut(keys: keys, action: Loc.core(action), group: Loc.core(group.title))
     }
+}
+
+extension ShortcutGroup {
+    /// What the ⌘? sheet writes above the group. Not the raw value: that is
+    /// the identity, and it is also what `library.json` would hold if a group
+    /// were ever saved.
+    var title: String { rawValue }
 }

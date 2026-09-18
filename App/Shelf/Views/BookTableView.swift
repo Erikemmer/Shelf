@@ -32,36 +32,36 @@ struct BookTableView: View {
             sortOrder: Binding(get: { comparators }, set: { adopt($0) }),
             columnCustomization: $customization
         ) {
-            TableColumn("Title", value: \.book.titleSort) { entry in
+            TableColumn(Loc.string("Title"), value: \.book.titleSort) { entry in
                 Text(entry.book.title).lineLimit(1)
             }
             .width(min: 140, ideal: 260)
             .customizationID(Column.title.rawValue)
 
-            TableColumn("Author", value: \.sortableAuthor) { entry in
+            TableColumn(Loc.string("Author"), value: \.sortableAuthor) { entry in
                 Text(entry.book.authorLine).lineLimit(1)
             }
             .width(min: 100, ideal: 160)
             .customizationID(Column.author.rawValue)
 
-            TableColumn("Series", value: \.sortableSeries) { entry in
+            TableColumn(Loc.string("Series"), value: \.sortableSeries) { entry in
                 Text(entry.book.series?.display ?? "").lineLimit(1)
             }
             .width(min: 80, ideal: 140)
             .customizationID(Column.series.rawValue)
 
-            TableColumn("Rating", value: \.book.rating) { entry in
+            TableColumn(Loc.string("Rating"), value: \.book.rating) { entry in
                 // Glyphs rather than the five-star control: a row 18 points
                 // high has no room for a control, and a table is read down a
                 // column — "★★★☆☆" lines up where five separate images do not.
                 Text(Self.stars(entry.book.stars))
                     .foregroundStyle(entry.book.stars > 0 ? Slate.accent : Slate.textSecondary)
-                    .accessibilityLabel("\(entry.book.stars) of 5")
+                    .accessibilityLabel(Loc.string("%lld of 5", entry.book.stars))
             }
             .width(min: 60, ideal: 70)
             .customizationID(Column.rating.rawValue)
 
-            TableColumn("Tags") { entry in
+            TableColumn(Loc.string("Tags")) { entry in
                 Text(entry.book.tags.joined(separator: ", "))
                     .foregroundStyle(Slate.textSecondary)
                     .lineLimit(1)
@@ -69,27 +69,27 @@ struct BookTableView: View {
             .width(min: 80, ideal: 160)
             .customizationID(Column.tags.rawValue)
 
-            TableColumn("Format") { entry in
+            TableColumn(Loc.string("Format")) { entry in
                 Text(entry.formatLine).foregroundStyle(Slate.textSecondary).lineLimit(1)
             }
             .width(min: 60, ideal: 80)
             .customizationID(Column.format.rawValue)
 
-            TableColumn("Added", value: \.book.addedAt) { entry in
+            TableColumn(Loc.string("Added"), value: \.book.addedAt) { entry in
                 Text(Self.day(entry.book.addedAt)).foregroundStyle(Slate.textSecondary)
             }
             .width(min: 80, ideal: 100)
             .customizationID(Column.added.rawValue)
 
-            TableColumn("Read") { entry in
+            TableColumn(Loc.string("Read")) { entry in
                 Image(systemName: entry.book.isRead ? "checkmark" : "")
                     .foregroundStyle(Slate.textSecondary)
-                    .accessibilityLabel(entry.book.isRead ? "Read" : "Unread")
+                    .accessibilityLabel(entry.book.isRead ? Loc.string("Read") : Loc.string("Unread"))
             }
             .width(min: 40, ideal: 50)
             .customizationID(Column.read.rawValue)
 
-            TableColumn("Size") { entry in
+            TableColumn(Loc.string("Size")) { entry in
                 Text(ByteCount.format(entry.totalBytes))
                     .foregroundStyle(Slate.textSecondary)
                     .monospacedDigit()
@@ -101,7 +101,7 @@ struct BookTableView: View {
             // columns CONCEPT §3.2 lists, but *Last Changed* is one of the six
             // sort fields — and a sort with no column to point at is a table
             // whose header shows no arrow while the menu says it is sorted.
-            TableColumn("Changed", value: \.book.modifiedAt) { entry in
+            TableColumn(Loc.string("Changed"), value: \.book.modifiedAt) { entry in
                 Text(Self.day(entry.book.modifiedAt)).foregroundStyle(Slate.textSecondary)
             }
             .width(min: 80, ideal: 100)

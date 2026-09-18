@@ -42,14 +42,19 @@ struct ShelfApp: App {
                 // The size is in the title rather than behind a confirmation:
                 // clearing costs nothing but the time to decode again, and
                 // knowing it is 412 MB is the whole reason anyone would.
-                Button("Clear Cover Cache (\(CoverCachePolicy.sizeLabel(usedBytes: model.coverCacheBytes)))") {
+                Button(
+                    Loc.string("Clear Cover Cache (%@)", CoverCachePolicy.sizeLabel(usedBytes: model.coverCacheBytes))
+                ) {
                     Task { await model.clearCoverCache() }
                 }
                 .disabled(model.library == nil)
                 // The answers the two metadata services gave, so the same ISBN
                 // is not asked twice. Not inside a library: it is keyed by an
                 // ISBN and serves every library on this Mac.
-                Button("Clear Downloaded Metadata (\(CoverCachePolicy.sizeLabel(usedBytes: model.onlineCacheBytes)))") {
+                Button(
+                    Loc.string(
+                        "Clear Downloaded Metadata (%@)", CoverCachePolicy.sizeLabel(usedBytes: model.onlineCacheBytes))
+                ) {
                     Task { await model.clearOnlineCache() }
                 }
             }
@@ -58,7 +63,7 @@ struct ShelfApp: App {
             deviceMenu
             viewMenu
             CommandGroup(replacing: .help) {
-                Button("Keyboard Shortcuts") { isShowingShortcuts = true }
+                Button(Loc.string("Keyboard Shortcuts")) { isShowingShortcuts = true }
                     .keyboardShortcut("/", modifiers: .command)
             }
         }
@@ -68,9 +73,9 @@ struct ShelfApp: App {
     /// screen – so the two can never tell the user different things.
     private var shortcutSheet: some View {
         SlateShortcutSheet(
-            title: "Keyboard Shortcuts",
+            title: Loc.string("Keyboard Shortcuts"),
             groups: ShortcutGroup.allCases.map {
-                (name: $0.rawValue, shortcuts: ShortcutReference.group($0).map(\.slate))
+                (name: Loc.core($0.title), shortcuts: ShortcutReference.group($0).map(\.slate))
             }
         ) {
             isShowingShortcuts = false
@@ -80,29 +85,29 @@ struct ShelfApp: App {
 
     private var fileMenu: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("Open Library…") { model.presentOpenPanel() }
+            Button(Loc.string("Open Library…")) { model.presentOpenPanel() }
                 .keyboardShortcut("o", modifiers: .command)
-            Button("New Library…") { model.presentNewLibraryPanel() }
+            Button(Loc.string("New Library…")) { model.presentNewLibraryPanel() }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
             openRecentMenu
             Divider()
-            Button("Add Books…") { model.presentAddBooksPanel() }
+            Button(Loc.string("Add Books…")) { model.presentAddBooksPanel() }
                 .keyboardShortcut("i", modifiers: .command)
                 .disabled(model.library == nil)
             // The reason most people will open Shelf at all (CONCEPT §7).
-            Button("Import from Calibre…") { model.presentCalibrePanel() }
+            Button(Loc.string("Import from Calibre…")) { model.presentCalibrePanel() }
                 .keyboardShortcut("i", modifiers: [.command, .option])
             // ⌘E, the shortcut sheet has said so since Sprint 1. It asks; it
             // writes nothing until a person has agreed field by field.
-            Button("Fetch Metadata…") { model.presentFetchMetadata() }
+            Button(Loc.string("Fetch Metadata…")) { model.presentFetchMetadata() }
                 .keyboardShortcut("e", modifiers: .command)
                 .disabled(model.library == nil || model.selection.isEmpty)
                 .disabled(model.library == nil)
             Divider()
-            Button("Show in Finder") { model.revealSelectedInFinder() }
+            Button(Loc.string("Show in Finder")) { model.revealSelectedInFinder() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(model.selectedEntry == nil)
-            Button("Open in Default App") { model.openSelectedInDefaultApp() }
+            Button(Loc.string("Open in Default App")) { model.openSelectedInDefaultApp() }
                 .keyboardShortcut(.return, modifiers: [])
                 .disabled(model.selectedEntry == nil)
         }
@@ -111,21 +116,21 @@ struct ShelfApp: App {
     /// File ▸ Open Recent. Libraries that cannot be reached are greyed out
     /// rather than removed – seeing that one is on an unplugged drive is useful.
     private var openRecentMenu: some View {
-        Menu("Open Recent") {
+        Menu(Loc.string("Open Recent")) {
             ForEach(model.recents.entries) { entry in
                 Button(entry.name) { model.open(recent: entry) }
                     .disabled(!model.recents.isReachable(entry))
             }
             if !model.recents.entries.isEmpty { Divider() }
-            Button("Clear Menu") { model.recents.clear() }
+            Button(Loc.string("Clear Menu")) { model.recents.clear() }
                 .disabled(model.recents.entries.isEmpty)
         }
         .onAppear { model.recents.refreshAvailability() }
     }
 
     private var libraryMenu: some Commands {
-        CommandMenu("Library") {
-            Button("Search") { model.focusSearch() }
+        CommandMenu(Loc.string("Library")) {
+            Button(Loc.string("Search")) { model.focusSearch() }
                 .keyboardShortcut("f", modifiers: .command)
                 .disabled(model.library == nil)
             Divider()
@@ -133,43 +138,43 @@ struct ShelfApp: App {
             // belongs to whatever text field has the keyboard, and putting this
             // there would fight it. Here it means one thing — every book the
             // filter is showing.
-            Button("Select All Books") { model.selectAll() }
+            Button(Loc.string("Select All Books")) { model.selectAll() }
                 .keyboardShortcut("a", modifiers: .command)
                 .disabled(model.library == nil)
             Divider()
-            Button("Previous Book") { model.selectPrevious() }
+            Button(Loc.string("Previous Book")) { model.selectPrevious() }
                 .keyboardShortcut(.leftArrow, modifiers: [])
                 .disabled(model.library == nil)
-            Button("Next Book") { model.selectNext() }
+            Button(Loc.string("Next Book")) { model.selectNext() }
                 .keyboardShortcut(.rightArrow, modifiers: [])
                 .disabled(model.library == nil)
-            Button("Row Above") { model.selectRowAbove() }
+            Button(Loc.string("Row Above")) { model.selectRowAbove() }
                 .keyboardShortcut(.upArrow, modifiers: [])
                 .disabled(model.library == nil)
-            Button("Row Below") { model.selectRowBelow() }
+            Button(Loc.string("Row Below")) { model.selectRowBelow() }
                 .keyboardShortcut(.downArrow, modifiers: [])
                 .disabled(model.library == nil)
-            Button("First Book") { model.selectFirst() }
+            Button(Loc.string("First Book")) { model.selectFirst() }
                 .keyboardShortcut(.home, modifiers: [])
                 .disabled(model.library == nil)
-            Button("Last Book") { model.selectLast() }
+            Button(Loc.string("Last Book")) { model.selectLast() }
                 .keyboardShortcut(.end, modifiers: [])
                 .disabled(model.library == nil)
             Divider()
             // Safe to offer precisely because the folder is the truth
             // (ADR 0001): it reads the folders and writes only the index.
-            Button("Rebuild Index from Folders") {
+            Button(Loc.string("Rebuild Index from Folders")) {
                 Task { await model.rebuildIndex() }
             }
             .disabled(model.library == nil || model.isLoading)
             // What an interrupted import leaves behind. It only looks; the
             // sheet names every file before anything can move, and what moves
             // moves to the Trash.
-            Button("Find Orphaned Folders…") {
+            Button(Loc.string("Find Orphaned Folders…")) {
                 Task { await model.findOrphanedFolders() }
             }
             .disabled(model.library == nil || model.isLoading)
-            Button("Close Library") { model.closeLibrary() }
+            Button(Loc.string("Close Library")) { model.closeLibrary() }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
                 .disabled(model.library == nil)
         }
@@ -179,18 +184,18 @@ struct ShelfApp: App {
     /// Library, because one of them is the only destructive thing Shelf does
     /// and it must not sit next to "Rebuild Index".
     private var deviceMenu: some Commands {
-        CommandMenu("Device") {
+        CommandMenu(Loc.string("Device")) {
             Button(sendLabel) { model.sendSelectionToDevice(nil) }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
                 .disabled(model.devices.selectedDevice == nil || model.selection.isEmpty)
-            Button("Show What Is on the Device…") { model.showDeviceContents(nil) }
+            Button(Loc.string("Show What Is on the Device…")) { model.showDeviceContents(nil) }
                 .disabled(model.devices.selectedDevice == nil)
             Divider()
             // Deleting on a device is reached only through the contents sheet,
             // where the files are chosen, and then only through a confirmation
             // that names every one of them (ADR 0014). This item opens that
             // sheet; it deletes nothing itself, and the menu says so.
-            Button("Delete from Device…") { model.showDeviceContents(nil) }
+            Button(Loc.string("Delete from Device…")) { model.showDeviceContents(nil) }
                 .disabled(model.devices.selectedDevice == nil)
             Divider()
             treatVolumeMenu
@@ -203,13 +208,13 @@ struct ShelfApp: App {
     }
 
     private var sendLabel: String {
-        guard let device = model.devices.selectedDevice else { return "Send to Device" }
-        return "Send to “\(device.name)”"
+        guard let device = model.devices.selectedDevice else { return Loc.string("Send to Device") }
+        return Loc.string("Send to “%@”", device.name)
     }
 
     private var ejectLabel: String {
-        guard let device = model.devices.selectedDevice else { return "Eject" }
-        return "Eject “\(device.name)”"
+        guard let device = model.devices.selectedDevice else { return Loc.string("Eject") }
+        return Loc.string("Eject “%@”", device.name)
     }
 
     /// The way in when no marker matches — a reader Shelf has never heard of,
@@ -224,9 +229,9 @@ struct ShelfApp: App {
     /// disk image is one, measured in Sprint 5. A menu of volume names could
     /// list them and not get in.
     private var treatVolumeMenu: some View {
-        Menu("Treat Volume as Device") {
+        Menu(Loc.string("Treat Volume as Device")) {
             ForEach(DeviceProfiles.all) { profile in
-                Button("\(profile.name)…") { model.presentDeviceVolumePanel(as: profile.id) }
+                Button(profile.name + "…") { model.presentDeviceVolumePanel(as: profile.id) }
             }
         }
     }
@@ -237,22 +242,22 @@ struct ShelfApp: App {
     private var viewMenu: some Commands {
         CommandGroup(after: .sidebar) {
             Divider()
-            Button("Larger Covers") { model.enlargeCovers() }
+            Button(Loc.string("Larger Covers")) { model.enlargeCovers() }
                 .keyboardShortcut("+", modifiers: .command)
                 .disabled(model.library == nil)
-            Button("Smaller Covers") { model.shrinkCovers() }
+            Button(Loc.string("Smaller Covers")) { model.shrinkCovers() }
                 .keyboardShortcut("-", modifiers: .command)
                 .disabled(model.library == nil)
             Divider()
             Toggle(
-                "Inspector",
+                Loc.string("Inspector"),
                 isOn: Binding(get: { model.isInspectorShown }, set: { model.isInspectorShown = $0 })
             )
             .keyboardShortcut("i", modifiers: [.command, .option])
             .disabled(model.library == nil)
             Divider()
             Picker(
-                "Show As",
+                Loc.string("Show As"),
                 selection: Binding(get: { model.viewMode }, set: { model.viewMode = $0 })
             ) {
                 // ⌘1 and ⌘2, as CONCEPT §3.2 asks. The shortcuts are on the
@@ -268,7 +273,7 @@ struct ShelfApp: App {
             Divider()
             // Every field, both ways round, the current one ticked. The same
             // field again turns it round — what clicking a table header does.
-            Menu("Sort By") {
+            Menu(Loc.string("Sort By")) {
                 ForEach(BookSort.allCases, id: \.self) { field in
                     Button {
                         model.order =

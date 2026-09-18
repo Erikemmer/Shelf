@@ -37,12 +37,12 @@ final class LibArchive: @unchecked Sendable {
         /// a CBR that could not be opened has to say why (CONCEPT §13).
         var note: String {
             guard readsAnyRAR else {
-                return "This Mac's \(version) cannot read RAR, so CBR files are listed by name only."
+                return Loc.string("This Mac's %@ cannot read RAR, so CBR files are listed by name only.", version)
             }
             if !readsRAR5 {
-                return "\(version) reads RAR but not RAR5. A CBR in RAR5 falls back to its file name."
+                return Loc.string("%@ reads RAR but not RAR5. A CBR in RAR5 falls back to its file name.", version)
             }
-            return "\(version), reading RAR and RAR5."
+            return Loc.string("%@, reading RAR and RAR5.", version)
         }
     }
 
@@ -213,7 +213,7 @@ final class LibArchive: @unchecked Sendable {
 
         let status = url.path.withCString { openFilename(archive, $0, 64 * 1024) }
         guard status == Status.ok else {
-            let reason = errorString?(archive).map { String(cString: $0) } ?? "libarchive could not open it"
+            let reason = errorString?(archive).map { String(cString: $0) } ?? Loc.string("libarchive could not open it")
             throw Failure.cannotOpen(reason)
         }
         return try body(archive)
@@ -232,7 +232,8 @@ enum CBRFileReader {
 
         guard let library = LibArchive.shared else {
             return BookFileReader.fromName(
-                stem, warning: "libarchive is not available on this Mac, so this CBR is listed by name only")
+                stem, warning: Loc.string("libarchive is not available on this Mac, so this CBR is listed by name only")
+            )
         }
         guard library.capabilities.readsAnyRAR else {
             return BookFileReader.fromName(stem, warning: library.capabilities.note)
@@ -246,7 +247,7 @@ enum CBRFileReader {
             // has only the RAR4 reader — so the note says which readers this
             // Mac has, rather than only that something went wrong.
             return BookFileReader.fromName(
-                stem, warning: "this CBR could not be opened – \(library.capabilities.note)")
+                stem, warning: Loc.string("this CBR could not be opened – %@", library.capabilities.note))
         }
 
         let comicInfo =

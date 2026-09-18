@@ -153,8 +153,8 @@ final class DeviceModel {
     func subtitle(for device: ConnectedDevice) -> String {
         var parts: [String] = []
         let count = files(on: device).count
-        parts.append("\(count) book\(count == 1 ? "" : "s")")
-        if let free = device.volume.freeBytes { parts.append("\(ByteCount.format(free)) free") }
+        parts.append(Loc.count("%lld books", count))
+        if let free = device.volume.freeBytes { parts.append(Loc.string("%@ free", Loc.size(free))) }
         return parts.joined(separator: " · ")
     }
 
@@ -221,8 +221,10 @@ final class DeviceModel {
         guard case .ready(let plan) = phase, !plan.isEmpty else { return }
         guard plan.fits(freeBytes: device.volume.freeBytes) else {
             errorMessage =
-                "Not enough room on “\(device.name)”: \(ByteCount.format(plan.requiredBytes)) needed, "
-                + "\(ByteCount.format(device.volume.freeBytes ?? 0)) free. Nothing was copied."
+                Loc.string(
+                    "Not enough room on “%1$@”: %2$@ needed, %3$@ free. Nothing was copied.",
+                    device.name, Loc.size(plan.requiredBytes),
+                    Loc.size(device.volume.freeBytes ?? 0))
             return
         }
 
@@ -282,8 +284,9 @@ final class DeviceModel {
 
     static func describe(_ error: any Error, device: ConnectedDevice) -> String {
         if case TransferRunner.Failure.notEnoughSpace(let needed, let available) = error {
-            return "Not enough room on “\(device.name)”: \(ByteCount.format(needed)) needed, "
-                + "\(ByteCount.format(available)) free. Nothing was copied."
+            return Loc.string(
+                "Not enough room on “%1$@”: %2$@ needed, %3$@ free. Nothing was copied.", device.name,
+                Loc.size(needed), Loc.size(available))
         }
         return (error as NSError).localizedDescription
     }
@@ -327,14 +330,16 @@ final class DeviceModel {
     /// rather than in the menu item, so every route to ejecting has it.
     func eject(_ device: ConnectedDevice) {
         guard !phase.isRunning else {
-            errorMessage = "“\(device.name)” is being written to. Stop the transfer first."
+            errorMessage = Loc.string("“%@” is being written to. Stop the transfer first.", device.name)
             return
         }
         do {
             try DeviceWatcher.eject(device.volume.url)
             Task { await refresh() }
         } catch {
-            errorMessage = "“\(device.name)” could not be ejected: \((error as NSError).localizedDescription)"
+            errorMessage = Loc.string(
+                "“%1$@” could not be ejected: %2$@", device.name,
+                (error as NSError).localizedDescription)
         }
     }
 

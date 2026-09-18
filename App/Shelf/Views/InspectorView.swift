@@ -58,7 +58,7 @@ struct InspectorView: View {
                     // them.
                     .onChange(of: entry.id) { _, _ in newIdentifierScheme = "" }
                 } else {
-                    Text("No book selected.")
+                    Text(Loc.string("No book selected."))
                         .foregroundStyle(Slate.textSecondary)
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -93,10 +93,10 @@ struct InspectorView: View {
     private var selectionHeader: some View {
         if model.hasMultipleSelection {
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(model.selection.count) books selected")
+                Text(Loc.count("%lld books selected", model.selection.count))
                     .font(.callout)
                     .foregroundStyle(Slate.accent)
-                Text("Rating, read status, tags and shelves apply to all of them.")
+                Text(Loc.string("Rating, read status, tags and shelves apply to all of them."))
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -111,7 +111,7 @@ struct InspectorView: View {
     /// "Mixed" and not an empty field. An empty field says "these books have no
     /// publisher", which is a different fact — and it is the one that would
     /// invite somebody to fill it in.
-    private static let mixed = "Mixed"
+    private static let mixed = Loc.string("Mixed")
 
     // MARK: Cover
 
@@ -159,14 +159,14 @@ struct InspectorView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
-            .accessibilityLabel(which.label)
+            .accessibilityLabel(Loc.core(which.label))
             .accessibilityValue(shared ?? Self.mixed)
-            .help("\(which.label) — edited one book at a time")
+            .help(Loc.string("%@ — edited one book at a time", Loc.core(which.label)))
     }
 
     private func lockedRow(_ which: BookField) -> some View {
-        SlateValueRow(name: which.label, value: model.sharedText(which) ?? Self.mixed)
-            .help("\(which.label) — edited one book at a time")
+        SlateValueRow(name: Loc.core(which.label), value: model.sharedText(which) ?? Self.mixed)
+            .help(Loc.string("%@ — edited one book at a time", Loc.core(which.label)))
     }
 
     /// The series name, its index beside it, and where the book sits in it.
@@ -180,29 +180,29 @@ struct InspectorView: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 SlateEditableBlock(
                     value: BookField.seriesName.text(of: entry.book),
-                    placeholder: BookField.seriesName.placeholder, font: .caption
+                    placeholder: Loc.core(BookField.seriesName.placeholder), font: .caption
                 ) { model.commit(.seriesName, $0, undoManager: undoManager) }
                 // Named for the accessibility tree as well as for the
                 // pointer: a field whose only label is its placeholder has
                 // no label at all once something is typed into it, and the
                 // tree showed exactly that — a bare `AXTextField`.
-                .accessibilityLabel("Series")
-                .help("Series — empty removes the book from its series")
+                .accessibilityLabel(Loc.string("Series"))
+                .help(Loc.string("Series — empty removes the book from its series"))
                 if entry.book.series != nil {
                     SlateEditableBlock(
                         value: BookField.seriesIndex.text(of: entry.book),
-                        placeholder: BookField.seriesIndex.placeholder, font: .caption
+                        placeholder: Loc.core(BookField.seriesIndex.placeholder), font: .caption
                     ) { model.commit(.seriesIndex, $0, undoManager: undoManager) }
                     .frame(width: 44)
-                    .accessibilityLabel("Series index")
-                    .help("Which book of the series — \(BookField.seriesIndex.hint)")
+                    .accessibilityLabel(Loc.string("Series index"))
+                    .help(Loc.string("Which book of the series — %@", Loc.core(BookField.seriesIndex.hint)))
                 }
             }
             if let position = seriesPosition(for: entry) {
                 Text(position)
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
-                    .help("Counted from the books in this library, not from the series itself")
+                    .help(Loc.string("Counted from the books in this library, not from the series itself"))
             }
             note(for: BookField.seriesName.rawValue)
             note(for: BookField.seriesIndex.rawValue)
@@ -218,12 +218,18 @@ struct InspectorView: View {
         // claims to be the third of said "Book 3 of 1" here until Sprint 5.
         // The index is passed as the file spells it, so a novella reads
         // "Book 3.5" rather than "Book 3" or "Book 3.5000".
-        return SeriesPosition.text(
-            printedIndex: BookField.seriesIndex.text(of: entry.book), index: index, countInLibrary: total)
+        let place = SeriesPosition.place(
+            printedIndex: BookField.seriesIndex.text(of: entry.book), index: index,
+            countInLibrary: total)
+        switch place {
+        case .none: return nil
+        case .book(let printed): return Loc.string("Book %@", printed)
+        case .bookOf(let printed, let count): return Loc.string("Book %1$@ of %2$lld", printed, count)
+        }
     }
 
     private func rating(for entry: LibraryEntry) -> some View {
-        SlateInspectorSection("Rating") {
+        SlateInspectorSection(Loc.string("Rating")) {
             // `stars`, not `rating`: the control counts to five and the model
             // keeps Calibre's ten. Sprint 1 handed it `rating` unconverted, so
             // anything rated 5 or more drew five full stars.
@@ -240,17 +246,17 @@ struct InspectorView: View {
             }
             .help(
                 model.hasMultipleSelection
-                    ? "1–5 rates all \(model.selection.count) books, 0 clears them"
-                    : "1–5 sets the rating, 0 clears it; the same star again clears it"
+                    ? Loc.string("1–5 rates all %lld books, 0 clears them", model.selection.count)
+                    : Loc.string("1–5 sets the rating, 0 clears it; the same star again clears it")
             )
             // SlateKit labels the control but publishes no value, so the stars
             // come out of the accessibility tree as an element with a name and
             // nothing in it. Said here until SlateKit says it itself.
             .accessibilityValue(
-                Text(model.sharedStars.map { "\($0) of 5" } ?? Self.mixed))
+                Text(model.sharedStars.map { Loc.string("%lld of 5", $0) } ?? Self.mixed))
 
             Toggle(
-                "Read",
+                Loc.string("Read"),
                 isOn: Binding(
                     get: { model.sharedReadStatus ?? false },
                     set: { _ in model.toggleRead(undoManager: undoManager) })
@@ -264,11 +270,13 @@ struct InspectorView: View {
             // as before.
             .help(
                 model.sharedReadStatus == nil
-                    ? "Some of these are read — this marks all \(model.selection.count) read (R)"
-                    : "Whether the book has been read (R)"
+                    ? Loc.string(
+                        "Some of these are read — this marks all %lld read (R)",
+                        model.selection.count)
+                    : Loc.string("Whether the book has been read (R)")
             )
             .accessibilityValue(
-                Text(model.sharedReadStatus.map { $0 ? "Read" : "Unread" } ?? Self.mixed))
+                Text(model.sharedReadStatus.map { $0 ? Loc.string("Read") : Loc.string("Unread") } ?? Self.mixed))
         }
     }
 
@@ -283,14 +291,14 @@ struct InspectorView: View {
     private func duplicate(for entry: LibraryEntry) -> some View {
         let reasons = model.duplicateReasons(for: entry.id)
         if let strongest = reasons.first {
-            SlateInspectorSection(strongest.isCertain ? "Duplicate" : "Possible Duplicate") {
+            SlateInspectorSection(strongest.isCertain ? Loc.string("Duplicate") : Loc.string("Possible Duplicate")) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(reasons, id: \.self) { reason in
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(reason.label)
+                            Text(Loc.core(reason.label))
                                 .font(.callout)
                                 .foregroundStyle(Slate.textPrimary)
-                            Text(reason.detail)
+                            Text(Loc.core(reason.detail))
                                 .font(.caption2)
                                 .foregroundStyle(Slate.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -298,7 +306,7 @@ struct InspectorView: View {
                         .accessibilityElement(children: .combine)
                     }
                 }
-                .help("Nothing has been done about it – Shelf never removes a book")
+                .help(Loc.string("Nothing has been done about it – Shelf never removes a book"))
             }
         }
     }
@@ -306,7 +314,7 @@ struct InspectorView: View {
     // MARK: Details
 
     private func facts(for entry: LibraryEntry) -> some View {
-        SlateInspectorSection("Details") {
+        SlateInspectorSection(Loc.string("Details")) {
             VStack(alignment: .leading, spacing: 4) {
                 mixedIdentity
                 row(.publisher, of: entry)
@@ -314,12 +322,12 @@ struct InspectorView: View {
                 row(.language, of: entry)
                 // Not editable, and not a field: both are facts about the disk
                 // rather than claims about the book.
-                SlateValueRow(name: "Added", value: added)
-                SlateValueRow(name: "Size", value: ByteCount.format(totalBytes))
+                SlateValueRow(name: Loc.string("Added"), value: added)
+                SlateValueRow(name: Loc.string("Size"), value: ByteCount.format(totalBytes))
                     .help(
                         model.hasMultipleSelection
-                            ? "Every file of all \(model.selection.count) books together"
-                            : "Every file of this book together")
+                            ? Loc.string("Every file of all %lld books together", model.selection.count)
+                            : Loc.string("Every file of this book together"))
             }
         }
     }
@@ -374,14 +382,17 @@ struct InspectorView: View {
         let columns = model.descriptor?.customColumns ?? []
         let shown = columns.filter { entry.book.customValues[$0.label] != nil }
         if !shown.isEmpty, !model.hasMultipleSelection {
-            SlateInspectorSection("From Calibre") {
+            SlateInspectorSection(Loc.string("From Calibre")) {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(shown.sorted { $0.number < $1.number }, id: \.label) { column in
                         SlateValueRow(
                             name: column.name,
                             value: Self.shown(entry.book.customValues[column.label] ?? "", as: column.kind)
                         )
-                        .help("\(column.hashLabel) · \(column.kind.label) · imported from Calibre, not editable")
+                        .help(
+                            Loc.string(
+                                "%1$@ · %2$@ · imported from Calibre, not editable", column.hashLabel,
+                                Loc.core(column.kind.label)))
                     }
                 }
             }
@@ -394,24 +405,24 @@ struct InspectorView: View {
     /// wrong one is a duplicate key that matches the wrong book, and two
     /// digits swapped while typing thirteen of them is the usual mistake.
     private func identifiers(for entry: LibraryEntry) -> some View {
-        SlateInspectorSection("Identifiers") {
+        SlateInspectorSection(Loc.string("Identifiers")) {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(entry.book.identifiers.sorted(by: { $0.key < $1.key }), id: \.key) { scheme, value in
                     SlateEditableRow(
                         name: scheme.uppercased(), value: value,
-                        help: "Empty removes the \(scheme.uppercased())"
+                        help: Loc.string("Empty removes the %@", scheme.uppercased())
                     ) {
                         model.commitIdentifier(scheme: scheme, value: $0, undoManager: undoManager)
                     }
                     note(for: "identifier:\(scheme.lowercased())")
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    SlateEditableBlock(value: newIdentifierScheme, placeholder: "ISBN") {
+                    SlateEditableBlock(value: newIdentifierScheme, placeholder: Loc.string("ISBN")) {
                         newIdentifierScheme = $0
                     }
                     .frame(width: 70)
-                    .accessibilityLabel("New identifier name")
-                    .help("The name of the identifier – ISBN, ASIN, DOI, Goodreads")
+                    .accessibilityLabel(Loc.string("New identifier name"))
+                    .help(Loc.string("The name of the identifier – ISBN, ASIN, DOI, Goodreads"))
                     // Prompts for whatever is being added rather than for
                     // "new value": half of an empty pair is a scheme, and a
                     // field that says "Add ASIN…" once ASIN is typed beside it
@@ -428,8 +439,8 @@ struct InspectorView: View {
                     // empty: its draft is its own `@State` and the value it is
                     // handed is always "".
                     .id(identifierAdds)
-                    .accessibilityLabel("New identifier value")
-                    .help("An ISBN is checked against its check digit; the others are not")
+                    .accessibilityLabel(Loc.string("New identifier value"))
+                    .help(Loc.string("An ISBN is checked against its check digit; the others are not"))
                 }
                 .font(.callout)
                 note(for: "identifier:\(newIdentifierScheme.lowercased())")
@@ -446,7 +457,7 @@ struct InspectorView: View {
     /// The placeholder names the key that focuses it, because a control whose
     /// key is written on it is a control people find (CONCEPT §3.3).
     private func tags(for entry: LibraryEntry) -> some View {
-        SlateInspectorSection("Tags") {
+        SlateInspectorSection(Loc.string("Tags")) {
             VStack(alignment: .leading, spacing: 6) {
                 tagField(for: entry)
                 // Tags only *some* of the selected books carry, drawn apart
@@ -455,13 +466,13 @@ struct InspectorView: View {
                 // same row; adding it finishes the job, which is what clicking
                 // one does.
                 if model.hasMultipleSelection, !model.mixedTags.isEmpty {
-                    Text("On some of them")
+                    Text(Loc.string("On some of them"))
                         .font(.caption2)
                         .foregroundStyle(Slate.textSecondary)
                     SlateFlowLayout(spacing: 6) {
                         ForEach(model.mixedTags, id: \.self) { tag in
                             SlateSuggestionChip(tag) { model.addTag(tag, undoManager: undoManager) }
-                                .help("Add “\(tag)” to all \(model.selection.count) books")
+                                .help(Loc.string("Add “%1$@” to all %2$lld books", tag, model.selection.count))
                         }
                     }
                 }
@@ -473,13 +484,14 @@ struct InspectorView: View {
         SlateTokenField(
             tokens: model.hasMultipleSelection ? model.sharedTags : entry.book.tags,
             placeholder: model.hasMultipleSelection
-                ? "Add tag to \(model.selection.count) books… (T)" : "Add tag… (T)",
+                ? Loc.string("Add tag to %lld books… (T)", model.selection.count)
+                : Loc.string("Add tag… (T)"),
             completions: model.tagCompletions,
             focusRequest: model.focusTagFieldRequest,
             // The help belongs to the entry field, not to the whole control:
             // handed in with `.help()` it reached every chip and replaced each
             // one's own "Remove science fiction".
-            help: "⏎ adds, ⌫ removes the last one, click the ✕ to remove one",
+            help: Loc.string("⏎ adds, ⌫ removes the last one, click the ✕ to remove one"),
             // Grey, with the ✕ under the pointer. SlateKit 0.3.1 defaults both
             // back to the accent-filled chip Selector draws, so Shelf asks for
             // the look it has had since 2c rather than inheriting it.
@@ -501,13 +513,16 @@ struct InspectorView: View {
     /// two shelves may share a name under different parents and a chip reading
     /// only "Sci-Fi" would not say which one.
     private func shelves(for entry: LibraryEntry) -> some View {
-        SlateInspectorSection("Shelves") {
+        SlateInspectorSection(Loc.string("Shelves")) {
             VStack(alignment: .leading, spacing: 6) {
                 let shelves = model.hasMultipleSelection ? model.sharedShelves : entry.book.shelves
                 if shelves.isEmpty {
-                    Text(model.hasMultipleSelection ? "No shelf they all stand on" : "Not on any shelf")
-                        .font(.caption)
-                        .foregroundStyle(Slate.textSecondary)
+                    Text(
+                        model.hasMultipleSelection
+                            ? Loc.string("No shelf they all stand on") : Loc.string("Not on any shelf")
+                    )
+                    .font(.caption)
+                    .foregroundStyle(Slate.textSecondary)
                 } else {
                     SlateWrappingChips(items: shelves) { path in
                         SlateChip(path, style: .neutral, removeButton: .onHover) {
@@ -515,12 +530,13 @@ struct InspectorView: View {
                         }
                         .help(
                             model.hasMultipleSelection
-                                ? "Take all \(model.selection.count) books off \(path)"
-                                : "Remove this book from \(path)")
+                                ? Loc.string(
+                                    "Take all %1$lld books off %2$@", model.selection.count, path)
+                                : Loc.string("Remove this book from %@", path))
                     }
                 }
                 if model.hasMultipleSelection, !model.mixedShelves.isEmpty {
-                    Text("Some of them stand on")
+                    Text(Loc.string("Some of them stand on"))
                         .font(.caption2)
                         .foregroundStyle(Slate.textSecondary)
                     SlateFlowLayout(spacing: 6) {
@@ -529,7 +545,7 @@ struct InspectorView: View {
                                 guard let shelf = model.shelfTree.shelf(atPath: path) else { return }
                                 model.addToShelf(shelf.id, books: model.selectedEntries, undoManager: undoManager)
                             }
-                            .help("Put all \(model.selection.count) books on \(path)")
+                            .help(Loc.string("Put all %1$lld books on %2$@", model.selection.count, path))
                         }
                     }
                 }
@@ -546,11 +562,14 @@ struct InspectorView: View {
             return !already.contains(path)
         }
         if available.isEmpty {
-            Text(model.shelfTree.isEmpty ? "Make one with + in the sidebar" : "On every shelf there is")
-                .font(.caption2)
-                .foregroundStyle(Slate.textSecondary)
+            Text(
+                model.shelfTree.isEmpty
+                    ? Loc.string("Make one with + in the sidebar") : Loc.string("On every shelf there is")
+            )
+            .font(.caption2)
+            .foregroundStyle(Slate.textSecondary)
         } else {
-            Menu("Add to Shelf…") {
+            Menu(Loc.string("Add to Shelf…")) {
                 ForEach(available, id: \.shelf.id) { row in
                     Button(String(repeating: "    ", count: row.depth) + row.shelf.name) {
                         model.addToShelf(
@@ -561,32 +580,32 @@ struct InspectorView: View {
             .menuStyle(.borderlessButton)
             .font(.caption)
             .frame(maxWidth: 140, alignment: .leading)
-            .help("Put this book on a shelf — or drag it onto one in the sidebar")
+            .help(Loc.string("Put this book on a shelf — or drag it onto one in the sidebar"))
         }
     }
 
     @ViewBuilder
     private func description(for entry: LibraryEntry) -> some View {
         if model.hasMultipleSelection {
-            SlateInspectorSection("Description") { lockedBlock(.description) }
+            SlateInspectorSection(Loc.string("Description")) { lockedBlock(.description) }
         } else {
             editableDescription(for: entry)
         }
     }
 
     private func editableDescription(for entry: LibraryEntry) -> some View {
-        SlateInspectorSection("Description") {
+        SlateInspectorSection(Loc.string("Description")) {
             VStack(alignment: .leading, spacing: 4) {
                 SlateEditableBlock(
                     value: BookField.description.text(of: entry.book),
-                    placeholder: BookField.description.placeholder, isMultiline: true, lineLimit: 10,
+                    placeholder: Loc.core(BookField.description.placeholder), isMultiline: true, lineLimit: 10,
                     font: .caption
                 ) { model.commit(.description, $0, undoManager: undoManager) }
-                .accessibilityLabel("Description")
+                .accessibilityLabel(Loc.string("Description"))
                 // ⏎ is a line break in here, so losing focus is what
                 // finishes the field. Said out loud, because the other
                 // fields behave differently.
-                .help("Several lines. Finished when the field loses focus; Escape discards")
+                .help(Loc.string("Several lines. Finished when the field loses focus; Escape discards"))
                 note(for: BookField.description.rawValue)
             }
         }
@@ -602,14 +621,14 @@ struct InspectorView: View {
     /// drag of a second file performs, through the same planner, so the two
     /// cannot disagree.
     private func formats(for entry: LibraryEntry) -> some View {
-        SlateInspectorSection("Formats") {
+        SlateInspectorSection(Loc.string("Formats")) {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(entry.formats.sorted { $0.format < $1.format }, id: \.id) { format in
                     formatRow(format, in: entry)
                 }
 
-                SlateSecondaryButton("Add Format…") { model.presentAddFormatPanel() }
-                    .help("Adds another file to this book – it is never written over one that is there")
+                SlateSecondaryButton(Loc.string("Add Format…")) { model.presentAddFormatPanel() }
+                    .help(Loc.string("Adds another file to this book – it is never written over one that is there"))
                     .padding(.top, 2)
             }
         }
@@ -657,30 +676,30 @@ struct InspectorView: View {
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
             } else if format.format == .cbr {
-                Text("libarchive is not available on this Mac, so this CBR is listed by name only.")
+                Text(Loc.string("libarchive is not available on this Mac, so this CBR is listed by name only."))
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
             }
             if let drm = format.drm {
-                Text("\(drm.label). Shelf shows it and does not touch it.")
+                Text(Loc.string("%@. Shelf shows it and does not touch it.", Loc.core(drm.label)))
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
             }
         }
         .contentShape(Rectangle())
         .contextMenu {
-            Button("Show in Finder") { model.revealInFinder(format, of: entry) }
-            Button("Open in Default App") { model.open(format, of: entry) }
+            Button(Loc.string("Show in Finder")) { model.revealInFinder(format, of: entry) }
+            Button(Loc.string("Open in Default App")) { model.open(format, of: entry) }
         }
-        .help("\(format.fileName) · right-click to show it in the Finder")
+        .help(Loc.string("%@ · right-click to show it in the Finder", format.fileName))
     }
 
     private func actions(for entry: LibraryEntry) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            SlateSecondaryButton("Open in Default App") { model.openSelectedInDefaultApp() }
-                .help("Hands the file to Books, Preview or whatever reads it (↩)")
-            SlateSecondaryButton("Show in Finder") { model.revealSelectedInFinder() }
-                .help("Reveals \(entry.folder) (⇧⌘R)")
+            SlateSecondaryButton(Loc.string("Open in Default App")) { model.openSelectedInDefaultApp() }
+                .help(Loc.string("Hands the file to Books, Preview or whatever reads it (↩)"))
+            SlateSecondaryButton(Loc.string("Show in Finder")) { model.revealSelectedInFinder() }
+                .help(Loc.string("Reveals %@ (⇧⌘R)", entry.folder))
         }
         .frame(maxWidth: .infinity)
     }
@@ -692,15 +711,15 @@ struct InspectorView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             SlateEditableBlock(
-                value: which.text(of: entry.book), placeholder: which.placeholder,
+                value: which.text(of: entry.book), placeholder: Loc.core(which.placeholder),
                 isMultiline: which.isMultiline, font: font
             ) { model.commit(which, $0, undoManager: undoManager) }
             // Named for the accessibility tree as well as for the pointer. A
             // field whose only label is its placeholder has no label at all
             // once something is typed into it, and the tree showed exactly
             // that: a bare `AXTextField` with a value and nothing else.
-            .accessibilityLabel(which.label)
-            .help(Self.help(for: which, ending: "⏎ or clicking away saves, Escape discards"))
+            .accessibilityLabel(Loc.core(which.label))
+            .help(Self.help(for: which, ending: Loc.string("⏎ or clicking away saves, Escape discards")))
             note(for: which.rawValue)
         }
     }
@@ -718,9 +737,9 @@ struct InspectorView: View {
     private func editableRow(_ which: BookField, of entry: LibraryEntry) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             SlateEditableRow(
-                name: which.label, value: which.text(of: entry.book),
-                placeholder: which.placeholder,
-                help: Self.help(for: which, ending: "empty removes it from metadata.opf")
+                name: Loc.core(which.label), value: which.text(of: entry.book),
+                placeholder: Loc.core(which.placeholder),
+                help: Self.help(for: which, ending: Loc.string("empty removes it from metadata.opf"))
             ) { model.commit(which, $0, undoManager: undoManager) }
             note(for: which.rawValue)
         }
@@ -738,14 +757,15 @@ struct InspectorView: View {
     /// what finishes it. Built in one place so nine fields cannot describe the
     /// same gesture in nine ways.
     private static func help(for field: BookField, ending: String) -> String {
-        [field.label, field.hint, ending]
+        [Loc.core(field.label), Loc.core(field.hint), ending]
             .filter { !$0.isEmpty }
             .joined(separator: " — ")
     }
 
     private static func identifierPlaceholder(_ scheme: String) -> String {
         let trimmed = scheme.trimmingCharacters(in: .whitespaces)
-        return trimmed.isEmpty ? "Add ISBN…" : "Add \(trimmed.uppercased())…"
+        return trimmed.isEmpty
+            ? Loc.string("Add ISBN…") : Loc.string("Add %@…", trimmed.uppercased())
     }
 
     // MARK: Formatting

@@ -12,6 +12,6 @@ import Foundation
 /// properly (CONCEPT §3.4). This is the shape that will be replaced then, not a
 /// scheme that pretends to generalise.
 enum Plural {
-    static func folders(_ count: Int) -> String { "\(count) folder\(count == 1 ? "" : "s")" }
-    static func files(_ count: Int) -> String { "\(count) file\(count == 1 ? "" : "s")" }
+    static func folders(_ count: Int) -> String { Loc.count("%lld folders", count) }
+    static func files(_ count: Int) -> String { Loc.count("%lld files", count) }
 }

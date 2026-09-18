@@ -170,28 +170,28 @@ struct ContentView: View {
             Button {
                 model.presentOpenPanel()
             } label: {
-                Label("Open Library", systemImage: "folder")
+                Label(Loc.string("Open Library"), systemImage: "folder")
             }
-            .help("Open a Shelf library (⌘O)")
+            .help(Loc.string("Open a Shelf library (⌘O)"))
         }
         ToolbarItem(placement: .primaryAction) {
             Button {
                 model.presentAddBooksPanel()
             } label: {
-                Label("Add Books", systemImage: "plus")
+                Label(Loc.string("Add Books"), systemImage: "plus")
             }
             .labelStyle(.titleAndIcon)
-            .help("Add books or a folder of books (⌘I)")
+            .help(Loc.string("Add books or a folder of books (⌘I)"))
             .disabled(model.library == nil)
         }
         ToolbarItem(placement: .primaryAction) {
             Toggle(
                 isOn: Binding(get: { model.isInspectorShown }, set: { model.isInspectorShown = $0 })
             ) {
-                Label("Inspector", systemImage: "sidebar.right")
+                Label(Loc.string("Inspector"), systemImage: "sidebar.right")
             }
             .labelStyle(.titleAndIcon)
-            .help(model.isInspectorShown ? "Hide the Inspector" : "Show the Inspector")
+            .help(model.isInspectorShown ? Loc.string("Hide the Inspector") : Loc.string("Show the Inspector"))
             .disabled(model.library == nil)
         }
     }
@@ -204,12 +204,12 @@ struct ContentView: View {
             if let message = model.errorMessage {
                 SlateBanner(message)
                     .onTapGesture { model.dismissError() }
-                    .help("Click to dismiss")
+                    .help(Loc.string("Click to dismiss"))
             }
             if let warning = model.syncWarning {
                 SlateBanner(warning, tint: Slate.accent.opacity(0.85))
                     .onTapGesture { model.dismissSyncWarning() }
-                    .help("Click to dismiss")
+                    .help(Loc.string("Click to dismiss"))
             }
         }
         .padding(.horizontal, 20)
