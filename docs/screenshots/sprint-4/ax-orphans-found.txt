@@ -1,0 +1,24 @@
+  AXSheet
+    AXGroup [AXHostingView]
+      AXStaticText value="Orphaned Folders"
+      AXStaticText value="10 folder(s) hold files that no book in this library points at — 2.4 MB in all."
+      AXStaticText value="They are usually what an import that was interrupted left behind. Nothing has been changed…"
+      AXScrollArea
+        AXCheckBox value="1" desc="The Long Way to a Small, Angry Planet #158, Atwood, N. K/The Long Way to a Small, Angry Pl…"
+        AXCheckBox value="1" desc="The Ministry #33, Banks, Tamsyn/The Ministry #33 (209), 3 file(s), 267.9 KB · holds a book…"
+        AXCheckBox value="1" desc="The Long Way Gods #1, Butler, Kim/The Long Way Gods #1 (202), 3 file(s), 267.7 KB · holds …"
+        AXCheckBox value="1" desc="The Long Way Justice and the Very Long Subtitle and the Very Long Subtitle and the Very Lo…"
+        AXCheckBox value="1" desc="The Long Way Tale #66, Lefèvre, Ursula/The Long Way Tale #66 (206), 3 file(s), 267.8 KB · …"
+        AXCheckBox value="1" desc="The Long Way Mars #61, Mandel, Arkady St. John/The Long Way Mars #61 (205), 3 file(s), 267…"
+        AXCheckBox value="1" desc="The Long Way Eleven #88, Mandel, Iain St. John/The Long Way Eleven #88 (201), 3 file(s), 2…"
+        AXCheckBox value="1" desc="The Long Way Gods #194, Muir, Arkady/The Long Way Gods #194 (203), 3 file(s), 267.7 KB · h…"
+        AXCheckBox value="1" desc="The Ministry Gods #4, Robinson, Étienne Stanley/The Ministry Gods #4 (210), 3 file(s), 268…"
+        AXCheckBox value="1" desc="The Ministry #234, Wells, Ann/The Ministry #234 (208), 3 file(s), 267.9 KB · holds a book …"
+        AXScrollBar value="0"
+          AXValueIndicator value="0"
+          AXButton [AXIncrementArrow]
+          AXButton [AXDecrementArrow]
+          AXButton [AXIncrementPage]
+          AXButton [AXDecrementPage]
+      AXButton desc="Done"
+      AXButton desc="Move to Trash…"

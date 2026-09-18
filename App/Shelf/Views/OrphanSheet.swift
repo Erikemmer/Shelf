@@ -84,7 +84,7 @@ struct OrphanSheet: View {
     private var listing: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(
-                "\(model.orphanedFolders.count) folder(s) hold files that no book in this library "
+                "\(Plural.folders(model.orphanedFolders.count)) hold files that no book in this library "
                     + "points at — \(ByteCount.format(totalBytes)) in all."
             )
             .foregroundStyle(Slate.textPrimary)
@@ -129,7 +129,7 @@ struct OrphanSheet: View {
                 // be told about than one holding a stray cover, so it says so
                 // rather than making the two look alike.
                 Text(
-                    "\(folder.files.count) file(s), \(ByteCount.format(folder.byteSize))"
+                    "\(Plural.files(folder.files.count)), \(ByteCount.format(folder.byteSize))"
                         + (folder.holdsABook ? " · holds a book file" : "")
                         + (folder.bookID == nil ? " · no metadata.opf" : "")
                 )
@@ -144,8 +144,10 @@ struct OrphanSheet: View {
     /// anything moves.
     private var confirmation: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("\(chosenFolders.count) folder(s), \(chosenFileCount) file(s), \(ByteCount.format(chosenBytes))")
-                .foregroundStyle(Slate.textPrimary)
+            Text(
+                "\(Plural.folders(chosenFolders.count)), \(Plural.files(chosenFileCount)), \(ByteCount.format(chosenBytes))"
+            )
+            .foregroundStyle(Slate.textPrimary)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
@@ -183,7 +185,7 @@ struct OrphanSheet: View {
             Spacer()
             if isConfirming {
                 SlateSecondaryButton("Back") { isConfirming = false }
-                SlatePrimaryButton("Move \(chosenFolders.count) Folder(s) to Trash") {
+                SlatePrimaryButton("Move \(Plural.folders(chosenFolders.count)) to Trash") {
                     let folders = chosenFolders
                     Task {
                         await model.trashOrphanedFolders(folders)

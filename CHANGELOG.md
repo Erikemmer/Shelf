@@ -3,6 +3,156 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 4 – the other formats · 18 September 2026
+
+Measured on Erik's Mac (M-series, macOS 15.6) against
+`~/Library/Caches/Shelf/measure-library-4/`. 456 core tests, up from 376 at the
+end of Sprint 3.
+
+### Added — MOBI, AZW3, PDF, CBZ and CBR
+
+`BookFileFormat.hasReadableMetadata` is true for everything but KFX now. That
+was always the one line Sprint 4 would change; behind it are four readers and a
+table saying which half of the program runs each one.
+
+**MOBI and AZW3** get their own parser in `ShelfCore/Formats/Mobi`, written from
+the public format descriptions
+([ADR 0011](docs/adr/0011-mobi-with-an-own-parser-kfx-as-a-file-only.md)):
+PalmDB container → record 0 → PalmDOC and MOBI headers → EXTH. Read: 100 author,
+101 publisher, 103 description, 104 ISBN, 105 subject, 106 date, 113 ASIN,
+201 cover, 503 title, 524 language. Three things in it are worth knowing. The
+container is **big-endian** where the ZIP reader in the next folder is
+little-endian. A **comma is not an author separator** — these files write
+"Le Guin, Ursula K." and splitting on commas makes two half-people — so
+`AuthorField` splits on `&` and `;` only and is shared with the PDF and comic
+readers. And **Windows-1252 is a table in the code**, because
+`String.Encoding` has no single-byte code pages in swift-corelibs-foundation and
+the core builds on Linux.
+
+**KFX is carried and never opened.** Its container is undocumented, so a parser
+written against guesses would give plausible wrong answers that nobody could
+see. Name, size, digest, and a sentence in the inspector saying so.
+
+**Comics**: `ComicInfo.xml` first, then the file name. `Serie 012 (2019)` →
+series, issue, year. Two of its rules were found by tests rather than by
+thinking:
+
+* Bracketed groups come off the end **one at a time**, so
+  `Saga 012 (2019) (Digital)` keeps its year. Taking the year first and the
+  noise second lost it.
+* A dot becomes a space **only when the name has no spaces of its own**. Scene
+  releases write `The.Sandman.v01`; `Monstress 12.5` means twelve and a half,
+  and came out as issue 12 of a series called "Monstress 12" when dots were
+  replaced unconditionally.
+
+Pages sort in natural order, so page 2 comes before page 10 and the cover is not
+page ten.
+
+**PDF and CBR live in the app layer**, because PDFKit and libarchive's RAR
+reader are Apple's and the core has to build on Linux — their *rules* stay in
+the core. The PDF reader ignores an Author field holding "Microsoft Word" and a
+Title that is only the file name again, both of which look like metadata and are
+not. libarchive is reached through `dlopen` rather than a link: macOS ships the
+dylib and **no header for it**, and loading by name can fail in a way the
+program can explain, which is what CONCEPT §13 asks for. Measured here:
+libarchive 3.7.4, both the `rar` and `rar5` readers present. The inspector says
+so on every CBR row.
+
+### Added — several files on one book, Quick Look, and the badges
+
+The inspector's **Formats** section now has a row per *file*: its size, its name,
+a DRM badge when it has one, and Show in Finder / Open on the right-click. Per
+file because a book can be an EPUB with Adobe's protection and an AZW3 with
+Amazon's, and one badge on the book said nothing about which. **`Add Format…`**
+goes through the same `ImportPlanner` a dragged file does, so the two cannot
+disagree about what happens.
+
+**Quick Look on the space bar.** A PDF is handed to the system as it is;
+everything else shows the cover already extracted next to the book. CBZ was on
+the first version of that list, on the theory that macOS would show it as an
+archive — the screenshot run caught it drawing a brown book icon and the file
+size, which is exactly the outcome the rule exists to avoid. The list is
+`[.pdf]`.
+
+### Fixed — three defects the proof run found, none of which failed a test
+
+**The app died on the first CBR it was ever shown.** SIGSEGV in
+`rar5_cleanup`: `LibArchive` registered the RAR5 reader twice, once through
+`archive_read_support_format_all` and once by name "in case `all` leaves it
+out". It does not, and libarchive's error path for a second registration of an
+already-registered format dereferences a null context. Reproduced in isolation
+both ways before and after the fix.
+
+**A rebuild lost every DRM badge.** The importer detected protection and stored
+it — nine files in the measuring library — and `Rebuild Index from Folders` set
+them all back to nothing, with nothing failing and nothing logged. The index is
+a cache (ADR 0001), so everything in it has to be re-derivable from the folder,
+and this was not. `DRMProbe` now asks the file on every rebuild, narrowly: an
+EPUB for one entry in its central directory, a MOBI for record 0, a PDF for the
+tail where its trailer is. The badge is therefore a fact about the bytes, and a
+file whose protection is gone stops being badged — both directions tested.
+
+**A book with four files on disk showed three.** Adding a format to a book the
+library *already* had gave the runner nothing to add to, so it built a fresh
+entry holding only the new file, and the index took that as the whole book. The
+folder number went the same way, reset to 0. Nothing was ever lost on disk and a
+rebuild put it right, which is why it went unseen — the same shape as the
+orphaned folders below, and found the same way, by looking at what a real run
+produced. `ImportRunner.run` now takes an `existingEntry` lookup.
+
+### The proof run — every format in one library
+
+`shelf-tool synthesise-mixed` writes 500 each of EPUB, MOBI, AZW3, PDF and CBZ,
+plus three DRM-announcing files per format that can carry the announcement,
+fifteen deliberately broken ones and three KFX. **2 527 files, 192.4 MB.**
+Section 10 of `Scripts/proof-run.sh`.
+
+| | |
+|---|---|
+| import, copied and verified | **2 527 files in 9.0 s**, 250 MB peak |
+| became | **1 015 books · 1 512 formats added to existing books** |
+| books holding more than one file | **514** |
+| files carrying DRM | **9** (3 Adobe, 6 Kindle) |
+| skipped, failed | **0, 0** |
+| library on disk | 274 MB (192.4 MB of books, the rest covers) |
+| source modified during the run | **0 files** (`find -newer`) |
+| digests vs `/usr/bin/shasum` | one per format, all five agree, all five in the index |
+| index erased and rebuilt | **2.7 s** → 1 015 books, 2 527 files, **9 badges** |
+
+The fifteen damaged files — truncated EPUBs, the right name over the wrong
+bytes, a nearly empty PDF — all import as books named after their files, each
+with a line in the report. Not one stopped the run, which is what CONCEPT §13
+asks for.
+
+**Three flaws in the fixture, each found by a number that looked wrong.** They
+are worth listing because a fixture that collides with itself measures the
+duplicate check instead of the thing under test: comic issue numbers were
+`index % 300`, so 308 comics were duplicates of each other; the three "wrong
+bytes" files per format were byte-identical, so two of every three were skipped;
+and comic *contents* were seeded on `index % 200`, so 300 of 500 CBZ were the
+same file. All three now carry their index in their bytes.
+
+### Not measured, and named
+
+* **No genuine CBR.** A RAR is a proprietary compressed format and this Mac has
+  no tool that can write one. The route in is proven — libarchive opens the
+  archive, the pages sort, the cover comes out — against a ZIP under a `.cbr`
+  name. A real RAR5 comic has not been read.
+* **No genuinely protected file.** The fixtures announce protection without
+  being encrypted, which is what Shelf's claim actually needs
+  ([ADR 0012](docs/adr/0012-drm-is-recognised-and-nothing-else.md)). Whether a
+  real ADEPT EPUB or a Kindle purchase is detected is unmeasured.
+* **No MOBI or AZW3 that anybody bought.** The fixtures are written from the
+  same description the parser was written from. The byte offsets in the fixture
+  are spelled out longhand rather than borrowed from the parser's constants, and
+  several tests assert against hand-written bytes, but that is mitigation and
+  not proof.
+* **The app layer has no unit tests.** `PDFFileReader`, `LibArchive` and
+  `QuickLookPreview` are covered by the proof run and the screenshots only —
+  the test target is `ShelfCore` alone.
+
+Pictures and what each is evidence of: `docs/screenshots/sprint-4/README.md`.
+
 ## Sprint 4 – what an interrupted import leaves behind · 17 September 2026
 
 ### Fixed — a killed import no longer doubles its own books

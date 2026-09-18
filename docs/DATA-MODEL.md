@@ -448,6 +448,50 @@ Rules worth knowing:
   A count from one of them alone is the one that makes an import look fine and
   then fail halfway.
 
+## 6a. Where a book's metadata comes from, per format
+
+One row per format: what is read out of the file, where the cover comes from,
+which half of the program reads it, and what reaches `metadata.opf`.
+
+The last column is the important one and it is the same for every row: **the OPF
+gets the same fields whatever the file was**. That is what makes the folder the
+truth (ADR 0001) — a rebuild reads the OPF and does not care that the book
+arrived as an AZW3.
+
+| Format | Metadata from | Cover from | Read by | Into `metadata.opf` |
+|---|---|---|---|---|
+| EPUB, KEPUB | `META-INF/container.xml` → OPF → Dublin Core, `calibre:series` | manifest's `cover-image`, else first image | core | every field |
+| MOBI, AZW3 | PalmDB → record 0 → EXTH: 100 author, 101 publisher, 103 description, 104 ISBN, 105 subject, 106 date, 113 ASIN, 503 title, 524 language | EXTH 201 (an image record), else 202, else the first record that begins like an image | core | every field |
+| PDF | `documentAttributes`: Title, Author, Subject, Keywords, CreationDate | page 1 rendered to PNG at 1 000 px | **app** (PDFKit) | every field |
+| CBZ | `ComicInfo.xml` if present, else the file name (`ComicFileName`) | first page in natural order | core | every field |
+| CBR | the same, through libarchive | the same | **app** (libarchive) | every field |
+| KFX | nothing — the container is undocumented (ADR 0011) | nothing | nobody | title and author from the file name |
+
+Two rules the table does not show:
+
+* **A file that will not parse is still a book.** Every reader falls back to the
+  file name and puts what went wrong in the import report. Nothing is refused
+  for having odd metadata.
+* **`fromTheFile` says which happened.** "The file says the title is X" and
+  "Shelf guessed X from the name" are different claims, and the report makes the
+  difference visible.
+
+### Protection
+
+`formats.drm` holds what protects *that file*, not that book — a book can be an
+EPUB with Adobe's scheme and an AZW3 with Amazon's.
+
+| Format | Recognised by |
+|---|---|
+| EPUB, KEPUB | `META-INF/encryption.xml` exists → `adobeADEPT` |
+| MOBI, AZW3 | EXTH 209, or a non-zero PalmDOC encryption byte → `kindle` |
+| PDF | `PDFDocument.isEncrypted` at import, `/Encrypt` in the trailer on a rebuild → `unknown` |
+| CBZ, CBR, KFX | nothing is claimed |
+
+It is **not stored in the OPF** and is deliberately not: it is re-derived from
+the file on every rebuild (`DRMProbe`), so a file whose protection is gone stops
+being badged. See [ADR 0012](adr/0012-drm-is-recognised-and-nothing-else.md).
+
 ## 7. `Import-Report.txt`
 
 Plain text, appended to, one block per import, because the history of what came

@@ -233,17 +233,26 @@ change of controls, not of layout.
       folders it left (`OrphanedFolders`), and what nothing can claim is
       reported — `Library ▸ Find Orphaned Folders…`, two steps, every file
       named, and the Trash rather than a delete
-- [ ] MOBI/AZW3: PalmDB + EXTH (100 author, 503 title, 104 ISBN, 106 date,
+- [x] MOBI/AZW3: PalmDB + EXTH (100 author, 503 title, 104 ISBN, 106 date,
       201 cover offset) in `ShelfCore/Formats/Mobi`
-- [ ] PDF: PDFKit `documentAttributes`, page 1 rendered — app layer, PDFKit is
+      ([ADR 0011](adr/0011-mobi-with-an-own-parser-kfx-as-a-file-only.md))
+- [x] PDF: PDFKit `documentAttributes`, page 1 rendered — app layer, PDFKit is
       not Linux-capable
-- [ ] CBZ: file name by regex, optional `ComicInfo.xml`, first image as cover
-- [ ] CBR: libarchive in the app layer, RAR5 checked at runtime, file-name
-      fallback ([ADR 0003](adr/0003-zip-in-the-core.md))
-- [ ] Kindle DRM detection (EXTH 209); KFX listed by name and size only
-- [ ] `BookFileFormat.hasReadableMetadata` becomes true for these — it is the
+- [x] CBZ: file name by regex, optional `ComicInfo.xml`, first image as cover
+- [x] CBR: libarchive in the app layer, RAR5 checked at runtime, file-name
+      fallback ([ADR 0003](adr/0003-zip-in-the-core.md)). **No genuine RAR has
+      been read** — nothing on this Mac can write one
+- [x] Kindle DRM detection (EXTH 209); Adobe ADEPT and encrypted PDFs too; KFX
+      listed by name and size only
+      ([ADR 0012](adr/0012-drm-is-recognised-and-nothing-else.md))
+- [x] `BookFileFormat.hasReadableMetadata` becomes true for these — it is the
       one place that changes
-- [ ] Quick Look (␣)
+- [x] Several files on one book: a row per file in the inspector with its size
+      and Show in Finder, `Add Format…` through the same planner
+- [x] Quick Look (␣): the file itself for a PDF, the extracted cover otherwise
+- [ ] **Open, for Erik:** a real MOBI, a real AZW3, a real CBR and a genuinely
+      DRM-protected file to try the readers against. Everything above is
+      measured against synthetic material only
 
 ## Sprint 5 – Devices
 

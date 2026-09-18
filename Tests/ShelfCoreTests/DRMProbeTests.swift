@@ -80,6 +80,35 @@ struct DRMProbeTests {
         }
     }
 
+    // MARK: One badge for a book whose files disagree
+
+    /// A protected book bought twice really is an EPUB with Adobe's DRM and an
+    /// AZW3 with Kindle's. The grid has room for one badge, and naming either
+    /// one of them would be wrong about the other file.
+    @Test("a book protected two different ways is badged simply 'DRM'")
+    func mixedProtection() {
+        let id = UUID()
+        func format(_ kind: BookFileFormat, _ drm: DRMKind?) -> BookFormat {
+            BookFormat(bookID: id, format: kind, fileName: "x.\(kind.rawValue)", byteSize: 1, sha256: "d", drm: drm)
+        }
+        var entry = LibraryEntry(book: Book(id: id, title: "Protected", authors: ["A"]), number: 1, folder: "A/B")
+
+        entry.formats = [format(.epub, .adobeADEPT), format(.azw3, .kindle)]
+        #expect(entry.drm == .unknown)
+        #expect(entry.drm?.label == "DRM")
+
+        // One kind, however many files carry it, keeps its own name.
+        entry.formats = [format(.mobi, .kindle), format(.azw3, .kindle)]
+        #expect(entry.drm == .kindle)
+
+        // A protected file next to an unprotected one is still that protection.
+        entry.formats = [format(.epub, .adobeADEPT), format(.pdf, nil)]
+        #expect(entry.drm == .adobeADEPT)
+
+        entry.formats = [format(.epub, nil), format(.pdf, nil)]
+        #expect(entry.drm == nil)
+    }
+
     // MARK: The defect the proof run found
 
     /// **The regression this file exists for.** The importer detected DRM and

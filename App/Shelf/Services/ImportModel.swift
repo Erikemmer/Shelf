@@ -278,6 +278,19 @@ final class ImportModel {
                 filesDone: 0, filesTotal: plan.fileCount, bytesDone: 0, bytesTotal: plan.totalBytes,
                 currentTitle: ""))
 
+        // The entries the plan is going to add a format to. Only those: a
+        // library of 8 000 books has no business being held in memory to copy
+        // three files into it.
+        var collectedKnown: [UUID: LibraryEntry] = [:]
+        for operation in plan.operations {
+            guard case .addFormat(let add) = operation, collectedKnown[add.bookID] == nil else { continue }
+            collectedKnown[add.bookID] = try? await index.entry(id: add.bookID)
+        }
+
+        // `let`, so the runner's `@Sendable` closure captures a value rather
+        // than a variable it could race with.
+        let known = collectedKnown
+
         do {
             // The handle is kept because cancellation does not otherwise reach
             // a detached task.
@@ -294,7 +307,12 @@ final class ImportModel {
                         self.phase = .running(progress)
                     }
                 },
-                saveBatch: { try await index.save($0) })
+                saveBatch: { try await index.save($0) },
+                // What the library already holds for a book the run is adding a
+                // format to. Taken before the run rather than queried during
+                // it: the runner's closure is synchronous, and a book being
+                // added to is one the planner already named.
+                existingEntry: { known[$0] })
             imported = outcome.entries
             nextBookNumber = outcome.nextBookNumber
             var report = outcome.report

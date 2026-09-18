@@ -25,7 +25,12 @@
 │            RecentLibrariesStore (security-scoped bookmarks)   │
 │            SHA256Hasher (CryptoKit, the fast path)            │
 │            TimingLog (SHELF_TIMING=1; silent otherwise)       │
-│            EditingKeyMonitor (1–5, 0, R, T at the window)     │
+│            EditingKeyMonitor (1–5, 0, R, T, ␣ at the window)  │
+│            FileReader (core, plus the two only a Mac reads) · │
+│              PDFFileReader (PDFKit) · CBRFileReader           │
+│              + LibArchive (dlopen, checked at runtime)        │
+│            QuickLookPreview (␣: the file for a PDF, the       │
+│              extracted cover for everything else)             │
 ├───────────────────────────────────────────────────────────────┤
 │  ShelfCore (Swift package, no UI, runs on Linux too)          │
 │  Model:     Book · SeriesRef · BookFormat · BookFileFormat ·  │
@@ -40,9 +45,14 @@
 │             handful of books have in common)                  │
 │  Index:     IndexSchema (migrations) · LibraryIndex (GRDB) ·  │
 │             BookSort + BookOrder (the one SQL order)          │
-│  Formats:   ZipReader · Inflate · XMLTree · OPFDocument ·     │
-│             EPUBMetadata · FileNameMetadata · CoverFile ·     │
-│             ZipWriter + SyntheticEPUB + MinimalPNG (fixtures) │
+│  Formats:   BookFileReader (which reader for which file) ·    │
+│             ZipReader · Inflate · XMLTree · OPFDocument ·     │
+│             EPUBMetadata · AuthorField · FileNameMetadata ·   │
+│             Mobi/: PalmDatabase · MobiHeader · MobiMetadata · │
+│             Comic/: ComicFileName · ComicMetadata/ComicInfo · │
+│             DRMProbe · CoverFile · ZipWriter + SyntheticEPUB  │
+│             + SyntheticMobi + SyntheticComic + SyntheticPDF   │
+│             + MinimalPNG (fixtures)                           │
 │  Calibre:   CalibreReader (metadata.db via a copy, WAL too) · │
 │             CalibreCensus (the counting protocol) ·           │
 │             CalibreImportSource → ImportCandidate ·           │
@@ -317,9 +327,16 @@ Namespaces are matched by *local name*, not by URI: EPUBs in the wild declare
 prefixes wrongly often enough that resolving strictly would lose metadata that
 is plainly there.
 
-Formats other than EPUB and KEPUB import by file name in Sprint 1 and say so in
-the report; `BookFileFormat.hasReadableMetadata` is the one place that changes in
-Sprint 4.
+Since Sprint 4 every format but KFX is read from the file itself, and the choice
+of reader is a table rather than an `if`: `BookFileFormat.readerLayer` says
+`.core` (EPUB, KEPUB, MOBI, AZW3, CBZ), `.app` (PDF, CBR — PDFKit and
+libarchive are Apple's and the core builds on Linux) or `.none` (KFX, whose
+container is undocumented, [ADR 0011](adr/0011-mobi-with-an-own-parser-kfx-as-a-file-only.md)).
+`BookFileReader` in the core dispatches the first group; `FileReader` in the app
+adds the second. A test asserts the two tables cannot drift apart.
+
+The per-format detail — which field comes from where, and what reaches the OPF —
+is [docs/DATA-MODEL.md §6a](DATA-MODEL.md).
 
 ## Concurrency
 

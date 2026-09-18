@@ -595,6 +595,21 @@ struct InspectorView: View {
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
             }
+            // A CBR says what this Mac can actually do with it, always and not
+            // only when something has gone wrong (CONCEPT §13). Whether RAR5 can
+            // be read is a property of the libarchive this Mac happens to ship,
+            // so it is a different answer on a different Mac — and a person
+            // looking at a comic whose metadata came from its file name deserves
+            // to be told why rather than left to wonder.
+            if format.format == .cbr, let note = LibArchive.shared?.capabilities.note {
+                Text(note)
+                    .font(.caption2)
+                    .foregroundStyle(Slate.textSecondary)
+            } else if format.format == .cbr {
+                Text("libarchive is not available on this Mac, so this CBR is listed by name only.")
+                    .font(.caption2)
+                    .foregroundStyle(Slate.textSecondary)
+            }
             if let drm = format.drm {
                 Text("\(drm.label). Shelf shows it and does not touch it.")
                     .font(.caption2)

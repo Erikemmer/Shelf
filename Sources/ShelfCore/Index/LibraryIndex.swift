@@ -34,8 +34,19 @@ public struct LibraryEntry: Identifiable, Equatable, Sendable {
     }
 
     /// DRM on any of the files – what the badge in the grid reads.
+    /// What protects this book, for the one badge the grid has room for.
+    ///
+    /// When the files disagree — and they do: a protected book bought twice is
+    /// an EPUB with Adobe DRM and an AZW3 with Kindle's — the answer is the
+    /// generic `.unknown`, which draws as "DRM". Picking whichever file came
+    /// first out of SQLite would put "Kindle DRM" on a book whose EPUB is
+    /// Adobe's, which is a smaller lie than most and still a lie. The
+    /// inspector lists every file with its own badge, which is where the whole
+    /// truth belongs.
     public var drm: DRMKind? {
-        formats.compactMap(\.drm).first
+        let kinds = Set(formats.compactMap(\.drm))
+        guard kinds.count <= 1 else { return .unknown }
+        return kinds.first
     }
 }
 

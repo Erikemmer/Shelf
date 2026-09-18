@@ -353,6 +353,19 @@ enum Commands {
             existingFolders: existingFolders(library))
         print("plan: \(plan.summary())")
 
+        // What the library already holds for each book a format is being
+        // added to. Without it the runner writes an entry holding only the new
+        // file and the index forgets the ones already there.
+        var collectedKnownentries: [UUID: LibraryEntry] = [:]
+        for operation in plan.operations {
+            guard case .addFormat(let add) = operation, collectedKnownentries[add.bookID] == nil else { continue }
+            collectedKnownentries[add.bookID] = try await index.entry(id: add.bookID)
+        }
+
+        // `let`, so the runner's `@Sendable` closure captures a value rather
+        // than a variable it could race with.
+        let knownEntries = collectedKnownentries
+
         // MARK: Run
         let runner = ImportRunner(makeHasher: PortableSHA256Hasher.factory)
         let copyStarted = Date()
@@ -379,7 +392,8 @@ enum Commands {
                     exit(9)
                 }
             },
-            saveBatch: { try await index.save($0) })
+            saveBatch: { try await index.save($0) },
+            existingEntry: { knownEntries[$0] })
         print("copied, verified and indexed in \(ImportReport.duration(Date().timeIntervalSince(copyStarted)))")
 
         descriptor.nextBookNumber = outcome.nextBookNumber

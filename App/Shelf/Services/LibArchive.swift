@@ -197,12 +197,19 @@ final class LibArchive: @unchecked Sendable {
         defer { _ = readFree(archive) }
 
         _ = supportFilterAll(archive)
+        // `support_format_all` and **nothing else**, which is a correction.
+        //
+        // This first registered rar and rar5 by name as well, on the theory
+        // that `support_format_all` might leave them out. It does not, and the
+        // second registration of a format that is already registered *fails* —
+        // whereupon libarchive runs that format's cleanup with a context it
+        // never allocated and dereferences null. The app died with SIGSEGV in
+        // `rar5_cleanup` on the first CBR it was ever shown, during the Sprint 4
+        // screenshot run. Registering once is both correct and enough.
+        //
+        // Whether this Mac's libarchive *has* the RAR readers is answered by
+        // whether their symbols exist (`capabilities`), which needs no call.
         _ = supportFormatAll(archive)
-        // Asked for by name as well, because `support_format_all` in some
-        // builds leaves RAR out — it is the one format whose reader is
-        // conditionally compiled.
-        _ = supportFormatRAR?(archive)
-        _ = supportFormatRAR5?(archive)
 
         let status = url.path.withCString { openFilename(archive, $0, 64 * 1024) }
         guard status == Status.ok else {

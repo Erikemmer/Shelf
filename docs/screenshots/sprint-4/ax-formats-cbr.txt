@@ -1,0 +1,4 @@
+      AXStaticText value="libarchive 3.7.4, reading RAR and RAR5." help="Saga 12 - Unknown.cbr · right-click to show it in the Finder"
+      AXButton desc="Add Format…" help="Adds another file to this book – it is never written over one that is there"
+      AXButton desc="Open in Default App" help="Hands the file to Books, Preview or whatever reads it (↩)"
+      AXButton desc="Show in Finder" help="Reveals Unknown/Saga 12 (24) (⇧⌘R)"

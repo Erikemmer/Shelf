@@ -7,14 +7,19 @@ import ShelfCore
 ///
 /// What it shows, and why it is not simply "hand the book file to Quick Look":
 ///
-/// * A **PDF** and a **comic** are handed over as they are. Quick Look renders
-///   a PDF properly, pages and all, and a CBZ it will at least show as an
-///   archive — and for both of them the file *is* what the person wants to see.
-/// * An **EPUB, MOBI or AZW3** is not. macOS has no Quick Look generator for
-///   any of them, so handing one over draws a grey icon with a file name under
-///   it, which is worse than nothing. For these Shelf previews **the cover it
-///   already has on disk** (`cover.png` next to the book), which is the picture
-///   the person is actually looking for.
+/// * A **PDF** is handed over as it is. Quick Look renders one properly, pages
+///   and all, and for a PDF the file *is* what the person wants to see.
+/// * Everything else is not. macOS has no Quick Look generator for EPUB, MOBI,
+///   AZW3, CBZ or CBR, so handing one over draws a generic icon with a file
+///   name beside it. For these Shelf previews **the cover it already has on
+///   disk** (`cover.png` next to the book), which is the picture the person is
+///   actually looking for.
+///
+/// The comic formats were on the first list, on the theory that Quick Look
+/// would at least show a CBZ as an archive. It does not: the screenshot run
+/// caught it drawing a brown book icon and the file's size, which is precisely
+/// the outcome this rule exists to avoid. Measured rather than assumed, and the
+/// list is shorter for it.
 ///
 /// Nothing is written and nothing is converted. The cover shown is the file
 /// already sitting in the book's folder; no temporary copy of a book is ever
@@ -22,9 +27,11 @@ import ShelfCore
 @MainActor
 final class QuickLookPreview: NSObject {
 
-    /// The formats macOS itself previews usefully. Reference data: a row, not a
-    /// branch, and the row is the claim being made about each format.
-    static let previewedByTheSystem: Set<BookFileFormat> = [.pdf, .cbz, .cbr]
+    /// The formats macOS itself previews usefully — measured on this Mac, not
+    /// assumed. Reference data: a row, and the row is a claim about that format.
+    ///
+    /// Just PDF. A comic looked like a safe second entry and was not.
+    static let previewedByTheSystem: Set<BookFileFormat> = [.pdf]
 
     /// What is currently being shown. One item, because the panel previews the
     /// selected book and the selection's *first* book when there are several —

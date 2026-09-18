@@ -1285,7 +1285,7 @@ final class LibraryModel {
             errorMessage = nil
         } else {
             errorMessage =
-                "\(moved) folder(s) moved to the Trash, \(failures.count) could not be: "
+                "\(Plural.folders(moved)) moved to the Trash, \(failures.count) could not be: "
                 + failures.map { "\($0.path) – \($0.message)" }.joined(separator: "; ")
         }
         await reload()

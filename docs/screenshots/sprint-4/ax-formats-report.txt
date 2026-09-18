@@ -1,0 +1,9 @@
+  AXSheet
+    AXGroup [AXHostingView]
+      AXStaticText value="Add Books"
+      AXStaticText value="/Users/erikemmer/Library/Caches/Shelf/measure-library-4/formats-shots-source"
+      AXStaticText value="Verified · 65 files · 23 new books · 42 new formats · 1 skipped"
+      AXStaticText value="Copied, 4.6 MB"
+      AXStaticText value="Imported with something missing, 24"
+      AXStaticText value="The full report is in .shelf/Import-Report.txt."
+      AXButton desc="Done"

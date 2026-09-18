@@ -13,6 +13,11 @@
 # the new tag is searched for across the whole library, the index is thrown
 # away, and every one of the 200 changes has to come back out of the folders.
 #
+# Section 10 is Sprint 4's other half: a library of every format Shelf reads —
+# EPUB, MOBI, AZW3, PDF and CBZ, with DRM-marked and deliberately damaged files
+# among them — imported in one run, then the index thrown away and rebuilt. No
+# CBR: nothing on this Mac can write a RAR, so none was measured.
+#
 # Section 9 is Sprint 4's: an import is killed in the middle, resumed, and the
 # library has to end with one folder per book and nothing nobody points at.
 #
@@ -352,6 +357,83 @@ if [ "$FOLDERS_AFTER" = "$RESUME_COUNT" ] && [ "$INDEXED_AFTER" = "$RESUME_COUNT
     echo "  one folder per book, nothing doubled, nothing orphaned ✓"
 else
     echo "  THE RESUME LEFT DEBRIS BEHIND" >&2
+    exit 1
+fi
+
+# ── 10. Every format, including the broken ones ──────────────────────────────
+# Sprint 4's. A library holding EPUB, MOBI, AZW3, PDF and CBZ, with DRM-marked
+# and deliberately damaged files mixed in, imported in one run — then the index
+# thrown away and rebuilt, which is where the DRM badges were found to vanish.
+#
+# Not written and therefore not measured: CBR. A RAR is a proprietary
+# compressed format and this Mac has no tool that can make one.
+say "a library of every format Shelf reads, damaged files and all"
+MIXED_SOURCE="$ROOT/mixed-source"
+MIXED_LIBRARY="$ROOT/mixed-library"
+MIXED_COUNT="${MIXED_COUNT:-500}"
+rm -rf "$MIXED_SOURCE" "$MIXED_LIBRARY"
+"$TOOL" synthesise-mixed "$MIXED_SOURCE" "$MIXED_COUNT" | tail -14
+
+say "importing the mixed library"
+/usr/bin/time -l "$TOOL" import "$MIXED_SOURCE" "$MIXED_LIBRARY" 2>&1 \
+    | grep -Ev "^  *[0-9]+  " | grep -E "^plan:|^Verified|^  [A-Z]+: |new books|formats added|real|maximum resident"
+echo "  library size: $(LC_ALL=C du -sh "$MIXED_LIBRARY" | awk '{print $1}')"
+
+MIXED_DB="$MIXED_LIBRARY/.shelf/library.sqlite"
+say "what the index holds"
+sqlite3 "$MIXED_DB" "SELECT '  ' || format || ': ' || COUNT(*) FROM formats GROUP BY format ORDER BY format"
+MIXED_BOOKS=$(sqlite3 "$MIXED_DB" "SELECT COUNT(*) FROM books")
+MIXED_FILES=$(sqlite3 "$MIXED_DB" "SELECT COUNT(*) FROM formats")
+MIXED_MULTI=$(sqlite3 "$MIXED_DB" "SELECT COUNT(*) FROM (SELECT book_id FROM formats GROUP BY book_id HAVING COUNT(*) > 1)")
+MIXED_DRM=$(sqlite3 "$MIXED_DB" "SELECT COUNT(*) FROM formats WHERE drm IS NOT NULL")
+ON_DISK=$(find "$MIXED_SOURCE" -type f | wc -l | tr -d ' ')
+echo "  books: $MIXED_BOOKS · files: $MIXED_FILES of $ON_DISK on disk · books with several files: $MIXED_MULTI"
+echo "  files carrying DRM: $MIXED_DRM"
+
+if [ "$MIXED_FILES" = "$ON_DISK" ]; then
+    echo "  every file in the source reached the index ✓"
+else
+    echo "  THE INDEX IS MISSING FILES" >&2
+    exit 1
+fi
+
+say "is the mixed source untouched?"
+NEWER=$(find "$MIXED_SOURCE" -newer "$MIXED_LIBRARY/.shelf/library.json" -type f | wc -l | tr -d ' ')
+echo "  files in the source modified since the import began: $NEWER"
+[ "$NEWER" = "0" ] || { echo "  THE SOURCE WAS TOUCHED" >&2; exit 1; }
+
+say "one digest per format, against /usr/bin/shasum"
+FAILED=0
+for EXT in epub mobi azw3 pdf cbz; do
+    FILE=$(find "$MIXED_SOURCE" -name "*.$EXT" | head -1)
+    [ -n "$FILE" ] || continue
+    OURS=$("$TOOL" digest "$FILE")
+    THEIRS=$(shasum -a 256 "$FILE" | awk '{print $1}')
+    IN_INDEX=$(sqlite3 "$MIXED_DB" "SELECT COUNT(*) FROM formats WHERE sha256 = '$THEIRS'")
+    if [ "$OURS" = "$THEIRS" ] && [ "${IN_INDEX:-0}" -gt 0 ]; then
+        echo "  $EXT: shelf and shasum agree, and the index has it"
+    else
+        echo "  $EXT: MISMATCH ($OURS vs $THEIRS, in index: $IN_INDEX)"
+        FAILED=1
+    fi
+done
+[ "$FAILED" = "0" ] || { echo "digests disagree – stopping" >&2; exit 1; }
+
+# The rebuild is where the DRM badges were found to disappear: the importer
+# detected them and stored them, and a rebuild set every one back to nothing.
+say "throwing the mixed index away and rebuilding it from the folders"
+/usr/bin/time -l "$TOOL" rebuild "$MIXED_LIBRARY" 2>&1 | grep -Ev "^  *[0-9]+  " | tail -8
+BOOKS_BACK=$(sqlite3 "$MIXED_DB" "SELECT COUNT(*) FROM books")
+FILES_BACK=$(sqlite3 "$MIXED_DB" "SELECT COUNT(*) FROM formats")
+DRM_BACK=$(sqlite3 "$MIXED_DB" "SELECT COUNT(*) FROM formats WHERE drm IS NOT NULL")
+echo "  books back: $BOOKS_BACK of $MIXED_BOOKS"
+echo "  files back: $FILES_BACK of $MIXED_FILES"
+echo "  DRM badges back: $DRM_BACK of $MIXED_DRM"
+if [ "$BOOKS_BACK" = "$MIXED_BOOKS" ] && [ "$FILES_BACK" = "$MIXED_FILES" ] \
+    && [ "$DRM_BACK" = "$MIXED_DRM" ]; then
+    echo "  the folders gave everything back, badges included ✓"
+else
+    echo "  THE REBUILD LOST SOMETHING" >&2
     exit 1
 fi
 

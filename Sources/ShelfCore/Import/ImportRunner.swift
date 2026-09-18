@@ -104,10 +104,26 @@ public struct ImportRunner: Sendable {
     ///   A book reaches this closure only once its file, its cover and its
     ///   `metadata.opf` are all on disk, so an index written from here never
     ///   describes a book that is not there.
+    /// - Parameter existingEntry: what the library already holds for a book,
+    ///   by id. Asked only for an `.addFormat` whose book this run did not
+    ///   create — which is `Add Format…`, and a second import over a folder
+    ///   already in the library.
+    ///
+    ///   Without it the runner has nothing to add *to*, so it built a fresh
+    ///   entry with no formats and one file in it, and the index took that as
+    ///   the whole truth about the book. A book whose folder held an EPUB, an
+    ///   AZW3, a MOBI and a PDF showed three formats; the fourth was on disk
+    ///   and out of the index until the next rebuild. The folder number went
+    ///   the same way, reset to 0.
+    ///
+    ///   Nothing was ever lost on disk, which is exactly why it went unseen —
+    ///   the same shape of defect as the orphaned folders, and found the same
+    ///   way, by looking at what a real run produced.
     public func run(
         _ options: Options,
         progress: @Sendable @escaping (Progress) -> Void = { _ in },
-        saveBatch: @Sendable (_ entries: [LibraryEntry]) async throws -> Void = { _ in }
+        saveBatch: @Sendable (_ entries: [LibraryEntry]) async throws -> Void = { _ in },
+        existingEntry: @Sendable (UUID) -> LibraryEntry? = { _ in nil }
     ) async throws -> Outcome {
         let started = Date()
         try checkSpace(for: options)
@@ -152,8 +168,10 @@ public struct ImportRunner: Sendable {
                 case .addFormat(let add):
                     // The book may be one this very run created, or one that
                     // was already in the library; either way its entry is what
-                    // the new format is appended to.
-                    let existing = entries[add.bookID]
+                    // the new format is appended to. The second case has to be
+                    // *asked for* — the run has no memory of a book it did not
+                    // make.
+                    let existing = entries[add.bookID] ?? existingEntry(add.bookID)
                     let entry = try appendFormat(add, to: existing, in: options.library)
                     entries[entry.book.id] = entry
                     unsaved.append(entry)
@@ -285,6 +303,10 @@ public struct ImportRunner: Sendable {
                     book.id = operation.bookID
                     return book
                 }(), number: 0, folder: folderPath)
+        // Never twice. A run asked to add a format the entry already lists —
+        // the same file offered again — replaces that row rather than growing a
+        // second one with the same name.
+        entry.formats.removeAll { $0.fileName == format.fileName }
         entry.formats.append(format)
         entry.book.modifiedAt = Date()
         // A book that just gained a format should say so in its OPF too.
