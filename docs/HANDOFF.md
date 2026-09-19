@@ -2,7 +2,8 @@
 
 **Next step: release v1.0.** What is open is what Erik has to contribute.
 
-Sprints 1–8 are done. `main` is green, **675 core tests**, the version in
+Sprints 1–8 are done. `main` is green, **679 core tests** on macOS *and* on
+Linux, **CI is green on all three jobs** including the app build, the version in
 `project.yml` is `1.0.0`, and `make release-dry` builds, signs and zips it. The
 tag `v1.0.0` is **not** set and will not be set without Erik's word.
 
@@ -19,7 +20,7 @@ and [ADR 0019](adr/0019-export-the-opf-decides-what-an-export-is.md).
 
 ## What Erik has to do, and nobody else can
 
-Four things, in the order they block something.
+**Two things.** Everything else that used to be on this list has been done.
 
 ### 1. A Developer ID certificate, and a notarytool profile
 
@@ -33,52 +34,10 @@ and `docs/RELEASE.md` says exactly how, step by step. No script here creates
 either, and neither is ever written into a file in this repository. When they
 exist, `make release` runs the whole path and steps 6 and 7 stop being skipped.
 
-### 2. GitHub Actions has not run since Sprint 4
+`make release-dry` proves everything up to that point, and is run before every
+release-shaped commit.
 
-Every job ends after seven seconds with
-
-> The job was not started because recent account payments have failed or your
-> spending limit needs to be increased.
-
-Checked again on 19 September 2026 on three separate pushes. Nothing in this
-repository can fix it. It has already cost something once: the Linux build was
-broken from Sprint 5 to Sprint 7 (`import Darwin` in `shelf-tool`) and the
-Linux job is what exists to catch that.
-
-Until it is sorted, the substitute is a container on this Mac, and it is run
-before each release-shaped commit:
-
-```bash
-CHECK=~/Library/Caches/Shelf/linux-check-7b
-rm -rf "$CHECK" && mkdir -p "$CHECK" && git archive HEAD | tar -x -C "$CHECK"
-docker run --rm -v "$CHECK:/src" -w /src swift:6.1 bash -c \
-  "apt-get update -qq && apt-get install -y -qq libsqlite3-dev && swift build && swift test"
-```
-
-A `git archive` rather than the repository itself, because `Package.resolved`
-lives beside the repo and the container cannot read it — and because it then
-checks exactly what is committed. Measured 19 September 2026 on `4e53102`:
-build 36.0 s, **631 tests green on Linux**. **Sprint 8's 44 new tests have not
-been run on Linux**, because Docker was not started for this session — the core
-compiles without AppKit, ImageIO or PDFKit as always, and nothing in
-`ShelfCore/Organize/`, `ShelfCore/Export/` or `SidecarMetadata` imports
-anything but Foundation, but that is an argument and not a run.
-
-### 3. SlateKit is private, and the CI cannot see it
-
-The core does not need it and its tests guard every push; the **app** does, and
-GitHub Actions cannot reach a private repository without credentials. The job
-skips the app build with a visible warning rather than going red. Two ways out,
-and the choice is Erik's:
-
-1. A `SLATEKIT_TOKEN` secret in the Shelf repo — a fine-grained token with read
-   access to `Erikemmer/SlateKit`. The job picks it up automatically. Nothing
-   becomes public.
-2. Make SlateKit public. The package holds only appearance and layout, no
-   subject matter — but making it public is a publication, and a session does
-   not do that on its own.
-
-### 4. The things only real hardware and real books can answer
+### 2. The things only real hardware and real books can answer
 
 All of these are in `docs/BACKLOG.md` with what each would settle:
 
@@ -95,13 +54,34 @@ All of these are in `docs/BACKLOG.md` with what each would settle:
   of 2 000 books. `~/Downloads/Calibre Library Erik` holds a `metadata.db` with
   no book folders, which exercises the schema and not the import. **Erik has to
   name the path.**
+- **A real Calibre reading one of Shelf's exports.** The OPFs are quoted, the
+  schema is Calibre's own, and the "For Calibre" mapping has a test — but
+  running Calibre's importer over an export would mean writing into Erik's own
+  Calibre library, which is not this project's to touch.
 - **Google Books answering.** Its shared anonymous quota has returned HTTP 429
   to every request this project has ever made, so no lookup here has had both
   services answering at once and the two-row disagreement case has never been
   photographed. A key would fix it and would be a secret in a shipped app.
 - **The welcome screen's logo.** It still shows SlateKit's placeholder rather
-  than the app icon. That was never asked for and is a question, not a
-  slip.
+  than the app icon. That was never asked for and is a question, not a slip.
+
+---
+
+## What is no longer on that list
+
+Three things were, until 19 September 2026, and all three are done:
+
+- **GitHub Actions had not run since Sprint 4** — every job ended after seven
+  seconds with "recent account payments have failed". Both repositories are
+  **public** now, so there are no Actions minutes to pay for. CI runs on every
+  push and all three jobs are green.
+- **SlateKit was private, so the app build skipped itself.** It is public
+  (`Erikemmer/SlateKit`), the `SLATEKIT_TOKEN` gate is gone from
+  `.github/workflows/ci.yml`, and the job runs. **It had never once run**, from
+  Sprint 1 to Sprint 8, and it found two real defects on its first day — see
+  `CHANGELOG.md`.
+- **Sprint 8's tests had not run on Linux.** They have: 679 green, in the
+  container, against the commit they are quoted for.
 
 ---
 
@@ -148,7 +128,8 @@ Du arbeitest mit mir (Erik Emmer) an **Shelf**, einem Mac-only eBook-Manager im
 Look & Feel von Selector. Repo: https://github.com/Erikemmer/Shelf (lokal
 `~/Documents/Shelf`). Shelf ist ein modern aussehendes Calibre: Bibliothek,
 Metadaten, Calibre-Import, Geräte – kein Reader, keine Konvertierung in v1.0.
-**Stand: v1.0 ist freigabebereit**, `main` grün, 675 Kern-Tests, SlateKit-Pin
+**Stand: v1.0 ist freigabebereit**, `main` grün, 679 Kern-Tests (macOS und
+Linux), CI grün auf allen drei Jobs, SlateKit-Pin
 `0.4.1`, Version `1.0.0` in `project.yml`, Tag `v1.0.0` **nicht** gesetzt.
 Sprint 8 (Umbenennen/Zusammenführen, „Organize Library…", Export) ist fertig;
 oben in `CHANGELOG.md` stehen die Zahlen.

@@ -476,7 +476,11 @@ is currently assumed.
       sentence smuggled into this one
 - [ ] **Five sheets have never been photographed in German**: Send to Device,
       Delete from Device, the Calibre import protocol, Fetch Metadata and the
-      orphaned-folders sheet. Their strings are in the catalogue and covered by
+      orphaned-folders sheet. **Sprint 8's own five have been**, and doing it
+      found that every count line in the window was English —
+      `App/Shelf/Views/Summaries.swift` now builds those from the catalogue for
+      all nine sheets, so what is left here is the *layout* question only.
+      Their strings are in the catalogue and covered by
       the tests; nothing has looked at their *layout* in German, which is the
       only thing a picture can answer. `Scripts/online-shot.sh` and
       `Scripts/device-shot.sh` would take them with the same defaults-domain
@@ -542,6 +546,23 @@ is currently assumed.
       filling an OPF's gaps from the book file gave one book its title as its
       author, and an export that left its own stale files behind made the next
       import prefer them
+
+### The closing run before v1.0 · 19 September 2026
+
+- [x] **Sprint 8's tests on Linux.** 679 green in the `swift:6.1` container
+      against the commit they are quoted for, build 58.4 s. Nothing was red
+- [x] **The five new sheets photographed in German**, judged one by one in
+      `docs/screenshots/sprint-8/de/README.md`. Two defects, both fixed: every
+      count line in the window was English, and two labels were lower-cased
+      (German capitalises its nouns — the same mistake `SidebarView` carries a
+      comment about from Sprint 7)
+- [x] **An emptied author folder goes to the Trash**, through `FolderDisposal`,
+      and the rule for what counts as emptied is `EmptiedFolder` — an
+      allow-list of the file system's own residue, tested on Linux. It was
+      `removeItem` and `contents.isEmpty`
+- [x] **CI runs again, and all three jobs are green.** Both repositories are
+      public, so there are no Actions minutes to pay for and no token is needed
+      to resolve SlateKit
 
 ### Left for later, deliberately
 

@@ -6,6 +6,11 @@ Everything below is `Scripts/release.sh`, which `make release` runs. This
 document is what the script cannot say: what the two credentials are, why they
 are needed, and what to do when a step refuses.
 
+**Both repositories are public** — `Erikemmer/Shelf` and its one shared
+package, `Erikemmer/SlateKit`. Nothing in the build needs a login, and CI
+builds the app on every push. The two credentials below are Apple's, and they
+are the only ones this release path has ever needed.
+
 ---
 
 ## What is needed, once

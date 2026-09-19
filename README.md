@@ -48,6 +48,10 @@ and does it with the quiet and the speed Selector has for photographs.
 
 ## Getting it running
 
+Nothing here needs a login. Shelf and its one shared package,
+[SlateKit](https://github.com/Erikemmer/SlateKit), are both public, so a clone
+and `make bootstrap` is the whole of it.
+
 ```bash
 make bootstrap     # first time on a Mac: checks Xcode, installs XcodeGen,
                    # runs the tests, generates and builds the project
@@ -59,6 +63,9 @@ Then press ⌘R in Xcode, or:
 make app           # build the app, Release
 make smoke         # start it and check it shows a window and settles
 ```
+
+Every push runs three jobs — the core's tests on Linux, the core's tests on
+macOS, and the app build — and `main` is green on all three.
 
 ## Everyday commands
 
