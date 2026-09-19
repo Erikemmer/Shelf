@@ -52,12 +52,41 @@ public enum CoverFile {
     }
 
     /// The cover in a book's folder, whatever its extension.
+    ///
+    /// The *first* of `extensions` that is there, which is what every reader
+    /// in Shelf draws. When a folder holds two — see `urls(in:)` — this is the
+    /// one that wins, and that is exactly why replacing a cover must not stop
+    /// at it.
+    ///
+    /// Stops at the first hit, and that is not an optimisation to be tidied
+    /// away: `booksWithACover` calls this once per book, and its measurement —
+    /// 37 ms for 4 996 folders — is a measurement of one or two `stat` calls,
+    /// not of six.
     public static func url(in folder: URL) -> URL? {
         for ext in extensions {
             let candidate = folder.appendingPathComponent("\(baseName).\(ext)")
             if FileManager.default.fileExists(atPath: candidate.path) { return candidate }
         }
         return nil
+    }
+
+    /// **Every** cover in a book's folder, in the order `url(in:)` prefers.
+    ///
+    /// Usually none or one. A folder that has been through several programs
+    /// can hold `cover.jpg` and `cover.jpeg` side by side — Calibre folders
+    /// that have grown over years do — and anything that *replaces* a cover
+    /// has to take them all away. Displacing only the first is worse than
+    /// displacing none: `jpeg` comes before `png` in this list, so a surviving
+    /// `cover.jpeg` is then found in preference to the picture that was just
+    /// written, and the window shows the old one while the disk says it was
+    /// replaced.
+    ///
+    /// Six `stat` calls, always. Only the replace path asks, and it asks once
+    /// for one book — never the per-book question `url(in:)` answers.
+    public static func urls(in folder: URL) -> [URL] {
+        extensions
+            .map { folder.appendingPathComponent("\(baseName).\($0)") }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     /// Whether a file name is a cover rather than part of the book.

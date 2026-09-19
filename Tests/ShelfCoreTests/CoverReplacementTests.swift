@@ -81,7 +81,7 @@ struct CoverReplacementTests {
             with: Self.jpeg(), in: folder, previousGeneration: 0, disposal: bin.disposal)
 
         #expect(result.generation == 1)
-        #expect(result.displaced == nil)
+        #expect(result.displaced.isEmpty)
         #expect(bin.taken.isEmpty)
     }
 
@@ -100,7 +100,7 @@ struct CoverReplacementTests {
         let result = try CoverReplacement.replace(
             with: Self.png(), in: folder, previousGeneration: 3, disposal: bin.disposal)
 
-        #expect(result.displaced == "cover.jpg")
+        #expect(result.displaced == ["cover.jpg"])
         #expect(bin.taken == ["cover.jpg"])
         let recovered = try Data(contentsOf: bin.folder.appendingPathComponent("cover.jpg"))
         #expect(recovered == Self.jpeg(0xAB))
@@ -144,6 +144,86 @@ struct CoverReplacementTests {
         #expect(temporary.names(in: "Austen, Jane/Emma (1)") == ["cover.jpg"])
     }
 
+    /// **A folder can hold more than one cover**, and garbage-collecting only
+    /// the first is worse than collecting none: `CoverFile.extensions` is
+    /// searched in order, `jpeg` comes before `png`, so a surviving
+    /// `cover.jpeg` is found *in preference to* the picture that was just
+    /// written. The window then shows the old one again and the disk says it
+    /// was replaced.
+    ///
+    /// Grown Calibre folders really do hold both spellings.
+    @Test("every cover in the folder is displaced, not just the first one found")
+    func allOfThemAreDisplaced() throws {
+        let temporary = try TemporaryFolder()
+        let folder = try temporary.folder("Austen, Jane/Emma (1)")
+        let bin = try Bin(in: temporary.url)
+        try Self.jpeg(0xA1).write(to: folder.appendingPathComponent("cover.jpg"))
+        try Self.jpeg(0xA2).write(to: folder.appendingPathComponent("cover.jpeg"))
+
+        let result = try CoverReplacement.replace(
+            with: Self.png(), in: folder, previousGeneration: 0, disposal: bin.disposal)
+
+        // In `CoverFile.extensions` order, which is the order that decides
+        // which of the two the window would have drawn.
+        #expect(result.displaced == ["cover.jpg", "cover.jpeg"])
+        #expect(temporary.names(in: "Austen, Jane/Emma (1)") == ["cover.png"])
+        #expect(bin.taken.sorted() == ["cover.jpeg", "cover.jpg"])
+    }
+
+    // MARK: The half-written file
+
+    /// Every runner in this project that writes through a `.part` names its
+    /// prefix and sweeps its own leftovers — `ImportRunner.removePartials`,
+    /// `ExportRunner`. This one does the same, and in the same place: the next
+    /// write into that folder.
+    ///
+    /// It matters because nothing else would ever take it away.
+    /// `CoverFile.isCover` says no, so `EmptiedFolder` counts it as somebody's
+    /// data and keeps the folder alive, and `OrphanedFolders` adds its bytes to
+    /// a folder it reports. A file Shelf dropped would be reported to the user
+    /// as a file Shelf found.
+    @Test("a half-written cover left by an interrupted run is swept by the next one")
+    func leftoverPartIsSwept() throws {
+        let temporary = try TemporaryFolder()
+        let folder = try temporary.folder("Austen, Jane/Emma (1)")
+        let bin = try Bin(in: temporary.url)
+        let leftover = "\(CoverReplacement.partialPrefix)deadbeef.part"
+        try Self.jpeg().write(to: folder.appendingPathComponent(leftover))
+
+        try CoverReplacement.replace(
+            with: Self.png(), in: folder, previousGeneration: 0, disposal: bin.disposal)
+
+        #expect(temporary.names(in: "Austen, Jane/Emma (1)") == ["cover.png"])
+        // Swept, not moved to the Trash: it is Shelf's own debris and never was
+        // anybody's picture. The Trash is for what a person might want back.
+        #expect(bin.taken.isEmpty)
+    }
+
+    @Test("a dot file that is not Shelf's debris is left exactly where it is")
+    func otherDotFilesAreNotSwept() throws {
+        let temporary = try TemporaryFolder()
+        let folder = try temporary.folder("Austen, Jane/Emma (1)")
+        let bin = try Bin(in: temporary.url)
+        try Data("keep me".utf8).write(to: folder.appendingPathComponent(".notes"))
+
+        try CoverReplacement.replace(
+            with: Self.png(), in: folder, previousGeneration: 0, disposal: bin.disposal)
+
+        #expect(temporary.names(in: "Austen, Jane/Emma (1)") == [".notes", "cover.png"])
+    }
+
+    // MARK: Refusing before anything moves
+
+    /// What the window asks *before* it writes the new generation into the
+    /// OPF, so that bytes which were never a picture cost nothing at all.
+    @Test("whether bytes could be a cover is answerable without writing anything")
+    func acceptsIsAnswerableOnItsOwn() {
+        #expect(CoverReplacement.accepts(Self.png()))
+        #expect(CoverReplacement.accepts(Self.jpeg()))
+        #expect(!CoverReplacement.accepts(Data("<html>Not Found</html>".utf8)))
+        #expect(!CoverReplacement.accepts(Data()))
+    }
+
     // MARK: Taking one away
 
     /// Not a menu item — **undo**. Setting the first cover on a book that had
@@ -162,7 +242,7 @@ struct CoverReplacementTests {
             in: folder, previousGeneration: 2, disposal: bin.disposal)
 
         #expect(result.written == nil)
-        #expect(result.displaced == "cover.jpg")
+        #expect(result.displaced == ["cover.jpg"])
         // The generation moves even though nothing was written: what the grid
         // holds is a thumbnail of a picture that is no longer there.
         #expect(result.generation == 3)
@@ -179,7 +259,7 @@ struct CoverReplacementTests {
         let result = try CoverReplacement.remove(
             in: folder, previousGeneration: 2, disposal: bin.disposal)
 
-        #expect(result.displaced == nil)
+        #expect(result.displaced.isEmpty)
         // No file changed, so no cached thumbnail is stale.
         #expect(result.generation == 2)
         #expect(bin.taken.isEmpty)

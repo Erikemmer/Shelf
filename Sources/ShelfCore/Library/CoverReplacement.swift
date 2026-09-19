@@ -34,10 +34,18 @@ public enum CoverReplacement {
         /// it is not necessarily the name the old one had. Nil when the cover
         /// was taken away rather than replaced.
         public var written: URL?
-        /// The file that was displaced, or nil when the book had no cover.
-        /// A *name*, because by the time anybody reads this the file is in the
-        /// Trash and its URL is no longer where it was.
-        public var displaced: String?
+        /// The files that were displaced, in the order `CoverFile` prefers
+        /// them, and empty when the book had no cover.
+        ///
+        /// A list and not one name, because a folder can hold more than one:
+        /// `cover.jpg` beside `cover.jpeg` is ordinary in a Calibre folder
+        /// that has grown over years, and leaving the second behind is worse
+        /// than leaving both — the surviving one is found *in preference to*
+        /// the picture that was just written.
+        ///
+        /// *Names*, because by the time anybody reads this the files are in
+        /// the Trash and their URLs are no longer where they were.
+        public var displaced: [String]
         /// What the book's `coverGeneration` becomes. The caller writes it into
         /// the book; this type does not touch `metadata.opf`.
         public var generation: Int
@@ -94,16 +102,53 @@ public enum CoverReplacement {
     public static func remove(
         in folder: URL, previousGeneration: Int, disposal: FolderDisposal = .trash
     ) throws -> Result {
-        guard let existing = CoverFile.url(in: folder) else {
-            return Result(written: nil, displaced: nil, generation: previousGeneration)
+        sweepPartials(in: folder)
+        let existing = CoverFile.urls(in: folder)
+        guard !existing.isEmpty else {
+            return Result(written: nil, displaced: [], generation: previousGeneration)
         }
-        do {
-            try disposal.dispose(existing)
-        } catch {
-            throw Refusal.cannotDisplace(error.localizedDescription)
+        var displaced: [String] = []
+        for cover in existing {
+            do {
+                try disposal.dispose(cover)
+                displaced.append(cover.lastPathComponent)
+            } catch {
+                throw Refusal.cannotDisplace(error.localizedDescription)
+            }
         }
-        return Result(
-            written: nil, displaced: existing.lastPathComponent, generation: previousGeneration + 1)
+        return Result(written: nil, displaced: displaced, generation: previousGeneration + 1)
+    }
+
+    /// The prefix every half-written cover carries.
+    ///
+    /// Named, and swept, for the reason `ImportRunner.partialPrefix` and
+    /// `ExportRunner.partialPrefix` are: nothing else in Shelf would ever take
+    /// one away. `CoverFile.isCover` says a `.part` is not a cover, so
+    /// `EmptiedFolder` counts it as somebody's data and keeps an author folder
+    /// alive for ever, and `OrphanedFolders` adds its bytes to a folder it
+    /// reports — a file Shelf dropped, reported back to the user as a file
+    /// Shelf found.
+    public static let partialPrefix = ".shelf-cover-"
+
+    /// Whether these bytes could be a cover at all.
+    ///
+    /// Asked by the window **before** it writes anything, including before it
+    /// writes the new generation into `metadata.opf`, so that bytes which were
+    /// never a picture cost nothing at all. The same question `replace` asks
+    /// first; here so a caller can ask it without a folder.
+    public static func accepts(_ data: Data) -> Bool {
+        CoverFile.fileExtension(for: data) != nil
+    }
+
+    /// Removes this folder's half-written covers, if an earlier run left any.
+    ///
+    /// Not through the disposal: this is Shelf's own debris and never was
+    /// anybody's picture. The Trash is for what a person might want back.
+    private static func sweepPartials(in folder: URL) {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        for name in names where name.hasPrefix(partialPrefix) && name.hasSuffix(".part") {
+            try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
+        }
     }
 
     /// Writes these bytes as the book's cover, displacing whatever was there.
@@ -117,10 +162,11 @@ public enum CoverReplacement {
         with data: Data, in folder: URL, previousGeneration: Int,
         disposal: FolderDisposal = .trash
     ) throws -> Result {
-        guard CoverFile.fileExtension(for: data) != nil else { throw Refusal.notAnImage }
+        guard accepts(data) else { throw Refusal.notAnImage }
+        sweepPartials(in: folder)
 
         let target = folder.appendingPathComponent(CoverFile.name(for: data))
-        let part = folder.appendingPathComponent(".\(CoverFile.baseName)-\(UUID().uuidString.prefix(8)).part")
+        let part = folder.appendingPathComponent("\(partialPrefix)\(UUID().uuidString.prefix(8)).part")
         do {
             try data.write(to: part, options: .atomic)
         } catch {
@@ -128,11 +174,13 @@ public enum CoverReplacement {
             throw Refusal.cannotWrite(error.localizedDescription)
         }
 
-        var displaced: String?
-        if let existing = CoverFile.url(in: folder) {
+        // **Every** cover, not the first one found. A surviving `cover.jpeg`
+        // beside a freshly written `cover.png` is drawn in preference to it.
+        var displaced: [String] = []
+        for existing in CoverFile.urls(in: folder) {
             do {
                 try disposal.dispose(existing)
-                displaced = existing.lastPathComponent
+                displaced.append(existing.lastPathComponent)
             } catch {
                 try? FileManager.default.removeItem(at: part)
                 throw Refusal.cannotDisplace(error.localizedDescription)

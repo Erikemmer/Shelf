@@ -878,7 +878,7 @@ struct InspectorCover: View {
             isPresented: $isChoosingFile, allowedContentTypes: CoverImage.accepted
         ) { result in
             guard case .success(let url) = result else { return }
-            model.setCover(of: entry, fromFileAt: url, undoManager: undoManager)
+            Task { await model.setCover(of: entry, fromFileAt: url, undoManager: undoManager) }
         }
     }
 
@@ -922,7 +922,7 @@ struct InspectorCover: View {
             _ = provider.loadObject(ofClass: URL.self) { url, _ in
                 guard let url else { return }
                 Task { @MainActor in
-                    model.setCover(of: entry, fromFileAt: url, undoManager: undoManager)
+                    await model.setCover(of: entry, fromFileAt: url, undoManager: undoManager)
                 }
             }
             return true
@@ -930,7 +930,7 @@ struct InspectorCover: View {
         provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
             guard let data else { return }
             Task { @MainActor in
-                model.setCover(of: entry, fromImageData: data, undoManager: undoManager)
+                await model.setCover(of: entry, fromImageData: data, undoManager: undoManager)
             }
         }
         return true

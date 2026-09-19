@@ -894,7 +894,7 @@ final class LibraryModel {
         switch CoverImage.prepare(data) {
         case .success(let prepared):
             let current = entries.first { $0.id == entry.id } ?? entry
-            applyCover(prepared, to: current, undoManager: undoManager)
+            await applyCover(prepared, to: current, undoManager: undoManager)
             online.coverWasWritten(as: CoverFile.name(for: prepared))
         case .failure(let refusal):
             coverRefusal = refusal
@@ -916,9 +916,9 @@ final class LibraryModel {
 
     /// A picture that arrived as bytes rather than as a file: dragged out of a
     /// web page, or out of Preview.
-    func setCover(of entry: LibraryEntry, fromImageData data: Data, undoManager: UndoManager?) {
+    func setCover(of entry: LibraryEntry, fromImageData data: Data, undoManager: UndoManager?) async {
         switch CoverImage.prepare(data) {
-        case .success(let prepared): applyCover(prepared, to: entry, undoManager: undoManager)
+        case .success(let prepared): await applyCover(prepared, to: entry, undoManager: undoManager)
         case .failure(let refusal): coverRefusal = refusal
         }
     }
@@ -930,14 +930,14 @@ final class LibraryModel {
     /// a TIFF is written again as JPEG because a book folder cannot name
     /// either, and a cover that is already the right size and the right format
     /// comes through byte for byte.
-    func setCover(of entry: LibraryEntry, fromFileAt url: URL, undoManager: UndoManager?) {
+    func setCover(of entry: LibraryEntry, fromFileAt url: URL, undoManager: UndoManager?) async {
         // The open panel hands back a URL the sandbox has opened for us; a URL
         // dropped on the window has to be asked for. Harmless for the first
         // case, which simply answers false.
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         switch CoverImage.prepare(contentsOf: url) {
-        case .success(let data): applyCover(data, to: entry, undoManager: undoManager)
+        case .success(let data): await applyCover(data, to: entry, undoManager: undoManager)
         case .failure(let refusal): coverRefusal = refusal
         }
     }
@@ -972,7 +972,7 @@ final class LibraryModel {
             return
         }
         switch CoverImage.prepare(cover) {
-        case .success(let data): applyCover(data, to: entry, undoManager: undoManager)
+        case .success(let data): await applyCover(data, to: entry, undoManager: undoManager)
         case .failure(let refusal): coverRefusal = refusal
         }
     }
@@ -980,10 +980,9 @@ final class LibraryModel {
     /// The one path every cover change goes down, forwards and backwards.
     ///
     /// The shape is `apply(_ change:)`'s and for the same reason: the *previous
-    /// value* is captured and registered with the window's `UndoManager`
-    /// **before** anything is written, because once the file is written nobody
-    /// can ask the folder what it used to hold. Registering the inverse from
-    /// inside the undo block is what gives redo for nothing.
+    /// value* is captured **before** anything is written, because once the file
+    /// is written nobody can ask the folder what it used to hold. Registering
+    /// the inverse from inside the undo block is what gives redo for nothing.
     ///
     /// The previous value here is the picture itself, held in memory on the
     /// undo stack. That is a few hundred kilobytes per step — a cover is capped
@@ -994,7 +993,28 @@ final class LibraryModel {
     /// `nil` means "no cover", which is what undoing the *first* cover on a
     /// book has to restore. Anything else would leave the folder saying one
     /// thing and the book saying another.
-    func applyCover(_ bytes: Data?, to entry: LibraryEntry, undoManager: UndoManager?) {
+    ///
+    /// ## Why the number is written before the picture
+    ///
+    /// A cover change is two writes — `metadata.opf` and a file beside it — and
+    /// one of them can fail. Which order they go in decides what a failure
+    /// *costs*, and the two orders are not symmetrical:
+    ///
+    /// - **Picture first.** The new picture is on disk and the book still
+    ///   claims the old generation, so the cache *hits* on the thumbnail of
+    ///   the old one. The window draws a picture that is no longer there, and
+    ///   `Rebuild Index from Folders` brings it back rather than clearing it —
+    ///   which is precisely the failure `coverGeneration` exists to prevent.
+    /// - **Number first.** The book claims a generation for a picture that has
+    ///   not arrived, so the cache *misses*, decodes the file that is actually
+    ///   there and caches it under the new key. The window is correct. It costs
+    ///   one decode of an unchanged cover, and nothing else.
+    ///
+    /// So the number goes first and the whole thing is awaited: a half-done
+    /// cover change is then self-healing rather than quietly wrong. Bytes that
+    /// were never a picture are refused before either write, so the common
+    /// mistake costs nothing at all.
+    func applyCover(_ bytes: Data?, to entry: LibraryEntry, undoManager: UndoManager?) async {
         guard let library else { return }
         coverRefusal = nil
         let folder = library.root.appendingPathComponent(entry.folder, isDirectory: true)
@@ -1002,46 +1022,57 @@ final class LibraryModel {
         // Nothing to do, and nothing to put on the undo stack: choosing the
         // picture that is already there is not a change.
         guard previous != bytes else { return }
+        // Before either write, so a dropped text file never moves a generation.
+        if let bytes, !CoverReplacement.accepts(bytes) {
+            coverRefusal = .notAnImage
+            return
+        }
+
+        let generation = entry.book.coverGeneration + 1
+        let change = MetadataChange.make(from: entry.book) { $0.coverGeneration = generation }
+        guard await write(change, to: entry, startedAt: ContinuousClock.now) else {
+            // `write` has already put the reason in the error line; the cover
+            // is untouched, which is the state this began in.
+            return
+        }
 
         do {
-            let result =
-                try bytes.map {
-                    try CoverReplacement.replace(
-                        with: $0, in: folder, previousGeneration: entry.book.coverGeneration)
-                } ?? CoverReplacement.remove(in: folder, previousGeneration: entry.book.coverGeneration)
-
-            undoManager?.registerUndo(withTarget: self) { model in
-                MainActor.assumeIsolated {
-                    // The entry as it is *now*, not as it was captured: its
-                    // generation has moved, and handing back the stale one
-                    // would write the same number twice and leave the grid on
-                    // a thumbnail of the picture being undone.
-                    let current = model.entries.first { $0.id == entry.id } ?? entry
-                    model.applyCover(previous, to: current, undoManager: undoManager)
-                }
-            }
-            undoManager?.setActionName(Loc.core(MetadataChange.Field.cover.label))
-
-            // Now the number, through the same editor every other field goes
-            // through: `metadata.opf` first, then the index (ADR 0001).
-            let change = MetadataChange.make(from: entry.book) { $0.coverGeneration = result.generation }
-            Task { await write(change, to: entry, startedAt: ContinuousClock.now) }
-
-            if bytes == nil {
-                coversOnDisk.remove(entry.id)
+            if let bytes {
+                try CoverReplacement.replace(
+                    with: bytes, in: folder, previousGeneration: entry.book.coverGeneration)
             } else {
-                coversOnDisk.insert(entry.id)
-            }
-            Task {
-                await loader?.forget(entry.id)
-                coverRefreshRequest += 1
-                totals = (try? await index?.totals(coversOnDisk: coversOnDisk)) ?? totals
+                try CoverReplacement.remove(in: folder, previousGeneration: entry.book.coverGeneration)
             }
         } catch let refusal as CoverReplacement.Refusal {
             coverRefusal = refusal
+            return
         } catch {
             coverRefusal = .cannotWrite(error.localizedDescription)
+            return
         }
+
+        // Registered only now, because only now has anything happened that
+        // could be undone.
+        undoManager?.registerUndo(withTarget: self) { model in
+            MainActor.assumeIsolated {
+                // The entry as it is *now*, not as it was captured: its
+                // generation has moved, and handing back the stale one would
+                // write the same number twice and leave the grid on a
+                // thumbnail of the picture being undone.
+                let current = model.entries.first { $0.id == entry.id } ?? entry
+                Task { await model.applyCover(previous, to: current, undoManager: undoManager) }
+            }
+        }
+        undoManager?.setActionName(Loc.core(MetadataChange.Field.cover.label))
+
+        if bytes == nil {
+            coversOnDisk.remove(entry.id)
+        } else {
+            coversOnDisk.insert(entry.id)
+        }
+        await loader?.forget(entry.id)
+        coverRefreshRequest += 1
+        totals = (try? await index?.totals(coversOnDisk: coversOnDisk)) ?? totals
     }
 
     /// What the stored answers take up, for the menu item that names it.
@@ -1090,8 +1121,17 @@ final class LibraryModel {
         Task { await write(change, to: entry, startedAt: startedAt) }
     }
 
-    private func write(_ change: MetadataChange, to entry: LibraryEntry, startedAt: ContinuousClock.Instant) async {
-        guard let library, let index else { return }
+    /// Answers **whether it wrote**, which every caller but one may ignore.
+    ///
+    /// The one that may not is `applyCover`: a cover change is the only edit
+    /// whose other half is a *file*, so "the number did not get written" is
+    /// not an inconvenience there but a folder and a book saying different
+    /// things (see `applyCover`).
+    @discardableResult
+    private func write(
+        _ change: MetadataChange, to entry: LibraryEntry, startedAt: ContinuousClock.Instant
+    ) async -> Bool {
+        guard let library, let index else { return false }
         let editor = MetadataEditor(library: library)
         do {
             let updated = try await editor.apply(change, to: entry, in: index)
@@ -1107,8 +1147,10 @@ final class LibraryModel {
             // So a book that has just been marked read leaves "Unread" at once.
             refilter()
             errorMessage = nil
+            return true
         } catch {
             show(error, doing: Loc.string("save the change to “%@”", entry.book.title))
+            return false
         }
     }
 
