@@ -161,26 +161,32 @@ die Entscheidungen in `docs/adr/` (0001–0019).
 
 ---
 
-## Was in `~/Library/Caches/Shelf/` von der Sitzung vom 19.09.2026 (Sprint 8) stammt
+## Was in `~/Library/Caches/Shelf/` von der Sitzung vom 19.09.2026 stammt
 
 Angelegt und benannt, wie CLAUDE.md es verlangt — **alles andere dort wurde
 nicht angefasst**:
 
 Geblieben ist nur, was noch gebraucht wird:
 
-- `measure-library-8/shots/` (7,2 MB) – die 16-Bücher-Bibliothek, gegen die die
-  Sprint-8-Screenshots aufgenommen wurden. `make organize-library` legt sie in
-  Sekunden neu an; sie bleibt, weil sie winzig ist und weil die Bilder gegen
-  genau diese aufgenommen wurden
+- `measure-library-8/shots/` (7,3 MB) – die 16-Bücher-Bibliothek, gegen die die
+  Sprint-8-Screenshots in beiden Sprachen aufgenommen wurden.
+  `make organize-library` legt sie in Sekunden neu an
+- `release/` (153 MB) – das Ergebnis von `make release-dry`
 
 Wieder entfernt, weil jedes davon mit einem Befehl neu entsteht:
 
 - `synthetic/` (5,8 GB) – die 5 000 Bücher des Abschlusslaufs
   (`make synthetic`, 3 min, dann `make proof`)
-- `measure-library-8/b-check/` (16 MB), `c-check/` (40 MB), `export/` (86 MB),
-  `window/` (13 MB) – Arbeitsbibliotheken dieser Sitzung, jede aus
-  `shelf-tool synthesise` + `import` in unter einer Minute wieder da
+- `linux-check-8/` (641 MB) – ein `git archive` von HEAD für den Container
+- `measure-library-8/b-check|c-check|export|window/` – Arbeitsbibliotheken,
+  jede aus `shelf-tool synthesise` + `import` in unter einer Minute wieder da
 
-`release/` (146 MB) und `measure-library-7b/` (751 MB) stammen aus der
-Vorsitzung und **wurden nicht angefasst**; `make accessibility` braucht das
-zweite. Alles andere in `~/Library/Caches/Shelf/` ebenso.
+`measure-library-7b/` (751 MB) stammt aus der Vorsitzung und **wurde nicht
+angefasst**; `make accessibility` braucht es. Alles andere dort ebenso.
+
+**Docker** wurde von dieser Sitzung gestartet und von ihr wieder beendet.
+
+**Im Papierkorb** liegen rund vierzig leere Autorenordner aus den
+Wegwerf-Bibliotheken der Screenshot-Läufe. Sie sind absichtlich dort geblieben:
+sie sind der Beleg, dass „Organize Library…" wirklich in den Papierkorb legt
+und nicht löscht.
