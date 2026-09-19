@@ -171,12 +171,21 @@ die Entscheidungen in `docs/adr/` (0001–0017).
 Angelegt und benannt, wie CLAUDE.md es verlangt — **alles andere dort wurde
 nicht angefasst**:
 
-- `measure-library-7b/` – die 26-Bücher-Bibliothek der Barrierefreiheits-Belege,
-  dazu eine synthetische Calibre-Bibliothek und vier Geräte-Images
-- `runbook-7b/` – alles, was `make runbook` anlegt
-- `linux-check-7b/` – ein `git archive` von HEAD für den Swift-Container
-- `synthetic/` – die 5 000 Bücher des Abschlusslaufs (`make synthetic-clean`)
-- `release/` – das Ergebnis von `make release-dry`
+Geblieben ist nur, was noch gebraucht wird:
 
-`linux-check-7/` der Vorsitzung (615 MB) wurde entfernt, weil die Vorsitzung es
-ausdrücklich so vermerkt hatte.
+- `measure-library-7b/` (751 MB) – die 26-Bücher-Bibliothek, gegen die
+  `make accessibility` läuft, dazu eine synthetische Calibre-Bibliothek und vier
+  Geräte-Images. `make accessibility` braucht sie
+- `release/` (146 MB) – das Ergebnis von `make release-dry`
+
+Wieder entfernt, weil jedes davon mit einem Befehl neu entsteht:
+
+- `synthetic/` (2,6 GB) – die 5 000 Bücher des Abschlusslaufs
+  (`make synthetic`, 20 s)
+- `runbook-7b/` (644 MB) – alles, was `make runbook` anlegt; der Befehl legt es
+  ohnehin bei jedem Lauf neu an
+- `linux-check-7b/` (629 MB) – ein `git archive` von HEAD für den Container
+
+`linux-check-7/` der Vorsitzung (615 MB) wurde ebenfalls entfernt, weil die
+Vorsitzung es ausdrücklich so vermerkt hatte. **Alles andere in
+`~/Library/Caches/Shelf/` wurde nicht angefasst.**
