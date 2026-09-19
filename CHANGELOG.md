@@ -56,7 +56,7 @@ still there after quitting and relaunching, and after
 answered 429`, as it has to every request this project has ever made, so the
 download was measured against Open Library alone.
 
-### Three things that were already broken, and are fixed on the way
+### Five things that were already broken, and are fixed on the way
 
 1. **`coverRefreshRequest` had no reader at all.** It has been incremented
    since Sprint 6 and nothing watched it, so a cover fetched from the net
@@ -68,6 +68,19 @@ download was measured against Open Library alone.
    beside `cover.jpeg` — ordinary in a Calibre folder grown over years — kept
    the second, and because `jpeg` is searched before `png`, the survivor was
    then drawn *in preference to* the picture just written.
+
+The last two were found by **looking at the screenshots**, not by any test:
+
+4. **The grid cell kept the replaced picture after ⌘Z**, with the restored one
+   in the inspector beside it. The generation is written before the picture, and
+   writing it is what invalidates the view, so the cell woke while the old file
+   was still on disk and was never woken again. It watches `coverRefreshRequest`
+   now, like the inspector.
+5. **Every field name in the Fetch Metadata sheet was English in a German
+   window** — Title, Authors, Publisher, Published, Language, ISBN, Tags, down
+   the whole sheet. `Text(proposal.label)` drew one of the core's own words
+   verbatim while the accessibility label three lines above it put the same
+   string through `Loc.core`. Since Sprint 6, and invisible in English.
 
 ### How it is built
 
@@ -93,6 +106,12 @@ which is the exact failure the generation exists to prevent.
 
 A cover for a multiple selection, and a `Remove Cover` menu item. Both are in
 `docs/BACKLOG.md` with the reasons.
+
+### Photographed
+
+Twelve pictures in each language, `docs/screenshots/sprint-9/` and `de/`, each
+one judged in its README and each claim checked against the disk rather than
+against the picture. `Scripts/cover-shot.sh` is the run.
 
 ### What is not tested
 
