@@ -157,6 +157,18 @@ struct LocalisationTests {
         all += CalibreCustomColumn.Kind.allCases.map(\.label)
         all += ShortcutReference.all.map(\.label)
         all += ShortcutGroup.allCases.map(\.rawValue)
+
+        // Sprint 8. A `NameKind` says four things and a `NameMerge` says the
+        // rest; the refusals and the undo name are built from a template, so
+        // the template is what is walked in and the numbers are filled by
+        // `String.localizedStringWithFormat` like every other count.
+        for kind in NameKind.allCases { all += [kind.label, kind.pluralLabel] }
+        all += NameMerge.allActionNames
+        for kind in NameKind.allCases {
+            all.append(NameMerge(kind: kind, sources: ["x"], target: "").refusal ?? "")
+            all.append(NameMerge(kind: kind, sources: [], target: "y").refusal ?? "")
+            all.append(NameMerge(kind: kind, sources: ["x"], target: "a/b").refusal ?? "")
+        }
         return all.filter { !$0.isEmpty }
     }
 

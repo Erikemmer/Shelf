@@ -682,6 +682,22 @@ public final class LibraryIndex: Sendable {
                 """)
     }
 
+    /// Publishers, which have no table of their own.
+    ///
+    /// A publisher is a column on `books` rather than a row somewhere, because
+    /// nothing hangs off it: no sort key, no second name, no membership. That
+    /// makes this a `GROUP BY` over one column instead of a join, and it is
+    /// the only facet with no `name_sort` to order by — a publisher's name is
+    /// a company's, and "Verlag" does not move to the end the way "The" does.
+    public func publisherFacets() async throws -> [Facet] {
+        try await facets(
+            sql: """
+                SELECT publisher AS name, COUNT(*) AS count FROM books
+                WHERE publisher IS NOT NULL AND TRIM(publisher) <> ''
+                GROUP BY publisher ORDER BY publisher COLLATE NOCASE
+                """)
+    }
+
     public func formatFacets() async throws -> [Facet] {
         try await facets(
             sql: """

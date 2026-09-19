@@ -110,6 +110,19 @@ let usage = """
                                     whether every one of those changes is still
                                     there – run it after a rebuild
 
+    Ordering the library (Sprint 8). Both of these change the folder tree or
+    the metadata that names it, so both print what they would do before they do
+    it — `merge` changes metadata only, `organize` moves folders.
+
+      names <library> <kind>        every spelling of author|series|publisher|
+                                    tag in the library, with its book count.
+                                    Reads only
+      merge <library> <kind> <target> <source>…
+                                    fold every <source> spelling into <target>,
+                                    writing one metadata.opf per book affected.
+                                    No folder is moved. With no <source>, prints
+                                    what it would do and writes nothing
+
     SHELF_EXIT_AFTER=<n> makes `import` and `send` leave the process after n
     files, the way a crash does – it is how the proof run produces an
     interrupted import and an interrupted transfer.
@@ -146,6 +159,8 @@ case "bulk-tag-undo": try await Commands.bulkTagUndo(Array(arguments.dropFirst()
 case "epub-digests": try await Commands.epubDigests(Array(arguments.dropFirst()))
 case "search-time": try await Commands.searchTime(Array(arguments.dropFirst()))
 case "verify-edits": try await Commands.verifyEdits(Array(arguments.dropFirst()))
+case "names": try await Commands.names(Array(arguments.dropFirst()))
+case "merge": try await Commands.merge(Array(arguments.dropFirst()))
 default:
     print(usage)
     exit(2)
@@ -1342,6 +1357,66 @@ enum Commands {
     /// written and one index update – the search row included. That is what the
     /// window does when a field is finished, so the number this prints is the
     /// number a person waits for.
+    // MARK: Ordering the library (Sprint 8)
+
+    static func names(_ arguments: [String]) async throws {
+        guard arguments.count >= 2, let kind = NameKind(rawValue: arguments[1]) else {
+            print("usage: shelf-tool names <library> <author|series|publisher|tag>")
+            exit(2)
+        }
+        let (_, index) = try openLibrary(arguments[0])
+        let facets: [LibraryIndex.Facet]
+        switch kind {
+        case .author: facets = try await index.authorFacets()
+        case .series: facets = try await index.seriesFacets()
+        case .publisher: facets = try await index.publisherFacets()
+        case .tag: facets = try await index.tagFacets()
+        }
+        print("\(facets.count) \(kind.pluralLabel.lowercased())")
+        for facet in facets { print("  \(facet.count)\t\(facet.name)") }
+    }
+
+    /// Renames or merges names, through exactly the core the window uses.
+    ///
+    /// With no source spellings it is a dry run: it prints the plan and writes
+    /// nothing, which is what the proof run checks before it checks the result.
+    static func merge(_ arguments: [String]) async throws {
+        guard arguments.count >= 3, let kind = NameKind(rawValue: arguments[1]) else {
+            print("usage: shelf-tool merge <library> <author|series|publisher|tag> <target> <source>…")
+            exit(2)
+        }
+        let (library, index) = try openLibrary(arguments[0])
+        let merge = NameMerge(
+            kind: kind, sources: Array(arguments.dropFirst(3)), target: arguments[2])
+
+        let entries = try await index.allEntries()
+        if merge.sources.isEmpty {
+            // Nothing to fold: say what carries the target spelling today and
+            // stop. A dry run writes nothing at all.
+            let carrying = entries.count { kind.names(of: $0.book).contains(merge.trimmedTarget) }
+            print("dry run · \(carrying) books already say “\(merge.trimmedTarget)” · nothing written")
+            return
+        }
+        if let refusal = merge.refusal {
+            print("refused: \(refusal)")
+            exit(1)
+        }
+
+        let plan = NameEdit.plan(merge, over: entries)
+        print("plan: \(plan.summary())")
+        guard !plan.isEmpty else { return }
+
+        let started = Date()
+        let editor = MetadataEditor(library: library)
+        for (entry, change) in plan.changes {
+            _ = try await editor.apply(change, to: entry, in: index)
+        }
+        print(
+            "\(merge.actionName): \(plan.bookCount) books · "
+                + ImportReport.duration(Date().timeIntervalSince(started)))
+        print("no folder was moved — that is `organize`")
+    }
+
     static func bulkEdit(_ arguments: [String]) async throws {
         guard arguments.count >= 2, let count = Int(arguments[1]) else {
             print("usage: shelf-tool bulk-edit <library> <count>")

@@ -27,6 +27,7 @@ enum Theme {
         case .tags: return "number"
         case .authors: return "person"
         case .series: return "list.number"
+        case .publishers: return "building.columns"
         case .formats: return "doc"
         case .devices: return "cable.connector"
         }
@@ -82,6 +83,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
     case tags = "Tags"
     case authors = "Authors"
     case series = "Series"
+    case publishers = "Publishers"
     case formats = "Formats"
     case devices = "Devices"
 
@@ -99,6 +101,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
         case .tags: return Loc.string("Tags")
         case .authors: return Loc.string("Authors")
         case .series: return Loc.contextual("Series [a sidebar section]", english: "Series")
+        case .publishers: return Loc.string("Publishers")
         case .formats: return Loc.string("Formats")
         case .devices: return Loc.string("Devices")
         }
@@ -109,7 +112,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
     /// harder to learn than one whose shape is fixed from the start.
     var isFilledInSprintOne: Bool {
         switch self {
-        case .tags, .authors, .series, .formats: return true
+        case .tags, .authors, .series, .publishers, .formats: return true
         case .shelves, .devices: return false
         }
     }
@@ -123,6 +126,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
         case .tags: return Loc.string("No tags yet")
         case .authors: return Loc.string("No authors yet")
         case .series: return Loc.string("No series yet")
+        case .publishers: return Loc.string("No publishers yet")
         case .formats: return Loc.string("No formats yet")
         }
     }

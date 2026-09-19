@@ -202,6 +202,7 @@ public struct LibraryFilter: Equatable, Sendable {
     public var tag: String?
     public var author: String?
     public var series: String?
+    public var publisher: String?
     public var format: BookFileFormat?
     public var searchText: String
 
@@ -211,6 +212,7 @@ public struct LibraryFilter: Equatable, Sendable {
         tag: String? = nil,
         author: String? = nil,
         series: String? = nil,
+        publisher: String? = nil,
         format: BookFileFormat? = nil,
         searchText: String = ""
     ) {
@@ -219,6 +221,7 @@ public struct LibraryFilter: Equatable, Sendable {
         self.tag = tag
         self.author = author
         self.series = series
+        self.publisher = publisher
         self.format = format
         self.searchText = searchText
     }
@@ -228,14 +231,15 @@ public struct LibraryFilter: Equatable, Sendable {
     /// Whether anything beyond the collection is narrowing the view – what the
     /// status bar uses to decide between "8 412 books" and "312 of 8 412".
     public var isNarrowed: Bool {
-        shelfPath != nil || tag != nil || author != nil || series != nil || format != nil
-            || !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        shelfPath != nil || tag != nil || author != nil || series != nil || publisher != nil
+            || format != nil || !searchText.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     /// What the window shows as its subject: "Science Fiction", "Jane Austen",
     /// or the collection's own name.
     public var title: String {
-        tag ?? author ?? series ?? shelfPath?.components(separatedBy: ShelfTree.pathSeparator).last
+        tag ?? author ?? series ?? publisher
+            ?? shelfPath?.components(separatedBy: ShelfTree.pathSeparator).last
             ?? format?.rawValue.uppercased() ?? collection.title
     }
 
@@ -258,6 +262,7 @@ public struct LibraryFilter: Equatable, Sendable {
         if let tag, !entry.book.tags.contains(tag) { return false }
         if let author, !entry.book.authors.contains(author) { return false }
         if let series, entry.book.series?.name != series { return false }
+        if let publisher, entry.book.publisher != publisher { return false }
         if let format, !entry.formats.contains(where: { $0.format == format }) { return false }
         return true
     }

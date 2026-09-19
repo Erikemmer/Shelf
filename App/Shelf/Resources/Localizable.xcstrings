@@ -627,6 +627,47 @@
         }
       }
     },
+    "%lld books changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Buch geändert"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Bücher geändert"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld book changed"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld books changed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld books selected": {
       "extractionState": "manual",
       "localizations": {
@@ -1029,6 +1070,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "A language code: en, de, fr"
+          }
+        }
+      }
+    },
+    "A name cannot be empty. Type the spelling the ticked ones should all have.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Name darf nicht leer sein. Tippen Sie die Schreibweise, die alle angehakten bekommen sollen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A name cannot be empty. Type the spelling the ticked ones should all have."
+          }
+        }
+      }
+    },
+    "A name cannot contain “/”.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Name darf kein „/“ enthalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A name cannot contain “/”."
           }
         }
       }
@@ -3583,6 +3658,125 @@
         }
       }
     },
+    "Merge": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zusammenführen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge"
+          }
+        }
+      }
+    },
+    "Merge %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ zusammenführen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge %@"
+          }
+        }
+      }
+    },
+    "Merge Authors": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autoren zusammenführen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge Authors"
+          }
+        }
+      }
+    },
+    "Merge Publishers": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verlage zusammenführen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge Publishers"
+          }
+        }
+      }
+    },
+    "Merge Series": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serien zusammenführen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge Series"
+          }
+        }
+      }
+    },
+    "Merge Tags": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tags zusammenführen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge Tags"
+          }
+        }
+      }
+    },
+    "Merge into…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zusammenführen in…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge into…"
+          }
+        }
+      }
+    },
     "Metadata": {
       "extractionState": "manual",
       "localizations": {
@@ -4093,6 +4287,23 @@
         }
       }
     },
+    "No publishers yet": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keine Verlage"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No publishers yet"
+          }
+        }
+      }
+    },
     "No reader connected — plug one in over USB": {
       "extractionState": "manual",
       "localizations": {
@@ -4416,6 +4627,23 @@
         }
       }
     },
+    "Nothing to change": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts zu ändern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing to change"
+          }
+        }
+      }
+    },
     "Nothing was removed. Library ▸ Find Orphaned Folders… shows them.": {
       "extractionState": "manual",
       "localizations": {
@@ -4429,6 +4657,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nothing was removed. Library ▸ Find Orphaned Folders… shows them."
+          }
+        }
+      }
+    },
+    "Nothing was selected to rename.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es wurde nichts zum Umbenennen ausgewählt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing was selected to rename."
           }
         }
       }
@@ -4654,6 +4899,23 @@
         }
       }
     },
+    "Organize Library…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bibliothek aufräumen…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Organize Library…"
+          }
+        }
+      }
+    },
     "Orphaned Folders": {
       "extractionState": "manual",
       "localizations": {
@@ -4820,6 +5082,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Publisher"
+          }
+        }
+      }
+    },
+    "Publishers": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verlage"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publishers"
           }
         }
       }
@@ -5249,6 +5528,74 @@
         }
       }
     },
+    "Rename %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ umbenennen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename %@"
+          }
+        }
+      }
+    },
+    "Rename Author": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autor umbenennen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename Author"
+          }
+        }
+      }
+    },
+    "Rename Publisher": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verlag umbenennen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename Publisher"
+          }
+        }
+      }
+    },
+    "Rename Series": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serie umbenennen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename Series"
+          }
+        }
+      }
+    },
     "Rename Shelf": {
       "extractionState": "manual",
       "localizations": {
@@ -5262,6 +5609,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rename Shelf"
+          }
+        }
+      }
+    },
+    "Rename Tag": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tag umbenennen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename Tag"
+          }
+        }
+      }
+    },
+    "Rename “%@”…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ umbenennen…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename “%@”…"
           }
         }
       }
@@ -5432,6 +5813,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Search"
+          }
+        }
+      }
+    },
+    "Search these %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese %@ durchsuchen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search these %@"
           }
         }
       }
@@ -6150,6 +6548,23 @@
         }
       }
     },
+    "Spellings": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreibweisen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spellings"
+          }
+        }
+      }
+    },
     "Stop": {
       "extractionState": "manual",
       "localizations": {
@@ -6197,6 +6612,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Table"
+          }
+        }
+      }
+    },
+    "Tag": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tag"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tag"
           }
         }
       }
@@ -6371,6 +6803,23 @@
         }
       }
     },
+    "The spelling to keep": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Schreibweise, die bleiben soll"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The spelling to keep"
+          }
+        }
+      }
+    },
     "There is already a shelf called “%@”.": {
       "extractionState": "manual",
       "localizations": {
@@ -6401,6 +6850,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "These would be added to the tags the book has. Nothing is taken off it — and nothing is ticked for you: a catalogue's subjects are not your vocabulary"
+          }
+        }
+      }
+    },
+    "They all become": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle werden zu"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "They all become"
           }
         }
       }
@@ -6537,6 +7003,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "This list"
+          }
+        }
+      }
+    },
+    "Tick every spelling that is the same %1$@ and type the one they should all have. Shelf changes the metadata of every book concerned, as one step you can undo. It does not move any folder — “%2$@” does that, and it asks first.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haken Sie jede Schreibweise an, die derselbe %1$@ ist, und tippen Sie die eine, die alle bekommen sollen. Shelf ändert die Metadaten jedes betroffenen Buchs, als einen Schritt, den Sie widerrufen können. Ordner bewegt es dabei nicht – das tut „%2$@“, und es fragt vorher."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tick every spelling that is the same %1$@ and type the one they should all have. Shelf changes the metadata of every book concerned, as one step you can undo. It does not move any folder — “%2$@” does that, and it asks first."
           }
         }
       }

@@ -161,6 +161,7 @@ final class LibraryModel {
     private(set) var tagFacets: [LibraryIndex.Facet] = []
     private(set) var authorFacets: [LibraryIndex.Facet] = []
     private(set) var seriesFacets: [LibraryIndex.Facet] = []
+    private(set) var publisherFacets: [LibraryIndex.Facet] = []
     private(set) var formatFacets: [LibraryIndex.Facet] = []
     /// Which books look like copies of another, and by which of the three
     /// rules. Asked of the index once per reload rather than per filter: it is
@@ -425,6 +426,7 @@ final class LibraryModel {
         tagFacets = []
         authorFacets = []
         seriesFacets = []
+        publisherFacets = []
         formatFacets = []
         duplicateReasons = [:]
         duplicateGroups = .none
@@ -447,6 +449,7 @@ final class LibraryModel {
             tagFacets = try await index.tagFacets()
             authorFacets = try await index.authorFacets()
             seriesFacets = try await index.seriesFacets()
+            publisherFacets = try await index.publisherFacets()
             formatFacets = try await index.formatFacets()
             duplicateReasons = try await index.duplicates()
             duplicateGroups = DuplicateGroups(reasons: duplicateReasons)
@@ -955,6 +958,7 @@ final class LibraryModel {
             if change.fields.contains(.tags) { tagFacets = try await index.tagFacets() }
             if change.fields.contains(.authors) { authorFacets = try await index.authorFacets() }
             if change.fields.contains(.series) { seriesFacets = try await index.seriesFacets() }
+            if change.fields.contains(.publisher) { publisherFacets = try await index.publisherFacets() }
             // So a book that has just been marked read leaves "Unread" at once.
             refilter()
             errorMessage = nil
@@ -1411,6 +1415,136 @@ final class LibraryModel {
                 ? Loc.string("%1$@ (%2$@)", actionName, Loc.count("%lld books", changes.count))
                 : actionName)
         undoManager?.endUndoGrouping()
+    }
+
+    // MARK: Renaming and merging names (Sprint 8)
+
+    /// The merge the sheet is showing, or `nil` when no sheet is open.
+    var pendingMerge: NameMerge?
+    /// What the last merge did, for the line under the sheet's button.
+    private(set) var mergeReport: String?
+
+    /// Opens the sheet on one spelling. `merging` decides whether it comes up
+    /// as a rename of that one or as a merge with it already chosen.
+    func beginRename(_ kind: NameKind, of name: String, merging: Bool = false) {
+        mergeReport = nil
+        pendingMerge = NameMerge(
+            kind: kind, sources: [name], target: merging ? "" : name)
+        // A merge starts with nothing typed, because the target is a choice;
+        // a rename starts with the name itself, because it is a correction.
+        if merging { pendingMerge?.sources = [name] }
+    }
+
+    /// Every spelling of a kind, for the sheet's list. Read off the facets the
+    /// sidebar already loaded, so the sheet costs no query.
+    func allNames(of kind: NameKind) -> [LibraryIndex.Facet] {
+        switch kind {
+        case .author: return authorFacets
+        case .series: return seriesFacets
+        case .publisher: return publisherFacets
+        case .tag: return tagFacets
+        }
+    }
+
+    /// What the merge would do, computed against the loaded entries. The sheet
+    /// shows this and `applyMerge` executes this — one value, as every other
+    /// plan in this program works (ADR 0002, decision 6).
+    func plan(for merge: NameMerge) -> NameMergePlan {
+        NameEdit.plan(merge, over: entries)
+    }
+
+    /// Writes the merge: one `metadata.opf` per book and one index row per
+    /// book, through the ordinary editing chain, wrapped in a single undo step
+    /// named for what it did.
+    ///
+    /// **It does not move a folder** (ADR 0007). What it does is offer to,
+    /// afterwards, through `organizeSuggestion`.
+    func applyMerge(_ merge: NameMerge, undoManager: UndoManager?) async {
+        guard merge.refusal == nil else { return }
+        let plan = plan(for: merge)
+        guard !plan.isEmpty else {
+            mergeReport = Loc.string("Nothing to change")
+            return
+        }
+
+        pendingMerge = nil
+        // The same frame every edit across a selection uses, so the count is
+        // pluralised by the catalogue and the sentence is German in a German
+        // window (ADR 0016).
+        await applyBatch(
+            plan.changes,
+            actionName: plan.bookCount > 1
+                ? Loc.string(
+                    "%1$@ (%2$@)", Loc.core(merge.actionName),
+                    Loc.count("%lld books", plan.bookCount))
+                : Loc.core(merge.actionName),
+            undoManager: undoManager)
+        mergeReport = Loc.count("%lld books changed", plan.bookCount)
+        organizeSuggestion = plan.bookCount
+    }
+
+    /// Writes a batch of changes one after another, as **one** step on the undo
+    /// stack.
+    ///
+    /// Not the `apply`-per-book that `edit` uses across a selection. That shape
+    /// starts one detached task per book, and each of those asks the index for
+    /// the totals and for three facet lists when it lands: fine for the fifty
+    /// books a selection holds, wrong for a merge, which can touch every book
+    /// by one author. Here the writes are sequential and the index is asked
+    /// once, at the end.
+    ///
+    /// Undo is registered **before** the first write, as everywhere else — once
+    /// the file is written nobody can ask it what it used to say — and the
+    /// registration inside the undo block is what gives redo for nothing:
+    /// `UndoManager` records whatever is registered while undoing as the redo
+    /// action.
+    private func applyBatch(
+        _ changes: [(entry: LibraryEntry, change: MetadataChange)], actionName: String,
+        undoManager: UndoManager?
+    ) async {
+        guard !changes.isEmpty, let library, let index else { return }
+
+        undoManager?.registerUndo(withTarget: self) { model in
+            MainActor.assumeIsolated {
+                let inverse = changes.map { (entry: $0.entry, change: $0.change.inverse) }
+                Task { await model.applyBatch(inverse, actionName: actionName, undoManager: undoManager) }
+            }
+        }
+        // Already translated by the caller: this one takes a finished
+        // sentence, because the count in it has to be pluralised where the
+        // count is known.
+        undoManager?.setActionName(actionName)
+
+        let editor = MetadataEditor(library: library)
+        for (entry, change) in changes {
+            do {
+                // The entry may be stale by a field, and that is safe: the
+                // editor reads the `metadata.opf` that is there and lays only
+                // the changed fields over it.
+                replace(try await editor.apply(change, to: entry, in: index))
+            } catch {
+                show(error, doing: Loc.string("save the change to “%@”", entry.book.title))
+            }
+        }
+        totals = (try? await index.totals(coversOnDisk: coversOnDisk)) ?? totals
+        await refreshFacets()
+        refilter()
+    }
+
+    /// How many books a finished merge touched, so the window can ask "tidy the
+    /// folders now?" once and then forget it. `nil` means nothing to offer.
+    var organizeSuggestion: Int?
+
+    private func refreshFacets() async {
+        guard let index else { return }
+        do {
+            tagFacets = try await index.tagFacets()
+            authorFacets = try await index.authorFacets()
+            seriesFacets = try await index.seriesFacets()
+            publisherFacets = try await index.publisherFacets()
+        } catch {
+            show(error, doing: Loc.string("read the library index"))
+        }
     }
 
     /// Why this book is in *Duplicates*, in one line — or nothing when it is
