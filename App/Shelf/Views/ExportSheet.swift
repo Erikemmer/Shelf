@@ -98,7 +98,13 @@ struct ExportSheet: View {
             // Formats. "All" is a state of its own and not every box ticked:
             // a format added to Shelf later should go without anybody
             // re-ticking anything.
-            HStack(spacing: 10) {
+            //
+            // The individual boxes appear only when "All" is off, and that is
+            // the second thing a screenshot corrected. They used to sit there
+            // ticked and disabled, which reads as eight controls that will not
+            // respond — and on a dark background a disabled checkbox is not
+            // obviously disabled. One row or the other, never both.
+            HStack(spacing: 12) {
                 Text(Loc.string("Formats"))
                     .font(.caption)
                     .foregroundStyle(Slate.textSecondary)
@@ -112,21 +118,43 @@ struct ExportSheet: View {
                         })
                 )
                 .toggleStyle(.checkbox)
-                ForEach(BookFileFormat.allCases.sorted(), id: \.self) { format in
-                    Toggle(
-                        format.label,
-                        isOn: Binding(
-                            get: { model.exportOptions.includes(format) },
-                            set: { on in
-                                var chosen = model.exportOptions.formats ?? Set(chosenFormats)
-                                if on { chosen.insert(format) } else { chosen.remove(format) }
-                                model.exportOptions.formats = chosen
-                                replan()
-                            })
-                    )
-                    .toggleStyle(.checkbox)
-                    .disabled(model.exportOptions.formats == nil)
+                .fixedSize()
+                if model.exportOptions.formats == nil {
+                    Text(Loc.string("every format of every book"))
+                        .font(.caption2)
+                        .foregroundStyle(Slate.textSecondary)
                 }
+                Spacer(minLength: 0)
+            }
+
+            if model.exportOptions.formats != nil {
+                // Wrapped rather than one long row: eight labels do not fit
+                // across a 620-point sheet, and an HStack that does not fit
+                // breaks the words instead ("EPU B", "AZW 3", "MOB I").
+                let formats = BookFileFormat.allCases.sorted()
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(stride(from: 0, to: formats.count, by: 5)), id: \.self) { start in
+                        HStack(spacing: 12) {
+                            ForEach(formats[start..<min(start + 5, formats.count)], id: \.self) { format in
+                                Toggle(
+                                    format.label,
+                                    isOn: Binding(
+                                        get: { model.exportOptions.includes(format) },
+                                        set: { on in
+                                            var chosen = model.exportOptions.formats ?? Set(chosenFormats)
+                                            if on { chosen.insert(format) } else { chosen.remove(format) }
+                                            model.exportOptions.formats = chosen
+                                            replan()
+                                        })
+                                )
+                                .toggleStyle(.checkbox)
+                                .fixedSize()
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .padding(.leading, 62)
             }
 
             Picker(
@@ -164,7 +192,7 @@ struct ExportSheet: View {
                 .font(.caption2)
                 .foregroundStyle(Slate.textSecondary)
 
-            HStack(spacing: 14) {
+            HStack(spacing: 16) {
                 Toggle(
                     Loc.string("cover.jpg"),
                     isOn: Binding(
@@ -175,6 +203,7 @@ struct ExportSheet: View {
                         })
                 )
                 .toggleStyle(.checkbox)
+                .fixedSize()
                 Toggle(
                     Loc.string("metadata.opf"),
                     isOn: Binding(
@@ -185,6 +214,7 @@ struct ExportSheet: View {
                         })
                 )
                 .toggleStyle(.checkbox)
+                .fixedSize()
                 Toggle(
                     Loc.string("Hard links where possible"),
                     isOn: Binding(
@@ -195,6 +225,7 @@ struct ExportSheet: View {
                         })
                 )
                 .toggleStyle(.checkbox)
+                .fixedSize()
                 .help(
                     Loc.string(
                         "On the same disk a link costs no space at all. Safe because Shelf never "

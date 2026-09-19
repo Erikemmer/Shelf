@@ -730,3 +730,203 @@ The ISBN, or the title and author, of the one book being looked up — and a
 User-Agent naming the project and its repository. No library name, no folder
 path, no identifier of the person or the machine, no telemetry, and no API key
 because there is none.
+
+## 10. Where a book's folder ought to be (Sprint 8)
+
+Everything above says where a book *is*. This says where it **should** be, which
+is a different question and only became one when `Organize Library…` arrived
+([ADR 0018](adr/0018-renaming-merging-and-organising-are-deliberate-operations.md)).
+
+### The target path
+
+```
+OrganizePlanner.target(for: entry)
+  = BookFolderName.relativePath(for: entry.book, number: entry.number)
+  = "<AuthorSort of the first author, sanitised>/<title, sanitised> (<number>)"
+```
+
+The very function the importer uses to name a *new* book's folder. One rule, so
+an organised library and a freshly imported one are laid out alike rather than
+by two rules that drift apart.
+
+Three things about it decide everything else:
+
+* **The number is part of the name, and it is `UNIQUE` in the index.** That is
+  what makes every target path unique: two books can share an author and a
+  title, and they cannot share a number. It is the reason the number is in the
+  folder name at all ([ADR 0002](adr/0002-copy-verify-then-trust.md)).
+* **Every component is cut to 255 bytes**, counted in bytes and never inside a
+  character. All three components: the author's, the title's and the file's.
+  The author's was not, until Sprint 8 asked a built path whether it was legal
+  and it answered no — a `dc:creator` holding a sentence made a folder the file
+  system refuses, which failed the *import* of such a book.
+* **Nothing about it is stored.** It is recomputed from the metadata whenever
+  it is asked for, so it cannot go stale.
+
+### The collision rule
+
+A book is **not moved** and is named in the preview when any of these is true.
+They are checked in this order, and the first one wins:
+
+| | What it means | Reachable? |
+|---|---|---|
+| `collision` | two books want the same path | only if the index is inconsistent: the number is unique |
+| `caseOnlyCollision` | two books want paths differing only in capitals, on a volume that folds case | likewise |
+| `nameTooLong` | a component would be over 255 bytes even after cutting | a guard; `BookFolderName` should make it impossible |
+| `sourceMissing` | the book's own folder is not where the index says — **and it is not at its target either** | a folder moved by hand in the Finder |
+| `destinationIsNotEmpty` | something is already at the target and it holds something | a folder a killed run left, or one made by hand |
+
+**Nothing is ever resolved by choosing.** Two books wanting one folder are both
+left alone: picking one of them is how a book ends up buried inside another
+book's folder.
+
+The row that is *missing* from that table is the interesting one. A book whose
+folder is gone but which **is** sitting at its target is not a problem at all:
+it is an organise that was killed between two index writes, and the index being
+wrong about where a book is, is the cache being wrong (ADR 0001). The planner
+recognises it — by the UUID in the `metadata.opf` there, never by title
+(`OrganizeBookProbe`) — reports it as `relocated`, and the caller writes the
+corrected path into the index.
+
+### Capitals, and why the volume is asked
+
+APFS is case-insensitive by default and case-*sensitive* if it was formatted
+that way; HFS+ is the same story; an exFAT card folds; a network share is
+whatever the server is. **`VolumeCase.folds(at:)` measures it** — it writes one
+empty file with a mixed-case name, asks for it by the other spelling, and takes
+the answer away with it. Guessing from the platform gets an external disk wrong.
+
+It changes two things:
+
+* **`Fitzek` → `fitzek` is not a move between two folders**, it is one folder
+  being spelled differently, and a direct `moveItem` is a write into itself.
+  Such a move goes through a third name in `.shelf/moving/`.
+* **Two books whose paths differ only in capitals** are a collision here and
+  two perfectly good folders on a case-sensitive disk.
+
+When the question cannot be asked at all — a read-only folder, a volume that
+has gone — the answer is **`true`**. That is the cautious way round: it costs a
+detour through a temporary name, where `false` would attempt a move that can
+destroy a folder.
+
+## 11. The organise manifest (`.shelf/organize-manifest.json`)
+
+```json
+{
+  "version": 1,
+  "startedAt": "2026-09-19T14:02:11Z",
+  "entries": [
+    {
+      "bookID": "3922C84C-…",
+      "from": "Atwood, Adrian/Piranesi #34 (8)",
+      "to":   "Fitzek, Sebastian/Piranesi #34 (8)",
+      "digests": { "Piranesi #34 - Sebastian Fitzek.epub": "9f2a…", "metadata.opf": "1c4e…" },
+      "movedAt": "2026-09-19T14:02:11Z"
+    }
+  ],
+  "inFlight": null
+}
+```
+
+Three jobs, and it is a cache like every other manifest here — losing it costs
+the way back and nothing else, because the folders still say what they hold:
+
+* **Resume.** A run cut off is resumed by skipping what is already in here.
+* **`Undo Organize`.** This file walked **backwards**, newest first: if
+  `A → B` and then `B → C` both happened, undoing `B → C` first is what frees
+  `B`. Forwards, the second step would find its destination occupied.
+* **Saying where a book went**, tidily, for a run that died untidily.
+
+`digests` holds every file in the folder, keyed by name, **hashed after the
+move**. That is the whole of "verified" here, as everywhere: a digest was
+compared, not that a rename returned success (ADR 0002).
+
+Written **every twenty moves** — often enough that an interruption costs
+little, seldom enough that a library is not rewritten per book — and
+additionally *immediately before* the one operation that has a halfway state.
+
+`inFlight` is that operation. An ordinary move is a single rename, which the
+file system either did or did not do; there is no halfway to record. A
+**case-only** move is two renames through a third name, and a process killed
+between them leaves a book's folder under a name nothing points at. So it is
+written down before it happens, and the next run puts it back — to the
+destination if that is free, otherwise where it came from — before it plans
+anything.
+
+## 12. The export manifest (`.shelf-export.json`, at the destination)
+
+```json
+{
+  "version": 1,
+  "writtenAt": "2026-09-19T15:40:02Z",
+  "options": { "structure": "authorTitle", "namePattern": "{author} - {title}",
+               "includesCover": true, "includesOPF": true,
+               "mapsShelvesToTags": false, "prefersHardLinks": false },
+  "entries": [
+    { "path": "Austen, Jane/Emma (17)/Jane Austen - Emma.epub",
+      "bookID": "…", "sha256": "9f2a…", "byteSize": 412334, "isHardLink": false }
+  ]
+}
+```
+
+A dot file, so a folder handed to somebody else does not look like Shelf left
+rubbish in it. What each field is for:
+
+* **`sha256` is the digest of the bytes in the *library***, not of the exported
+  file — that is what decides whether a second run needs to write it again. For
+  an OPF it is the digest of the *rendered text*, so a metadata change shows up
+  as `changed` with nothing hashed twice. For a cover, which the index does not
+  hold a digest of, it is `<size>-<modification time>`, the same cheap question
+  `IndexRebuilder` asks before it re-hashes a book file.
+* **`options`** — because a run with *other* options describes a differently
+  shaped destination, and then nothing in the manifest can be believed about
+  this one. The plan says so (`optionsChanged`) rather than silently rewriting
+  everything.
+* **What is no longer in `entries` gets removed.** A retitled book has a new
+  file name; the old file must go, or the destination holds the book twice and
+  the older copy wins the next import. Only paths the manifest names, only at
+  the size it recorded, and every removal named in the report.
+
+**The direction is one-way and stays one-way.** This file records what Shelf
+*wrote*. It is never consulted to find out what a book is: somebody who edits
+an exported OPF has edited a copy. That is the difference between an export and
+a sync, and Shelf does not offer a sync (ADR 0019).
+
+### What an export writes, per preset
+
+| | book files | `cover.*` | `metadata.opf` | shelves + read as tags |
+|---|---|---|---|---|
+| **Archive** | yes | yes | yes | no |
+| **Just the books** | yes | no | no | — |
+| **For Calibre** | yes | yes | yes | **yes** |
+
+The `metadata.opf` is what makes an export an archive, and the reason is in the
+first table of this document: the rating, the read status, the tags and the
+shelves are **only** there. They are not in any book file, because a book file
+is never written.
+
+**The Calibre mapping** adds `<dc:subject>` entries beside the real fields,
+never instead of them:
+
+| In Shelf | Also written as | Calibre shows it as |
+|---|---|---|
+| `shelf:shelves` = `["Fiction/Sci-Fi"]` | `<dc:subject>Shelf/Fiction/Sci-Fi</dc:subject>` | a hierarchical tag |
+| `shelf:read` = `true` | `<dc:subject>Read</dc:subject>` | a tag |
+
+A tag rather than a custom column because a custom column must be declared in
+Calibre's own `metadata.db` before a value in an OPF means anything, and Shelf
+never writes to `metadata.db` ([ADR 0009](adr/0009-calibre-is-read-through-a-copy-of-metadata-db.md)).
+
+### Reading it back
+
+`SidecarMetadata` is what makes the round trip work: an import **believes a
+`metadata.opf` beside a book, outright**, including the fields it leaves empty.
+Two shapes are looked for — `<stem>.opf` beside `<stem>.epub`, and a shared
+`metadata.opf` in the folder. The shared one is believed **only when the
+folder's book files are all different formats**, because then they are one
+book; two files of the same format make it a pile, and believing the OPF would
+give fifty books one UUID.
+
+The identity comes from the OPF too (`dc:identifier opf:scheme="uuid"`), which
+is what makes a re-import *reconstruct* a library rather than reinvent it — and
+what makes a second import of the same folder skip rather than double.

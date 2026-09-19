@@ -643,6 +643,244 @@ say "putting the disk images away"
 "$IMAGES" unmount
 fi
 
+# ══ 12. Sprint 8 – ordering the library, and the way out of it ════════════════
+#
+# Three things this section has to earn, and each of them is a claim somebody
+# would otherwise have to take on trust:
+#
+#   * a merge survives having the index thrown away — so it really went into
+#     the OPFs and the index really is only a cache (ADR 0001);
+#   * an organise can be killed with SIGKILL in the middle and resumed, and
+#     afterwards every checksum is what it was, no folder is orphaned, and the
+#     way back puts it all where it started;
+#   * an archive export imported into an empty library gives back *the same
+#     library* — which is the whole of "your library survives this app".
+#
+# It works on a copy of the main library, not on the library itself: the
+# sections above have already measured that one, and an organise renames most
+# of its folders.
+
+say "Sprint 8: ordering the library"
+S8="$ROOT/sprint8"
+S8_LIB="$S8/library"
+rm -rf "$S8"
+mkdir -p "$S8"
+cp -R "$LIBRARY" "$S8_LIB"
+"$TOOL" rebuild "$S8_LIB" >/dev/null 2>&1
+
+s8_fail() {
+    echo ""
+    echo "  ✗ $1" >&2
+    exit 1
+}
+
+# Every EPUB's digest, as a set. The set is what has to survive all of this —
+# not the paths, which are exactly what an organise is allowed to change.
+digest_set() {
+    find "$1" -name "*.epub" -print0 | sort -z | xargs -0 shasum -a 256 | awk '{print $1}' | sort
+}
+digest_set "$S8_LIB" >"$S8/digests-before.txt"
+BOOKS_BEFORE=$(wc -l <"$S8/digests-before.txt" | tr -d ' ')
+echo "  a copy of the library: $BOOKS_BEFORE EPUBs"
+
+# ── 12a. Three spellings of one author, over 40 books ─────────────────────────
+#
+# The scenario Sprint 8 exists for. The synthetic library has no such author,
+# so one is made: 40 books get their author set to one of three spellings of
+# the same person, and then the three are folded into one.
+say "one author under three spellings, over 40 books"
+SPELLINGS=("Sebastian Fitzek" "Fitzek, Sebastian" "S. Fitzek")
+N=0
+while IFS= read -r TITLE; do
+    "$TOOL" set-author "$S8_LIB" "$TITLE" "${SPELLINGS[$((N % 3))]}" >/dev/null 2>&1 \
+        || s8_fail "could not set an author — is 'set-author' in shelf-tool?"
+    N=$((N + 1))
+done < <("$TOOL" first-titles "$S8_LIB" 40)
+echo "  40 books given one of three spellings"
+
+for SPELLING in "${SPELLINGS[@]}"; do
+    COUNT_ONE=$("$TOOL" names "$S8_LIB" author | awk -F'\t' -v n="$SPELLING" '$2 == n {print $1}' | tr -d ' ')
+    echo "    ${SPELLING}: ${COUNT_ONE:-0} books"
+done
+
+"$TOOL" merge "$S8_LIB" author "Sebastian Fitzek" "Fitzek, Sebastian" "S. Fitzek" | sed 's/^/  /'
+MERGED=$("$TOOL" names "$S8_LIB" author | awk -F'\t' '$2 == "Sebastian Fitzek" {print $1}' | tr -d ' ')
+echo "  after the merge: ${MERGED:-0} books under one spelling"
+[ "${MERGED:-0}" = "40" ] || s8_fail "the merge did not gather all 40 books"
+
+# The claim that matters: it went into the folders, not only into the index.
+say "throwing the index away, and asking the folders who wrote those 40"
+"$TOOL" rebuild "$S8_LIB" 2>&1 | tail -4 | sed 's/^/  /'
+REBUILT=$("$TOOL" names "$S8_LIB" author | awk -F'\t' '$2 == "Sebastian Fitzek" {print $1}' | tr -d ' ')
+STRAYS=$("$TOOL" names "$S8_LIB" author | grep -c "Fitzek" || true)
+echo "  after the rebuild: ${REBUILT:-0} books under 'Sebastian Fitzek'"
+echo "  spellings of Fitzek still in the library: $STRAYS"
+[ "${REBUILT:-0}" = "40" ] || s8_fail "the merge did not survive the rebuild — it was only in the index"
+[ "$STRAYS" = "1" ] || s8_fail "more than one spelling of Fitzek came back out of the folders"
+echo "  one spelling, 40 books, nothing lost ✓"
+
+# ── 12b. Two obstacles, built on purpose ──────────────────────────────────────
+#
+# Something already sitting where a book wants to go: once at the exact path,
+# once at a path differing only in its capitals. The second is the Mac-only
+# trap — on this disk that *is* the same folder, on a case-sensitive one it is
+# not — and it is why `VolumeCase` measures the volume instead of assuming.
+#
+# Note what is **not** built here: two books wanting one folder. A target path
+# ends in the library's own running number, and that number is UNIQUE in the
+# index, so two indexed books cannot want the same path — the number is exactly
+# what makes the name unique (ADR 0002). Those two guards in the planner are
+# defensive and are covered by unit tests that hand it the state directly.
+say "two obstacles in the way of the organise, built on purpose"
+"$TOOL" make-collision "$S8_LIB" exact 2>&1 | sed 's/^/  /'
+"$TOOL" make-collision "$S8_LIB" case 2>&1 | sed 's/^/  /'
+
+say "the organise preview — nothing is moved by this"
+"$TOOL" organize "$S8_LIB" >"$S8/preview.txt" 2>&1
+sed 's/^/  /' "$S8/preview.txt" | head -24
+FOLDS=$(grep -c "folds case: yes" "$S8/preview.txt" || true)
+# The number the preview *states*, not the number of lines it states it on.
+BLOCKED=$(sed -n 's/.*already there, and it is not empty: \([0-9]*\).*/\1/p' "$S8/preview.txt")
+echo "  obstacles the preview named: ${BLOCKED:-0}"
+[ "${BLOCKED:-0}" != "0" ] || s8_fail "the preview does not name the obstacle it was given"
+if [ "$FOLDS" = "1" ]; then
+    [ "${BLOCKED:-0}" -ge 2 ] \
+        || s8_fail "this volume folds case, so the capitals obstacle should have counted too (got ${BLOCKED:-0})"
+    echo "  this volume folds case, so both obstacles count ✓"
+else
+    echo "  this volume is case-sensitive, so only the exact obstacle counts ✓"
+fi
+
+# They were put there to be photographed and counted, not to be lived with.
+# Both go now, so the organise below has a clean library to work on — and so
+# that what is removed is exactly what this script made.
+rm -rf "$S8_LIB/.shelf/library.sqlite" 2>/dev/null
+while IFS= read -r LEFTOVER; do
+    rm -f "$LEFTOVER"
+    rmdir "$(dirname "$LEFTOVER")" 2>/dev/null || true
+done < <(find "$S8_LIB" -name "not-a-book.txt")
+"$TOOL" rebuild "$S8_LIB" >/dev/null 2>&1
+
+# ── 12c. An organise killed in the middle, then resumed ───────────────────────
+say "an organise killed in the middle, then resumed"
+SHELF_EXIT_AFTER=25 "$TOOL" organize "$S8_LIB" --run >"$S8/killed.txt" 2>&1
+grep -q "leaving the process now" "$S8/killed.txt" \
+    || s8_fail "the run was meant to be killed mid-flight and was not"
+KILLED_BOOKS=$(find "$S8_LIB" -name "*.epub" | wc -l | tr -d ' ')
+KILLED_MANIFEST=$(python3 -c "import json,sys;print(len(json.load(open(sys.argv[1]))['entries']))" \
+    "$S8_LIB/.shelf/organize-manifest.json" 2>/dev/null || echo 0)
+echo "  killed after 25 moves: $KILLED_BOOKS EPUBs on disk, $KILLED_MANIFEST in the manifest"
+[ "$KILLED_BOOKS" = "$BOOKS_BEFORE" ] || s8_fail "BOOKS WENT MISSING WHEN THE RUN WAS KILLED"
+
+"$TOOL" organize "$S8_LIB" --run 2>&1 | grep -vE "^  " | sed 's/^/  /'
+
+say "after the organise: the same books, the same bytes, no orphan"
+digest_set "$S8_LIB" >"$S8/digests-after.txt"
+AFTER=$(wc -l <"$S8/digests-after.txt" | tr -d ' ')
+echo "  EPUBs: $BOOKS_BEFORE before, $AFTER after"
+[ "$AFTER" = "$BOOKS_BEFORE" ] || s8_fail "THE NUMBER OF BOOK FILES CHANGED"
+if diff -q "$S8/digests-before.txt" "$S8/digests-after.txt" >/dev/null; then
+    echo "  every checksum identical ✓"
+else
+    diff "$S8/digests-before.txt" "$S8/digests-after.txt" | head -5
+    s8_fail "A BOOK'S CONTENTS CHANGED DURING THE ORGANISE"
+fi
+"$TOOL" orphans "$S8_LIB" 2>&1 | sed 's/^/  /'
+ORPHANS=$("$TOOL" orphans "$S8_LIB" 2>&1 | awk -F': ' '/orphaned folders/ {print $2}' | tr -d ' ')
+[ "${ORPHANS:-0}" = "0" ] || s8_fail "THE ORGANISE LEFT ORPHANED FOLDERS"
+EMPTY_DIRS=$(find "$S8_LIB" -type d -empty -not -path "*/.shelf/*" | wc -l | tr -d ' ')
+echo "  empty folders left behind: $EMPTY_DIRS"
+"$TOOL" rebuild "$S8_LIB" 2>&1 | tail -3 | sed 's/^/  /'
+
+# ── 12d. The way back ─────────────────────────────────────────────────────────
+say "Undo Organize — every folder back where it came from"
+"$TOOL" organize-undo "$S8_LIB" 2>&1 | sed 's/^/  /'
+digest_set "$S8_LIB" >"$S8/digests-undone.txt"
+if diff -q "$S8/digests-before.txt" "$S8/digests-undone.txt" >/dev/null; then
+    echo "  every checksum still identical after the undo ✓"
+else
+    s8_fail "A BOOK'S CONTENTS CHANGED DURING THE UNDO"
+fi
+"$TOOL" rebuild "$S8_LIB" 2>&1 | tail -3 | sed 's/^/  /'
+
+# Put it back the way it should be, for the export below.
+"$TOOL" organize "$S8_LIB" --run >/dev/null 2>&1
+
+# ── 12e. Export, in all three shapes ──────────────────────────────────────────
+# Five books marked read, so the Calibre export has something to map. The
+# shelves are already there: section 8 put a thousand books on twenty of them,
+# and this section works on a copy of that library.
+READ_SET=0
+while IFS= read -r TITLE; do
+    "$TOOL" edit "$S8_LIB" "$TITLE" 4 yes >/dev/null 2>&1 && READ_SET=$((READ_SET + 1))
+done < <("$TOOL" first-titles "$S8_LIB" 5)
+echo "  books marked read, to give the Calibre mapping something to map: $READ_SET"
+
+# One at a time, and each of the two that are only being counted is taken away
+# again before the next is written. Each is a full second copy of the library,
+# and three of them alive at once is 4 GB that this run does not need to hold —
+# it is measured on a machine with under 10 GB free.
+say "export: Archive, Just the books, For Calibre"
+"$TOOL" export "$S8_LIB" "$S8/export-archive" archive 2>&1 \
+    | grep -E "preset:|plan:|Written" | sed "s/^/  [archive] /"
+echo "  archive:  $(find "$S8/export-archive" -name '*.opf' | wc -l | tr -d ' ') OPFs, $(find "$S8/export-archive" -name '*.epub' | wc -l | tr -d ' ') EPUBs"
+
+rm -rf "$S8/export-books"
+"$TOOL" export "$S8_LIB" "$S8/export-books" books 2>&1 \
+    | grep -E "preset:|plan:|Written" | sed "s/^/  [books] /"
+BOOKS_OPFS=$(find "$S8/export-books" -name '*.opf' | wc -l | tr -d ' ')
+echo "  books:    $BOOKS_OPFS OPFs, $(find "$S8/export-books" -name '*.epub' | wc -l | tr -d ' ') EPUBs"
+grep -q "the rating, the read status, the tags and the shelves" \
+    "$S8/export-books/Shelf-Export-Report.txt" \
+    || s8_fail "the 'just the books' report does not say what it left behind"
+echo "  and its report says, in as many words, what stayed behind ✓"
+rm -rf "$S8/export-books"
+[ "$BOOKS_OPFS" = "0" ] || s8_fail "'just the books' wrote OPFs"
+
+rm -rf "$S8/export-calibre"
+"$TOOL" export "$S8_LIB" "$S8/export-calibre" calibre 2>&1 \
+    | grep -E "preset:|plan:|Written" | sed "s/^/  [calibre] /"
+CAL_TAGS=$(grep -rl "dc:subject>Shelf/" "$S8/export-calibre" 2>/dev/null | wc -l | tr -d ' ')
+CAL_READ=$(grep -rl "dc:subject>Read<" "$S8/export-calibre" 2>/dev/null | wc -l | tr -d ' ')
+echo "  calibre:  $CAL_TAGS OPFs carry a shelf as a Calibre tag, $CAL_READ carry “Read”"
+[ "$CAL_TAGS" != "0" ] || s8_fail "the Calibre export mapped no shelf to a tag"
+rm -rf "$S8/export-calibre"
+
+# ── 12f. The most important proof of the sprint ───────────────────────────────
+#
+# The archive, imported into a *new, empty* library, and the two compared book
+# by book. If this passes, a library can leave Shelf and come back whole; if it
+# does not, every other promise in this sprint is decoration.
+say "the archive imported into an empty library, and the two compared"
+rm -rf "$S8/reimported"
+"$TOOL" import "$S8/export-archive" "$S8/reimported" 2>&1 \
+    | grep -E "reading|shelves registered|plan:|index holds" | sed 's/^/  /'
+"$TOOL" compare "$S8_LIB" "$S8/reimported" 2>&1 | sed 's/^/  /' \
+    || s8_fail "THE RE-IMPORTED LIBRARY IS NOT THE SAME LIBRARY"
+rm -rf "$S8/reimported"
+
+# ── 12g. The second run, and the hard links ───────────────────────────────────
+say "a second export into the same folder writes only the differences"
+"$TOOL" export "$S8_LIB" "$S8/export-archive" archive 2>&1 | grep -E "plan:|Written" | sed 's/^/  /'
+UNCHANGED=$("$TOOL" export "$S8_LIB" "$S8/export-archive" archive 2>&1 | grep -oE "[0-9]+ unchanged" | head -1)
+echo "  and again: $UNCHANGED"
+
+say "hard links: the same bytes, twice named, once stored"
+rm -rf "$S8/export-linked"
+"$TOOL" export "$S8_LIB" "$S8/export-linked" archive --links 2>&1 | grep -E "Written|hard links" | sed 's/^/  /'
+LIB_EPUBS=$(find "$S8_LIB" -name '*.epub' | wc -l | tr -d ' ')
+OUT_EPUBS=$(find "$S8/export-linked" -name '*.epub' | wc -l | tr -d ' ')
+BOTH_INODES=$(find "$S8_LIB" "$S8/export-linked" -name '*.epub' -exec stat -f '%i' {} \; | sort -u | wc -l | tr -d ' ')
+echo "  EPUBs in the library: $LIB_EPUBS · in the export: $OUT_EPUBS"
+echo "  distinct inodes across both: $BOTH_INODES"
+[ "$BOTH_INODES" = "$LIB_EPUBS" ] \
+    || s8_fail "THE LINKED EXPORT MADE SECOND COPIES ($BOTH_INODES inodes for $LIB_EPUBS books)"
+echo "  no second copy of a single book ✓"
+
+# What is left of section 12 is the library copy and one archive. Both are
+# named in the report, and `make synthetic-clean` takes the lot.
+rm -rf "$S8/export-linked"
+
 say "done"
 echo "source:  $SOURCE"
 echo "library: $LIBRARY"

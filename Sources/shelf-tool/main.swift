@@ -138,6 +138,17 @@ let usage = """
                                     files alone, `calibre` adds the shelves and
                                     the read status as Calibre tags. A second
                                     run writes only the differences
+      first-titles <library> <count>
+                                    the titles of the first <count> books by
+                                    book number — a stable order to drive the
+                                    proof run from
+      set-author <library> <title> <author>
+                                    set one book's author, for building the
+                                    "one person, three spellings" case
+      make-collision <library> exact|case
+                                    give two books the same target folder, or
+                                    two that differ only in capitals — the
+                                    traps the organise preview has to name
       compare <one library> <other library>
                                     whether two libraries hold the same books
                                     with the same ratings, tags, shelves,
@@ -186,6 +197,9 @@ case "organize": try await Commands.organize(Array(arguments.dropFirst()))
 case "organize-undo": try await Commands.organizeUndo(Array(arguments.dropFirst()))
 case "export": try await Commands.export(Array(arguments.dropFirst()))
 case "compare": try await Commands.compare(Array(arguments.dropFirst()))
+case "first-titles": try await Commands.firstTitles(Array(arguments.dropFirst()))
+case "set-author": try await Commands.setAuthor(Array(arguments.dropFirst()))
+case "make-collision": try await Commands.makeCollision(Array(arguments.dropFirst()))
 default:
     print(usage)
     exit(2)
@@ -1635,6 +1649,102 @@ enum Commands {
             if problems.count > 30 { print("  … \(problems.count - 30) more") }
             exit(1)
         }
+    }
+
+    static func firstTitles(_ arguments: [String]) async throws {
+        guard arguments.count >= 2, let count = Int(arguments[1]) else {
+            print("usage: shelf-tool first-titles <library> <count>")
+            exit(2)
+        }
+        let (_, index) = try openLibrary(arguments[0])
+        for entry in try await firstBooks(count, in: index) { print(entry.book.title) }
+    }
+
+    static func setAuthor(_ arguments: [String]) async throws {
+        guard arguments.count >= 3 else {
+            print("usage: shelf-tool set-author <library> <title> <author>")
+            exit(2)
+        }
+        let (library, index) = try openLibrary(arguments[0])
+        let entry = try await findBook(arguments[1], in: index)
+        // Through the field's own rules, not by assigning behind their back.
+        guard case .changed(let edited) = BookField.authors.apply(arguments[2], to: entry.book) else {
+            print("unchanged")
+            return
+        }
+        let change = MetadataChange.make(from: entry.book) { $0 = edited }
+        _ = try await MetadataEditor(library: library).apply(change, to: entry, in: index)
+        print("“\(entry.book.title)”: authors → \(edited.authors.joined(separator: " & "))")
+    }
+
+    /// Puts something in the way of a book's target folder, so the organise
+    /// preview has a real obstacle to name.
+    ///
+    /// **Why it is built this way, and not by giving two books one path.** A
+    /// target path ends in the library's own running number — `Emma (17)` —
+    /// and that number is `UNIQUE` in the index. So two *indexed* books can
+    /// never want the same folder: the number is exactly what makes the name
+    /// unique, which is why it is in the name at all (ADR 0002). The planner's
+    /// `collision` and `caseOnlyCollision` guards are therefore defensive, and
+    /// they are covered by unit tests that hand the planner the state directly.
+    ///
+    /// What *can* happen on a real disk, and what this builds, is a folder
+    /// already sitting where a book wants to go: left by a killed run, made by
+    /// hand in the Finder, or restored from a backup. Two shapes:
+    ///
+    /// * `exact` — a folder at the target path, with a file in it.
+    /// * `case`  — a folder whose name differs from the target only in its
+    ///   capitals. On this Mac that *is* the target folder; on a
+    ///   case-sensitive volume it is a different folder and no obstacle at
+    ///   all, which is the whole reason `VolumeCase` measures instead of
+    ///   assuming.
+    static func makeCollision(_ arguments: [String]) async throws {
+        guard arguments.count >= 2, ["exact", "case"].contains(arguments[1]) else {
+            print("usage: shelf-tool make-collision <library> exact|case")
+            exit(2)
+        }
+        let (library, index) = try openLibrary(arguments[0])
+        let entries = try await index.allEntries()
+
+        // A book that is actually going to move — one already in the right
+        // place would never ask about its destination.
+        let folds = VolumeCase.folds(at: library.root)
+        guard
+            let victim = entries.first(where: {
+                let target = OrganizePlanner.target(for: $0)
+                return target != $0.folder
+                    && !VolumeCase.isCaseOnly(from: $0.folder, to: target, folding: folds)
+                    && !OrganizeBookProbe.exists(target, under: library.root)
+            })
+        else {
+            print("no book in this library is due to move — run an edit first")
+            exit(1)
+        }
+
+        let target = OrganizePlanner.target(for: victim)
+        let inTheWay = arguments[1] == "exact" ? target : flippedCase(target)
+        let url = library.root.appendingPathComponent(inTheWay, isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try Data("something somebody put here\n".utf8)
+            .write(to: url.appendingPathComponent("not-a-book.txt"))
+
+        print("\(arguments[1]): “\(victim.book.title)” wants \(target)")
+        print("  and something is already at \(inTheWay)")
+        if arguments[1] == "case" {
+            print(
+                "  this volume folds case: \(folds ? "yes — so that is the same folder" : "no — so it is a different one")"
+            )
+        }
+    }
+
+    /// The last path component with its capitals turned over, so the result
+    /// differs from the original in nothing else.
+    private static func flippedCase(_ path: String) -> String {
+        var parts = path.split(separator: "/").map(String.init)
+        guard let last = parts.popLast() else { return path }
+        let flipped = String(
+            last.map { $0.isUppercase ? Character($0.lowercased()) : Character($0.uppercased()) })
+        return (parts + [flipped]).joined(separator: "/")
     }
 
     static func bulkEdit(_ arguments: [String]) async throws {

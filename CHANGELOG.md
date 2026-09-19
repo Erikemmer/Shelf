@@ -3,6 +3,247 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 8 – ordering the library, and the way out of it · 19 September 2026
+
+Measured on Erik's Mac (M-series, macOS 15.6) against
+`~/Library/Caches/Shelf/synthetic/` (the closing run, 5 000 books) and
+`~/Library/Caches/Shelf/measure-library-8/` (the small libraries the window was
+driven against, and the screenshots).
+
+**Why there is a Sprint 8 at all.** Trying the program found a hole in the
+concept rather than a defect in the code. Shelf could order a collection only
+inside its own window: with one person in the library as "Sebastian Fitzek",
+"Fitzek, Sebastian" and "S. Fitzek", those were three authors in the sidebar
+and three folders on the disk — and every answer Shelf gave was correct,
+because three different strings really are three different strings. A library
+manager that can only ever agree with the mess is not managing anything. The
+second half is the *Leitlinie*'s third principle, no lock-in: a library kept in
+Shelf has to be able to walk out of Shelf without losing what was maintained
+in it. [ADR 0018](docs/adr/0018-renaming-merging-and-organising-are-deliberate-operations.md)
+and [ADR 0019](docs/adr/0019-export-the-opf-decides-what-an-export-is.md).
+
+**675 core tests, up from 631.** `make proof` green end to end, all 46 sections.
+
+### The three things Sprint 7's runbook left open
+
+| | |
+|---|---|
+| a resumed transfer reports as failures the files it wrote itself | **fixed** |
+| a German sentence on the way back to Calibre is broken | **already fixed in Sprint 7**, and checked again: all seven verb phrases that fill `Could not %1$@: %2$@` are proper German zu-infinitives |
+| the read status and the shelves do not travel to Calibre | **fixed**, through the "For Calibre" export |
+
+**The resumed transfer.** The manifest is written every twenty files, so an
+untidy death — a crash, a power cut, a pulled cable — can leave up to nineteen
+files on a card that no manifest names; the next run then reported each of them
+as `FAILED … a file of that name is already on the device`. Nothing was ever
+lost, but "Failed" is the wrong word for "I had already done that", and the
+manifest stayed short for the life of the card. The planner now asks what is at
+a destination path before it plans a copy there (`DeviceFileProbe`): **the size
+first, and the digest only if the size already matched**, so a tidy card is
+asked nothing at all. A file whose bytes are the book's is skipped as
+`alreadyOnDevice` and carried in `TransferPlan.adopted`, which the runner
+records into the manifest *before* it copies anything. A file of the same name
+whose bytes differ is neither claimed nor written over — that is the second of
+the two tests, and the more important one.
+
+### Added — three spellings of one author can become one
+
+A sidebar row's context menu has `Rename “…”…` and `Merge into…`, for authors,
+series, publishers and tags. Publishers had neither a sidebar section nor a
+facet and got both; `LibraryIndex.publisherFacets` is a `GROUP BY` over a
+column rather than a join, because nothing hangs off a publisher — no sort key,
+no second name, no membership.
+
+**Shelf proposes nothing.** No similarity detection, no "we found 12 probable
+duplicates". ADR 0018 writes down why: the cost of being right is a list
+somebody reads anyway, and the cost of being wrong is 40 books filed under a
+name that never existed — and because a merge writes 40 OPFs, undoing it is a
+second bulk write rather than a non-event.
+
+The sheet rather than marking rows in the sidebar, because the sidebar draws
+**twelve** rows per section and a real library has hundreds of authors: three
+spellings of one person are mostly not on screen. ⌘-click stays unclaimed for
+the filter-combining the backlog still wants.
+
+Two things it deliberately does not do: it does not move a folder (ADR 0007),
+and it does not touch a book file. It *offers* the organise afterwards — "40
+books changed — tidy the folders now?" — as a banner that opens the preview.
+
+| | |
+|---|---|
+| 40 books given one of three spellings, then merged | 26 rewritten (14 already read that way) |
+| the index then erased and rebuilt from the folders | **40 books, one spelling, 0 lost** |
+| spellings of "Fitzek" left in the library afterwards | 1 |
+
+That second row is the one that matters: the merge went into the OPFs, not only
+into the index, so the index is still nothing but a cache (ADR 0001).
+
+### Added — `Organize Library…`, the first thing here that moves a folder
+
+Everything else in this program is a copy or a read. So it is written to the
+import's rules rather than to a `moveItem` and a hope (ADR 0002): the preview
+is the value the runner is handed, every folder is hashed before and after, a
+manifest is written as the run goes on, an interrupted run resumes, and
+`Undo Organize` is that manifest walked backwards — newest first, because
+undoing `B → C` is what frees `B` for the undo of `A → B`.
+
+**Folders move; the bytes inside them are not touched**, and the digests on
+both sides are what say so rather than a sentence in a document.
+
+**Capitals are measured, not assumed.** `VolumeCase.folds(at:)` writes one
+empty file with a mixed-case name, asks for it by the other spelling, and takes
+the answer away. APFS is case-insensitive by default and case-*sensitive* if it
+was formatted that way, and a library can sit on either — guessing from the
+platform gets an external disk wrong. On a folding volume `Fitzek` → `fitzek`
+is not a move between two folders but one folder spelled differently, and a
+direct `moveItem` is a write into itself; such a move goes through a third name
+in `.shelf/moving/`, and **that one move is written into the manifest before it
+is entered**, because it is the only operation in the whole feature with a
+halfway state.
+
+**One `removeItem`, with four guards**: an author folder this run has just
+emptied, a direct child of the root, not `.shelf`, holding nothing at all — a
+`.DS_Store` counts as something. Without it an organise tidies the books and
+litters the library with an empty author folder per merge. Every one is named
+in the report.
+
+Measured against the closing run's library, **4 996 books**:
+
+| | |
+|---|---|
+| the preview, over the whole library | 196 to move · 4 798 already right · **2 cannot be** |
+| killed mid-run (`SHELF_EXIT_AFTER=25`, the untidy way) | 4 996 EPUBs on disk, **20** in the manifest |
+| the same run again | 25 recognised as already moved · 173 moved · **0 failed** |
+| EPUBs before and after | 4 996 / 4 996, **every checksum identical** |
+| orphaned folders afterwards | **0** |
+| empty folders left behind | **0** |
+| a rebuild from the folders | 4 996 books, 0 unreadable, index and folders agree |
+| `Undo Organize` | **198 folders back**, every checksum still identical |
+
+The gap between 20 in the manifest and 25 moved is the point of the resume.
+Those five were moves no manifest knew about, and before the fix `Undo
+Organize` could not have put them back; the resumed run **adopts** them, digests
+and all — the same word and the same argument as a resumed transfer adopting
+the files it wrote itself.
+
+### Added — a library can leave Shelf and come back whole
+
+`File ▸ Export Library…`, three presets named for the question they answer:
+**Archive**, **Just the books**, **For Calibre**. Formats, structure, name
+pattern and a switch each for `cover.jpg` and `metadata.opf` stay visible
+underneath.
+
+**The `metadata.opf` is what makes an export an archive**, and that is the whole
+of ADR 0019. The ratings, the read status, the tags and the shelves are not
+inside any book file — a book file is never written — so an export without the
+OPF is not a lesser export, it is a different kind of thing. "Just the books"
+says so in the dialogue before anything is pressed, and again in the report
+written into the folder.
+
+**And an import now believes a `metadata.opf` beside a book**, which is the
+other half: writing the OPF is useless if nothing reads it back.
+`SidecarMetadata` also makes an import of somebody's Calibre *folder* carry its
+ratings and series across. `shelf-tool import` walks sub-folders now, and both
+import paths register the shelves in `library.json` and the index **before** the
+books — the index skips a shelf path it has not been given, silently (ADR 0008).
+
+**The way back to Calibre stops losing things.** "For Calibre" writes the same
+files and additionally maps each shelf to `<dc:subject>Shelf/Fiction/Sci-Fi` and
+a read book to `<dc:subject>Read`. A tag rather than a custom column, because a
+custom column must be declared in Calibre's `metadata.db` first and Shelf never
+writes there (ADR 0009). It is a mapping and says so: Shelf's own fields are
+written beside the tags, so the same folder still re-imports into Shelf without
+loss.
+
+**The most important measurement of the sprint**, against 4 996 books:
+
+| | |
+|---|---|
+| archive export | 14 892 files · 1.3 GB |
+| imported into a **new, empty** library | 4 996 books · 16 shelves registered before them |
+| the two libraries compared, book by book, by UUID | **4 996 compared · they agree on titles, authors, ratings, read status, series, shelves and tags** |
+
+And the rest:
+
+| | |
+|---|---|
+| "Just the books" | 4 996 EPUBs, **0 OPFs**, and its report says what stayed behind |
+| "For Calibre" | **1 000** OPFs carry a shelf as a Calibre tag, 6 carry `Read` |
+| a second run into the same folder | **14 892 unchanged · 0 written** |
+| a third run | the same |
+| hard links, same volume | 9 896 links · **5.3 MB copied** instead of 1.3 GB |
+| EPUBs in the library / in the export / distinct inodes across both | 4 996 / 4 996 / **4 996** |
+
+That last row is the whole claim: no second copy of a single book exists. Hard
+links are safe here and nowhere else because a book file is never written, so
+the two names cannot come to differ. **A hard-linked export is not a backup** —
+one copy of the bytes with two names — and the report says how many links it
+made so the difference is visible rather than assumed.
+
+### Fixed — a defect since Sprint 1, found by asking a path whether it was legal
+
+`BookFolderName.titleComponent` and `.fileName` both cut a name to the 255-byte
+limit. **`.authorComponent` did not.** A `dc:creator` holding a sentence — real
+EPUBs do this, and `AuthorSort` turns it into one long component — made a folder
+the file system refuses, which failed the *import* of such a book and not only
+its organise. It had been so since Sprint 1 and was found because Sprint 8 asks
+every component of a built path whether it is legal.
+
+### Fixed — two things only a round trip could find
+
+Neither would have been found by a test of the export alone, because each half
+was behaving reasonably. Both are in ADR 0019.
+
+**Filling the OPF's gaps from the book file was wrong.** A book with **no
+author** has an OPF that says so by saying nothing; treating that as "the OPF
+did not mention it" let the file's own guess through — and the file's guess came
+from its *name*, which the export had just written from the very metadata being
+reconstructed. One book came back with its title as its author. An empty field
+in a record is a statement, not a silence, so the sidecar wins outright now.
+
+**An export that does not tidy its own output corrupts the next import.** A
+retitled book has a new file name and the old file stayed beside it; that copy
+sorts first, is read first, and wins. A round trip came back with titles the
+library had corrected weeks earlier. Stale files are removed — only paths the
+previous manifest names, only at the size it wrote them, every one named in the
+report — and the folder a removal empties goes with it.
+
+### Fixed — three things found by looking at the screenshots
+
+`make organize-shots` drives the real window through four sheets and
+photographs each. Looking at the pictures found three defects that no test had,
+and `docs/screenshots/sprint-8/README.md` says which picture found which.
+
+| | was | is |
+|---|---|---|
+| the merge sheet, with the target already correct | **"No book carries that name"** — with three books listed one line above, each saying "3 books" | "3 books already read that way — nothing to change" |
+| the organise preview | the one book that **cannot** be moved was last in a scrolling list, below eight moves and below the fold | what cannot be done comes first, in the accent colour, with the book named |
+| the export sheet's format row | eight checkboxes broke their own words to fit — **"EPU B"**, **"AZW 3"**, **"MOB I"** — and sat ticked *and* disabled while "All" was on | "All" stands alone with "every format of every book"; the boxes appear only when it is off, wrapped five to a row |
+
+A fourth thing was found by the *script* rather than the pictures, and is worth
+writing down because it wasted two runs: **a right-click below the window opens
+nothing, and says nothing about having opened nothing.** The sidebar caps each
+section at twelve rows, so in a 30-book library the tag list alone pushed the
+Authors section off the bottom. A posted scroll-wheel event does not reach a
+SwiftUI `ScrollView` at all — the same limit `docs/BACKLOG.md` already records
+for the table — so there was nothing to scroll with. The shots library is
+sixteen books now, and the script prints the point it is about to click.
+
+### Not measured, and named
+
+- **No real Calibre has read one of these exports.** The OPFs are quoted, the
+  schema is the one Calibre writes and `CalibreReader` reads back, and the
+  mapping is checked by a test — but running Calibre's importer over an export
+  would mean writing into Erik's own Calibre library, which is not this
+  project's to touch. Unchanged from Sprint 7's `docs/RUNBOOK.md` §6.
+- **The German window has not been photographed** for any of the five new
+  sheets. Their strings are in the catalogue and the tests cover them; what a
+  picture would add is whether the layout survives longer German words.
+- **No export has been run to another volume**, so the copy-across-volumes path
+  and the hard-link fallback are exercised only by the unit test's seam.
+- **CI has still not run since Sprint 4.** Checked again: same "recent account
+  payments have failed" after seven seconds.
+
 ## Sprint 7 – polish and release · 18–19 September 2026
 
 Measured on Erik's Mac (M-series, macOS 15.6) against

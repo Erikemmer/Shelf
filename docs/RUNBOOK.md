@@ -214,6 +214,21 @@ a custom column has to be *declared* in Calibre's own database before a value
 in an OPF means anything, and Shelf never writes to `metadata.db`
 ([ADR 0009](adr/0009-calibre-is-read-through-a-copy-of-metadata-db.md)).
 
+**Since Sprint 8 there is a way to bring those two across as well**, and it is
+the "For Calibre" export in §14. It writes the same files and *additionally*
+maps each shelf to a tag Calibre does read:
+
+| In Shelf | Also written | Calibre shows |
+|---|---|---|
+| on the shelf `Fiction/Sci-Fi` | `<dc:subject>Shelf/Fiction/Sci-Fi</dc:subject>` | a hierarchical tag `Shelf → Fiction → Sci-Fi` |
+| read | `<dc:subject>Read</dc:subject>` | the tag `Read` |
+
+It is a **mapping and not the fields**: Shelf's own `shelf:read` and
+`shelf:shelves` are written beside the tags, not instead of them, so the same
+folder still comes back into Shelf with nothing lost. Use it when the
+destination is Calibre; use plain **Archive** when the destination is Shelf, or
+a backup, or ten years from now.
+
 `.shelf/` can be left where it is: it begins with a dot, and Calibre skips
 hidden folders.
 
@@ -392,3 +407,185 @@ and what to do.
 It never writes, deletes or overwrites a **book file** (CONCEPT §4). Every path
 in this runbook is a copy, a read, or a write to `metadata.opf` and the index.
 If a path ever seems to need a book file changed, it is the wrong path.
+
+---
+
+## 13. Tidy the library up
+
+Two commands, and the order matters: the first changes what the books *say*,
+the second changes where they *are*.
+
+### Spellings: one person, one name
+
+Right-click an author, a series, a publisher or a tag in the sidebar →
+**Rename…** or **Merge into…**. Tick every spelling that is the same thing,
+type the one they should all have, and press the button. The count under it is
+computed from the very value the button executes.
+
+```
+$ shelf-tool names <library> author
+36 authors
+  14	Sebastian Fitzek
+  13	Fitzek, Sebastian
+  13	S. Fitzek
+$ shelf-tool merge <library> author "Sebastian Fitzek" "Fitzek, Sebastian" "S. Fitzek"
+plan: 26 books · 2 spellings · → “Sebastian Fitzek”
+Merge Authors: 26 books · 0 s
+no folder was moved — that is `organize`
+```
+
+**Shelf proposes nothing.** There is no "we found 12 probable duplicates":
+which spellings are one person is a decision, and
+[ADR 0018](adr/0018-renaming-merging-and-organising-are-deliberate-operations.md)
+says why it is not this program's to make.
+
+It writes one `metadata.opf` per book and one index row per book, as **one**
+step on the undo stack — ⌘Z puts all 40 back. It does **not** move any folder,
+and it offers to afterwards: *"40 books changed — tidy the folders now?"*
+
+### Folders: `Library ▸ Organize Library…`
+
+The preview first, always. It shows every `old → new`, how many are already
+right, and everything it cannot touch.
+
+```
+$ shelf-tool organize <library>
+volume folds case: yes
+plan: 202 to move · 4794 already right · 2 cannot be
+  Atwood, Adrian/Piranesi #34 (8)
+    → Fitzek, Sebastian/Piranesi #34 (8)
+  …
+  something is already there, and it is not empty: 2
+nothing was moved — add --run
+```
+
+Then, and only then:
+
+```
+$ shelf-tool organize <library> --run
+Moved · 202 folders · Already right: 4794 · Could not: 2 · Failed: 0
+```
+
+What it guarantees, and what each one is worth knowing:
+
+- **Folders move; the bytes inside them do not.** Every folder is hashed before
+  the move and again after, and a folder whose contents differ is put straight
+  back and named in the report.
+- **Nothing is overwritten**, and nothing that holds anything is deleted. The
+  one exception is an author folder the run itself has just *emptied* — an
+  empty directory holds nothing — and each one is named in the report.
+- **It can be interrupted.** A manifest is written every twenty moves and
+  immediately before the one move that has a halfway state. Run it again and it
+  picks up.
+- **There is a way back**, and it survives a crash because it is a file rather
+  than the window's undo stack: `Undo Organize`, or `shelf-tool organize-undo`.
+
+**A setting, off by default:** *Shelf ▸ Keep Folders in Step with Metadata
+Changes*. Off, because a path can be referenced from a script, a hardlink
+backup or a Finder alias, and somebody who has those must not be surprised. On,
+a metadata change *offers* an organise — it still never moves a folder inside
+a keystroke.
+
+### If a run was killed
+
+Nothing is lost and there is nothing to repair by hand. The folders are the
+truth, so every book is findable at whichever path it is at, and a rebuild
+finds them all:
+
+```
+$ shelf-tool organize <library> --run
+25 books were already at their new folder — the index says so now
+plan: 34 to move · 26 already right
+Moved · 34 folders · Already right: 26 · Could not: 0 · Failed: 0
+```
+
+The first line is the repair: a run killed between two index writes leaves
+books at their new folder while the index still says the old one. That is the
+*cache* being wrong, and it is put right before anything else is decided — by
+the UUID in each `metadata.opf`, never by title.
+
+---
+
+## 14. Export, and back again
+
+**What the library is worth is not the book files.** The ratings, the read
+status, the tags and the shelves are only in `metadata.opf` — never inside a
+book file, because a book file is never written. So the whole question of an
+export is whether the OPFs come with it.
+
+`File ▸ Export Library…` (or *Export Selected Books…*), three presets:
+
+| | What it is for | What it writes |
+|---|---|---|
+| **Archive** | keeping it, backing it up, moving to another Mac | the books, the covers, a `metadata.opf` each |
+| **Just the books** | handing somebody files who has no Shelf | the book files, and nothing else |
+| **For Calibre** | going back to Calibre without losing the shelves | Archive, plus the mapping in §6 |
+
+**"Just the books" says what it costs, before anything is pressed** — in the
+dialogue and again in the report written into the folder:
+
+```
+NOT in this export, because no metadata.opf was written:
+  the rating, the read status, the tags and the shelves.
+  They are in the library's own OPFs and nowhere else.
+```
+
+### Getting it back
+
+An archive is a library. Import the folder and everything returns:
+
+```
+$ shelf-tool export <library> <folder> archive
+preset: Archive
+plan: 4996 books · 14988 new · 1.3 GB to write
+Written · 14988 new · 0 changed · 0 unchanged · Failed: 0
+
+$ shelf-tool import <folder> <a new, empty library>
+shelves registered before the books: 20
+index holds 4996 books
+
+$ shelf-tool compare <library> <the new one>
+books: 4996 and 4996
+compared by UUID: 4996
+the two libraries agree on titles, authors, ratings, read status, series, shelves and tags
+```
+
+In the app it is `File ▸ Add Books…` on the exported folder, or dropping it on
+the window. The import reads each `metadata.opf` and takes its word for
+everything, the UUID included — which is what makes it come back as *the same
+library* rather than as a new one holding the same files.
+
+### Running it again
+
+The same folder, a second time, writes only the differences:
+
+```
+plan: 4996 books · 37 new · 4 changed · 14947 unchanged · 12.1 MB to write
+```
+
+It compares the library against a manifest at the destination
+(`.shelf-export.json`); it never reads the exported files to find out what a
+book is. An exported OPF you have edited is a copy, and the next export
+overwrites it: this is an export, not a sync.
+
+A book whose title has changed has a new file name, and the file under the old
+name is **taken away** — otherwise the folder holds the book twice and the
+older copy wins the next import. Only files the manifest names, only at the
+size it wrote them; anything you have changed is left alone and named in the
+report.
+
+### Two copies, one on the disk
+
+On the same volume, tick **Hard links where possible**. A link costs a
+directory entry and no bytes, which is what makes archiving a large library
+something you will actually do. It is safe here because Shelf never writes a
+book file, so the two names cannot come to differ.
+
+```
+EPUBs in the library: 4996 · in the export: 4996
+distinct inodes across both: 4996
+```
+
+**It is not a backup.** One copy of the bytes with two names: a disk failure
+takes both. Across a volume boundary it is a copy, without asking, because a
+link cannot cross one.

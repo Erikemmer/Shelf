@@ -8320,6 +8320,23 @@
         }
       }
     },
+    "every format of every book": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "jedes Format jedes Buchs"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "every format of every book"
+          }
+        }
+      }
+    },
     "export the library": {
       "extractionState": "manual",
       "localizations": {

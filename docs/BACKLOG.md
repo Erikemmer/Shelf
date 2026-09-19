@@ -132,11 +132,12 @@ change of controls, not of layout.
 
 - [ ] Combining filters with ⌘-click, as Selector's sidebar does
 - [ ] Series view proper: missing volumes visible, not only the ones present
-- [ ] **"Reorganize Library…"** — the command that *does* rename folders to match
-      the metadata, with a preview of every move and a report afterwards
-      ([ADR 0007](adr/0007-a-metadata-change-does-not-rename-the-folder.md)).
-      Until it exists, a library that has been edited for a while has folder
-      names that are historical, which costs nothing but tidiness
+- [x] **"Reorganize Library…"** — done in Sprint 8 as **`Organize Library…`**,
+      with a preview of every move, checksums on both sides, a manifest, a
+      resume and `Undo Organize`
+      ([ADR 0018](adr/0018-renaming-merging-and-organising-are-deliberate-operations.md)).
+      It had sat here for seven sprints, and the absence had quietly become a
+      working assumption that Shelf does not touch folders at all
 - [x] **Clicking a cover does not take the keyboard back from the search field.**
       Closed in Sprint 7 as **not reproducible**, with the evidence rather than
       with an argument. `Scripts/keyboard-proof.sh` drives the real window —
@@ -303,7 +304,17 @@ is currently assumed.
       should fail its digest check, the `.part` should be swept up — and the
       sweep itself runs on a volume that is no longer there, which is the part
       no test has exercised.
-- [ ] **A resumed transfer reports as failures the files it wrote itself.**
+- [x] **A resumed transfer reports as failures the files it wrote itself.**
+      **Fixed in Sprint 8.** The planner asks what is at a destination path
+      before it plans a copy there (`DeviceFileProbe`): the size first, and the
+      digest only if the size already matched — so a tidy card is asked
+      nothing. A file whose bytes are the book's is skipped as
+      `alreadyOnDevice` and carried in `TransferPlan.adopted`, which the runner
+      records into the manifest before it copies anything, so the card
+      describes itself completely again. A file of the same name whose bytes
+      differ is neither claimed nor written over. Two tests, one for each half.
+      What it looked like before:
+
       Measured on 19 September 2026 by `Scripts/runbook-proof.sh`, which is
       where the numbers in [docs/RUNBOOK.md](RUNBOOK.md) §9 come from: a
       transfer of 20 books killed after one second left **9 files on the card
@@ -325,12 +336,10 @@ is currently assumed.
       be on the card and in no manifest when a process dies without warning. A
       crash, a power cut and a pulled cable are all that case.
 
-      The fix is in `TransferPlanner`, not in the runner: it skips a book whose
-      digest is in the manifest, and it should also recognise a file it would
-      have written — by name, and then by digest — and skip it as
-      `alreadyOnDevice` rather than letting the copy fail on
-      `destinationExists`. It wants a test that kills a transfer with a signal
-      and resumes it.
+      The fix was in `TransferPlanner`, not in the runner, exactly as this
+      entry predicted. What it did **not** predict is that the manifest could
+      be made to catch up as well, which is what stops the card mis-describing
+      itself for good.
 - [ ] **A real `KoboReader.sqlite`.** `SyntheticKoboDatabase` writes the tables
       and columns Shelf reads; a real one has about a hundred more columns, a
       real WAL, and firmware differences in `___PercentRead` and `ReadStatus`.
@@ -497,11 +506,69 @@ is currently assumed.
       `App/Shelf` does not, so a `ZipWriter` in the window would not compile;
       two tests say the same thing by name, so a copy pasted in fails too.
 
+## Sprint 8 – ordering the library, and the way out of it · done
+
+- [x] **Rename and merge** an author, a series, a publisher or a tag, from the
+      sidebar's context menu. One undo step named for what it did; the folders
+      are left alone and an organise is *offered* afterwards. No automatic
+      detection of similar spellings, deliberately
+      ([ADR 0018](adr/0018-renaming-merging-and-organising-are-deliberate-operations.md))
+- [x] **Publishers** gained a sidebar section and a facet, because the brief
+      asks for the same four operations on them
+- [x] **`Organize Library…`** — the preview, then the moves, hashed before and
+      after; a manifest every twenty moves and before the one move with a
+      halfway state; resume; `Undo Organize`; the "keep folders in step"
+      setting, off by default
+- [x] **`VolumeCase`** measures whether the volume folds case instead of
+      guessing from the platform, because an external disk answers differently
+- [x] **Export**, three presets, incremental second runs, hard links on one
+      volume, and an import that believes a `metadata.opf` beside a book —
+      which is what makes an archive re-importable at all
+      ([ADR 0019](adr/0019-export-the-opf-decides-what-an-export-is.md))
+- [x] Proof run section 12: the merge survives a rebuild, an organise killed
+      with `SHELF_EXIT_AFTER` is resumed with every checksum intact, the undo
+      puts it back, and an archive imported into an empty library compares
+      equal book by book. Numbers in `CHANGELOG.md`
+
+### What Sprint 8 found on the way
+
+- [x] **`BookFolderName.authorComponent` never cut to the byte limit.** The
+      title's and the file's did. A `dc:creator` holding a sentence — real
+      EPUBs do this — made a folder the file system refuses, which failed the
+      *import* of that book. Since Sprint 1. Found by asking every component of
+      a built path whether it was legal
+- [x] **Two defects only a round trip could find**, both in
+      [ADR 0019](adr/0019-export-the-opf-decides-what-an-export-is.md):
+      filling an OPF's gaps from the book file gave one book its title as its
+      author, and an export that left its own stale files behind made the next
+      import prefer them
+
+### Left for later, deliberately
+
+- [ ] **A rename does not offer to fix the *sort* name too.** `AuthorSort` is
+      derived, so merging "Fitzek, Sebastian" into "Sebastian Fitzek" files it
+      under F either way — but a name the rule gets wrong (a Dutch *van*, a
+      Spanish double surname) still has no way to be corrected by hand. That is
+      a stored `authorSort` per author, which is a schema change
+- [ ] **The organise has no "move only these".** It is the whole library or
+      nothing. A selection would want the preview to be filterable, which is a
+      sheet-sized piece of work rather than a planner-sized one
+- [ ] **An export cannot be resumed.** An interrupted one leaves a correct
+      manifest of what it did write, so running it again writes the rest — but
+      it re-plans from scratch, which on 5 000 books is a few seconds of
+      hashing rather than nothing
+
 ## Wishes, after v1.0
 
 Conversion through an installed Calibre's `ebook-convert`; an integrated reader;
 Send-to-Kindle by e-mail; writing reading progress to a device; rule-based
 shelves; iPad.
+
+A local model, or an interface to a service like Claude, that **proposes**
+spellings, duplicates and covers. The shape that makes it safe already exists:
+a proposal fills the same preview list a person fills by hand today, and the
+confirmation stays exactly where it is. A suggester never touches a file
+(CONCEPT §11).
 
 ## Measurements still to take by hand
 

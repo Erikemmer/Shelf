@@ -75,6 +75,13 @@ struct OrganizeSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
+                    // What it *cannot* do comes first. It was last, under the
+                    // moves, and a screenshot showed what that means: with
+                    // eight moves above it, the one book that would be left
+                    // behind was below the fold. The long list is the part
+                    // nobody reads line by line; the short one is the whole
+                    // reason this is a preview.
+                    blocked(plan)
                     ForEach(plan.moves) { move in
                         VStack(alignment: .leading, spacing: 1) {
                             Text(move.from)
@@ -89,7 +96,6 @@ struct OrganizeSheet: View {
                                 .truncationMode(.middle)
                         }
                     }
-                    blocked(plan)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -109,7 +115,7 @@ struct OrganizeSheet: View {
                     Text(Loc.core(reason.label))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Slate.accent)
-                        .padding(.top, 6)
+                        .padding(.bottom, 2)
                     ForEach(group) { book in
                         Text(verbatim: "\(book.title) → \(book.wantedPath)")
                             .font(.caption2)

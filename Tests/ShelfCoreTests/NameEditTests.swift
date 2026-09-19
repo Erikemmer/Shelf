@@ -119,6 +119,33 @@ struct NameEditTests {
         #expect(tags.changes.last?.change.after.tags == ["classic", "science fiction"])
     }
 
+    /// Two quite different nothings, told apart. Found by looking at a
+    /// screenshot of the sheet: ticking one spelling and typing that same
+    /// spelling read "No book carries that name", with three books listed one
+    /// line above it.
+    @Test("an empty plan says whether nobody carries the name or everybody already does")
+    func twoKindsOfNothing() {
+        let entries = [
+            entry("One", authors: ["Sebastian Fitzek"]),
+            entry("Two", authors: ["Sebastian Fitzek"]),
+            entry("Three", authors: ["Jane Austen"]),
+        ]
+        // Ticked and typed the same: nothing to do, but the books are there.
+        let noop = NameEdit.plan(
+            NameMerge.rename(.author, from: "Sebastian Fitzek", to: "Sebastian Fitzek"),
+            over: entries)
+        #expect(noop.isEmpty)
+        #expect(noop.carrying == 2)
+        #expect(noop.summary() == "2 books already read that way — nothing to change")
+
+        // A spelling the library has never heard of.
+        let absent = NameEdit.plan(
+            NameMerge.rename(.author, from: "Nobody At All", to: "Somebody"), over: entries)
+        #expect(absent.isEmpty)
+        #expect(absent.carrying == 0)
+        #expect(absent.summary() == "No book carries that spelling")
+    }
+
     // MARK: What it refuses
 
     @Test("an empty name, a name with a slash and an empty selection are refused with a sentence")

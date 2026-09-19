@@ -158,23 +158,44 @@ public struct NameMergePlan: Equatable, Sendable {
     /// A book already carrying the target spelling and nothing else is not in
     /// here: a change that changes nothing is not written (`MetadataChange`).
     public var changes: [(entry: LibraryEntry, change: MetadataChange)]
+    /// How many books carry one of the chosen spellings at all — whether or
+    /// not the merge would change them.
+    ///
+    /// It exists to tell two quite different nothings apart, and looking at a
+    /// screenshot is what found them being told alike. Ticking "Sebastian
+    /// Fitzek" and typing "Sebastian Fitzek" changes nothing, and the sheet
+    /// said **"No book carries that name"** — with three of them listed one
+    /// line above, each saying "3 books". Both are empty plans; only one of
+    /// them is a library that has never heard of the name.
+    public var carrying: Int
 
-    public init(merge: NameMerge, changes: [(entry: LibraryEntry, change: MetadataChange)]) {
+    public init(
+        merge: NameMerge, changes: [(entry: LibraryEntry, change: MetadataChange)],
+        carrying: Int = 0
+    ) {
         self.merge = merge
         self.changes = changes
+        self.carrying = carrying
     }
 
     public var bookCount: Int { changes.count }
     public var isEmpty: Bool { changes.isEmpty }
 
     public static func == (one: NameMergePlan, other: NameMergePlan) -> Bool {
-        one.merge == other.merge && one.changes.count == other.changes.count
+        one.merge == other.merge && one.carrying == other.carrying
+            && one.changes.count == other.changes.count
             && zip(one.changes, other.changes).allSatisfy { $0.entry == $1.entry && $0.change == $1.change }
     }
 
     /// "37 books · 3 spellings → “Sebastian Fitzek”".
     public func summary() -> String {
-        guard !isEmpty else { return "No book carries \(merge.isRename ? "that name" : "any of those names")" }
+        guard !isEmpty else {
+            if carrying == 0 {
+                return merge.isRename
+                    ? "No book carries that spelling" : "No book carries any of those spellings"
+            }
+            return "\(carrying) book\(carrying == 1 ? "" : "s") already read that way — nothing to change"
+        }
         var parts = ["\(bookCount) book\(bookCount == 1 ? "" : "s")"]
         if !merge.isRename {
             parts.append("\(merge.sources.count) spellings")
@@ -234,11 +255,14 @@ public enum NameEdit {
         _ merge: NameMerge, over entries: [LibraryEntry], at now: Date = Date()
     ) -> NameMergePlan {
         var changes: [(entry: LibraryEntry, change: MetadataChange)] = []
+        var carrying = 0
+        let sources = Set(merge.sources)
         for entry in entries {
+            if merge.kind.names(of: entry.book).contains(where: sources.contains) { carrying += 1 }
             guard let change = change(merge, to: entry.book, at: now) else { continue }
             changes.append((entry, change))
         }
-        return NameMergePlan(merge: merge, changes: changes)
+        return NameMergePlan(merge: merge, changes: changes, carrying: carrying)
     }
 
     /// De-duplicates a list of names case-insensitively, keeping the first
