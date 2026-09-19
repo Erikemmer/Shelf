@@ -238,22 +238,40 @@ struct BookCell: View {
         }
         .contextMenu { BookMenu(entry: entry) }
         .help(help)
-        .task(id: TaskKey(book: entry.id, size: size, generation: entry.book.coverGeneration)) {
+        .task(
+            id: TaskKey(
+                book: entry.id, size: size, generation: entry.book.coverGeneration,
+                refresh: model.coverRefreshRequest)
+        ) {
             await loadCover()
         }
     }
 
-    /// Every part of the key matters: the book, the size asked for, and —
-    /// since Sprint 9 — which picture the book has.
+    /// Every part of the key matters: the book, the size asked for, which
+    /// picture the book has, and whether a cover has changed under it.
     ///
-    /// Without the generation a replaced cover is on disk, the cache misses,
-    /// and the cell never asks, because from SwiftUI's side nothing about this
-    /// cell has changed. That is the grid half of the failure this whole
-    /// feature is built around: right on the disk, wrong in the window.
+    /// Without the **generation** a replaced cover is on disk, the cache
+    /// misses, and the cell never asks, because from SwiftUI's side nothing
+    /// about this cell has changed.
+    ///
+    /// Without the **refresh counter** the cell asks at the wrong moment.
+    /// `applyCover` writes the generation *before* it writes the picture — so
+    /// that a half-done change fails towards a cache miss rather than towards
+    /// a stale hit — and writing it is what invalidates this view. The cell
+    /// therefore wakes while the old file is still on disk, draws it
+    /// perfectly correctly, and is never woken again. Found by looking at a
+    /// screenshot: after ⌘Z the inspector had the restored picture and the
+    /// grid cell beside it still had the replaced one.
+    ///
+    /// `coverRefreshRequest` is bumped once everything is done — file written,
+    /// caches forgotten — which is the only moment at which asking gives the
+    /// right answer. The inspector has watched it since it gained a reader at
+    /// all; the grid had been left out.
     private struct TaskKey: Equatable {
         let book: UUID
         let size: CoverSize
         let generation: Int
+        let refresh: Int
     }
 
     private var size: CoverSize {

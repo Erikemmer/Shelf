@@ -197,7 +197,13 @@ struct FetchMetadataSheet: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(proposal.label)
+                    // `Loc.core`, not the bare name. `proposal.label` is one of
+                    // the core's English words (`BookField.label`) and this
+                    // drew it verbatim, so a German window read "Title",
+                    // "Authors", "Publisher" down the whole sheet — while the
+                    // accessibility label three lines above translated the same
+                    // string. Found by photographing the sheet in German.
+                    Text(Loc.core(proposal.label))
                         .font(.caption)
                         .foregroundStyle(Slate.textSecondary)
                     Text(Self.kindLabel(proposal.kind))
