@@ -36,6 +36,20 @@ enum IndexSchema {
             try createSearchTable(in: database)
             try refillSearchTable(in: database)
         }
+        // Sprint 9: a cover can be replaced, and the grid has to notice. The
+        // number itself lives in the book's `metadata.opf` (ADR 0001) — this
+        // column is the cache of it, so the grid does not have to read five
+        // thousand OPFs to know which thumbnail to ask for.
+        //
+        // `ADD COLUMN` rather than a rebuild: the default is 0, which is the
+        // right answer for every book that existed before this migration, so
+        // there is nothing to refill and no reason to make a user with an
+        // arranged library wait.
+        migrator.registerMigration("v3-cover-generation") { database in
+            try database.alter(table: "books") { table in
+                table.add(column: "cover_generation", .integer).notNull().defaults(to: 0)
+            }
+        }
         return migrator
     }()
 

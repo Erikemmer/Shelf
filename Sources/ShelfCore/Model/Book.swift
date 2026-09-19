@@ -77,6 +77,27 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
     /// are* — their names and their kinds — belongs to the library and lives
     /// in `library.json`, exactly as the shelf tree does (ADR 0010).
     public var customValues: [String: String]
+    /// How many times this book's cover has been replaced.
+    ///
+    /// **Not a fact about the picture — a fact about the cache key.** The cover
+    /// cache is keyed by UUID, size and generation (ADR 0005, decision 4),
+    /// because a cover belongs to the *book* and outlives any one of its files:
+    /// a path and a modification date, which is what Selector keys on, would
+    /// name the wrong thing here. The generation is what that decision left for
+    /// a replaced cover to move, and until Sprint 9 nothing moved it, because
+    /// until Sprint 9 a cover could not be replaced.
+    ///
+    /// In the book, so it is in `metadata.opf`, for the reason the shelves are
+    /// (ADR 0008) and Calibre's columns are (ADR 0010): the folder is the truth
+    /// and the index is a cache (ADR 0001). A number the index alone remembered
+    /// would be forgotten by `Library ▸ Rebuild Index from Folders`, and the
+    /// grid would go straight back to a thumbnail of the picture the person
+    /// had just replaced — which is the failure this field exists to prevent.
+    ///
+    /// Zero for every book that has never had its cover changed, which is every
+    /// book in every library imported before this sprint.
+    public var coverGeneration: Int
+
     /// When Shelf first saw the book. Calibre's `timestamp` on import.
     public var addedAt: Date
     /// Last time any metadata field changed. Drives "Recently Added"'s sibling
@@ -99,6 +120,7 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
         shelves: [String] = [],
         identifiers: [String: String] = [:],
         customValues: [String: String] = [:],
+        coverGeneration: Int = 0,
         addedAt: Date = Date(),
         modifiedAt: Date = Date()
     ) {
@@ -117,6 +139,7 @@ public struct Book: Identifiable, Equatable, Hashable, Sendable, Codable {
         self.shelves = shelves.sorted()
         self.identifiers = identifiers
         self.customValues = customValues
+        self.coverGeneration = coverGeneration
         self.addedAt = addedAt
         self.modifiedAt = modifiedAt
     }

@@ -176,21 +176,23 @@ public final class LibraryIndex: Sendable {
             sql: """
                 INSERT INTO books
                     (id, number, folder, title, title_sort, series_id, series_index, rating, is_read,
-                     publisher, published, language, description, added_at, modified_at, last_seen_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     publisher, published, language, description, cover_generation,
+                     added_at, modified_at, last_seen_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     number = excluded.number, folder = excluded.folder, title = excluded.title,
                     title_sort = excluded.title_sort, series_id = excluded.series_id,
                     series_index = excluded.series_index, rating = excluded.rating,
                     is_read = excluded.is_read, publisher = excluded.publisher,
                     published = excluded.published, language = excluded.language,
-                    description = excluded.description, added_at = excluded.added_at,
+                    description = excluded.description,
+                    cover_generation = excluded.cover_generation, added_at = excluded.added_at,
                     modified_at = excluded.modified_at, last_seen_at = excluded.last_seen_at
                 """,
             arguments: [
                 id, number, entry.folder, book.title, book.titleSort, seriesID, book.series?.index,
                 book.rating, book.isRead, book.publisher, book.published, book.language, book.description,
-                book.addedAt, book.modifiedAt, Date(),
+                book.coverGeneration, book.addedAt, book.modifiedAt, Date(),
             ])
 
         // MARK: Relations, replaced wholesale
@@ -409,7 +411,7 @@ public final class LibraryIndex: Sendable {
         var sql = """
             SELECT b.id, b.number, b.folder, b.title, b.title_sort, s.name AS series_name, b.series_index,
                    b.rating, b.is_read, b.publisher, b.published, b.language, b.description,
-                   b.added_at, b.modified_at
+                   b.cover_generation, b.added_at, b.modified_at
             FROM books b
             LEFT JOIN series s ON s.id = b.series_id
             """
@@ -452,6 +454,7 @@ public final class LibraryIndex: Sendable {
                 shelves: shelves[id] ?? [],
                 identifiers: identifiers[id] ?? [:],
                 customValues: customValues[id] ?? [:],
+                coverGeneration: row["cover_generation"] ?? 0,
                 addedAt: row["added_at"],
                 modifiedAt: row["modified_at"])
             return LibraryEntry(

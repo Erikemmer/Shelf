@@ -3448,6 +3448,23 @@
         }
       }
     },
+    "Cover": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover"
+          }
+        }
+      }
+    },
     "Cover from %@": {
       "extractionState": "manual",
       "localizations": {
@@ -8304,6 +8321,23 @@
         }
       }
     },
+    "That is not an image Shelf recognises, so nothing was written.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist kein Bild, das Shelf erkennt – es wurde nichts geschrieben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That is not an image Shelf recognises, so nothing was written."
+          }
+        }
+      }
+    },
     "The book files alone. The rating, the read status, the tags and the shelves will not go with them — they live in the metadata.opf, and that is not written.": {
       "extractionState": "manual",
       "localizations": {
@@ -8351,6 +8385,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "The cover could not be fetched: %@"
+          }
+        }
+      }
+    },
+    "The cover could not be written, so the book still has the one it had.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Cover konnte nicht geschrieben werden; das Buch hat weiterhin das bisherige."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The cover could not be written, so the book still has the one it had."
+          }
+        }
+      }
+    },
+    "The cover that is there could not be moved to the Trash, so it was left alone and nothing was replaced.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das vorhandene Cover konnte nicht in den Papierkorb gelegt werden; es blieb unangetastet und nichts wurde ersetzt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The cover that is there could not be moved to the Trash, so it was left alone and nothing was replaced."
           }
         }
       }

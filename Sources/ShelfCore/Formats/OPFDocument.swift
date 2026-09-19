@@ -103,6 +103,11 @@ public enum OPFDocument {
 
         book.shelves = decodeShelves(metas["shelf:shelves"]).sorted()
         book.customValues = decodeCustomValues(metas["shelf:custom"])
+        // Absent means zero, which is every book that has never had its cover
+        // replaced — and so every book in every library written before
+        // Sprint 9. A value that will not parse is zero too: the worst it
+        // costs is one cover decoded again.
+        book.coverGeneration = metas["shelf:cover_generation"].flatMap(Int.init) ?? 0
 
         return Parsed(
             book: book,
@@ -296,7 +301,7 @@ public enum OPFDocument {
         static let known: Set<String> = [
             "calibre:title_sort", "calibre:series", "calibre:series_index",
             "calibre:rating", "calibre:timestamp",
-            "shelf:read", "shelf:shelves", "shelf:custom",
+            "shelf:read", "shelf:shelves", "shelf:custom", "shelf:cover_generation",
         ]
 
         init(_ root: XMLTree.Element) {
@@ -399,6 +404,13 @@ public enum OPFDocument {
             lines.append(
                 "    <meta name=\"shelf:custom\" content=\"\(escapedAttribute(encodeCustomValues(book.customValues)))\"/>"
             )
+        }
+        // Only once something has actually replaced the cover. Writing
+        // `content="0"` into every OPF in the library would be a diff in five
+        // thousand folders that says nothing, and would make an export of a
+        // library imported from Calibre differ from the one Calibre reads.
+        if book.coverGeneration != 0 {
+            lines.append("    <meta name=\"shelf:cover_generation\" content=\"\(book.coverGeneration)\"/>")
         }
         for name in unmappedMetas.keys.sorted() {
             guard let content = unmappedMetas[name] else { continue }

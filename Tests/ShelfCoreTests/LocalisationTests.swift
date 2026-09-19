@@ -165,6 +165,16 @@ struct LocalisationTests {
         for kind in NameKind.allCases { all += [kind.label, kind.pluralLabel] }
         all += NameMerge.allActionNames
         all += BlockedBook.Reason.allCases.map(\.label)
+
+        // Sprint 9. Every way replacing a cover can be refused, because each
+        // one is a sentence the inspector puts under the picture — and a
+        // refusal that stays English in a German window is the one message a
+        // person most needs to be able to read.
+        all += [
+            CoverReplacement.Refusal.notAnImage,
+            .cannotDisplace(""),
+            .cannotWrite(""),
+        ].map(\.message)
         all += ExportPreset.allCases.map(\.label)
         all += ExportPreset.allCases.map(\.explanation)
         all += ExportOptions.Structure.allCases.map(\.label)

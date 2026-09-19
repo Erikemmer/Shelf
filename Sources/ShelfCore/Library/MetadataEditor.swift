@@ -80,6 +80,17 @@ public struct MetadataChange: Equatable, Sendable {
     public enum Field: String, CaseIterable, Sendable {
         case title, titleSort, authors, series, rating, isRead
         case publisher, published, language, description, tags, shelves, identifiers
+        /// The picture beside the book, represented by the number that changes
+        /// when it is replaced.
+        ///
+        /// The *bytes* are not a metadata field and are not written by
+        /// `MetadataEditor` — `CoverReplacement` puts them on disk. What is in
+        /// the book, and therefore in the OPF and the index, is
+        /// `coverGeneration`, and putting it in this list is what gives
+        /// changing a cover the same undo, the same "write the file, then the
+        /// index" and the same Edit-menu name as every other edit, rather than
+        /// a second mechanism beside the first.
+        case cover
 
         public var label: String {
             switch self {
@@ -96,6 +107,7 @@ public struct MetadataChange: Equatable, Sendable {
             case .tags: return "Tags"
             case .shelves: return "Shelves"
             case .identifiers: return "Identifiers"
+            case .cover: return "Cover"
             }
         }
 
@@ -114,6 +126,7 @@ public struct MetadataChange: Equatable, Sendable {
             case .tags: return one.tags != other.tags
             case .shelves: return one.shelves != other.shelves
             case .identifiers: return one.identifiers != other.identifiers
+            case .cover: return one.coverGeneration != other.coverGeneration
             }
         }
 
@@ -132,6 +145,7 @@ public struct MetadataChange: Equatable, Sendable {
             case .tags: target.tags = source.tags
             case .shelves: target.shelves = source.shelves
             case .identifiers: target.identifiers = source.identifiers
+            case .cover: target.coverGeneration = source.coverGeneration
             }
         }
     }
