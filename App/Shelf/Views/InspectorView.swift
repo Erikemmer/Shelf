@@ -64,6 +64,9 @@ struct InspectorView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            // The right-hand column of the window. A reader arriving on an
+            // unnamed scroll area has no way to tell it from the two beside it.
+            .accessibilityLabel(Loc.string("Inspector"))
             // T focuses the tag field, and the tag field is usually below the
             // fold: in a 280-point column the cover, the title block, the
             // rating, five details and the identifiers come first. A field that
@@ -687,6 +690,11 @@ struct InspectorView: View {
             }
         }
         .contentShape(Rectangle())
+        // One file is one fact. Read separately, the four lines came out as
+        // four stops — "EPUB", "1,2 MB", "Dune - Frank Herbert.epub", "Adobe
+        // DRM" — each one carrying the same help string and none of them
+        // saying which file the one before it belonged to.
+        .accessibilityElement(children: .combine)
         .contextMenu {
             Button(Loc.string("Show in Finder")) { model.revealInFinder(format, of: entry) }
             Button(Loc.string("Open in Default App")) { model.open(format, of: entry) }
@@ -808,6 +816,7 @@ struct InspectorCover: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: Slate.cornerRadius))
+                    .accessibilityLabel(Loc.string("Cover of %@", entry.book.title))
             } else {
                 RoundedRectangle(cornerRadius: Slate.cornerRadius)
                     .fill(Slate.contentBackground)
@@ -817,6 +826,10 @@ struct InspectorCover: View {
                             .font(.system(size: 32))
                             .foregroundStyle(Slate.textSecondary.opacity(0.35))
                     }
+                    // Announced as "book.closed" until Sprint 7, which is the
+                    // symbol's name and not a fact about the book.
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Loc.string("No cover"))
             }
         }
         .task(id: entry.id) {

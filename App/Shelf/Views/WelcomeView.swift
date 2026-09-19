@@ -19,7 +19,7 @@ struct WelcomeView: View {
                 subtitle: Loc.string("Your eBooks, with their covers, metadata and devices in one place."))
 
             SlatePrimaryButton(Loc.string("Open Library…")) { model.presentOpenPanel() }
-                .keyboardShortcut("o", modifiers: .command)
+                .shortcut(.openLibrary)
                 .help(Loc.string("Choose a Shelf library folder (⌘O)"))
 
             SlateSecondaryButton(Loc.string("New Library…")) { model.presentNewLibraryPanel() }

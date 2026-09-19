@@ -3,10 +3,135 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
-## Sprint 7 – polish and release · 18 September 2026
+## Sprint 7 – polish and release · 18–19 September 2026
 
 Measured on Erik's Mac (M-series, macOS 15.6) against
-`~/Library/Caches/Shelf/measure-library-7/`.
+`~/Library/Caches/Shelf/measure-library-7/` (the German screenshots and the
+release path) and `~/Library/Caches/Shelf/measure-library-7b/` (everything from
+19 September: accessibility, contrast, the arrow keys).
+
+### Added — the window can be used without a mouse and read without perfect eyes
+
+Accessibility was the largest thing Sprint 7 owed and nothing of it had been
+touched. What follows was found by dumping the **accessibility tree of a
+running window** and judging it, not by reading the source: `make accessibility`
+(`Scripts/ax-proof.sh`) drives the app through ten views, writes each tree into
+`docs/accessibility/`, and `Scripts/ax-judge.py` fails on a control with no
+name, on a name that is an SF Symbol's identifier, and on a view that has
+stopped holding a button it is supposed to hold.
+
+**Against the build this sprint started from, that run had 21 findings in the
+library window alone. It now has none, across ten views.**
+
+| | before | after |
+|---|---|---|
+| controls with no name at all | 5 | 0 |
+| elements announcing an SF Symbol's name | 16 | 0 |
+| sidebar rows a keyboard can activate | 0 of 33 | 33 of 33 |
+| views whose tree is committed as evidence | 0 | 10 |
+
+The ten: the grid with its sidebar and inspector, the table, and the seven
+sheets — shortcuts, orphaned folders, Fetch Metadata, Add Books, the Calibre
+protocol, Send to Device, and what is on the device. The eleventh, the
+confirmation that names every file before a deletion, is **not** here and
+`docs/accessibility/README.md` says why: it exists only when there is something
+on the card to delete, and this run sends nothing.
+
+Most of the fixing happened in **SlateKit 0.4.0 and 0.4.1**, because most of it
+was in components both apps draw — the sidebar row, the grid cell, the editable
+row, the star rating, and the focus ring that `.buttonStyle(.plain)` takes away.
+The pin moved 0.3.1 → 0.4.1. **Nothing there is an appearance change**: at rest
+every control looks exactly as it did, and `SlateGridCell` gained one parameter
+with a default that keeps what it always said.
+
+What Shelf itself had to say:
+
+- **A cover is one sentence, not four stops.** A cell arrived as its picture,
+  its caption and one static text per badge, read in *layout* order — so
+  "book.closed" and the read badge came before the title. It is one element now,
+  and `BookCell.spokenLabel` puts the badges into the sentence: "Dune, Frank
+  Herbert, Dune #1, EPUB · AZW3, 4 of 5, read, DRM, on the device".
+- **The search field, the cover-size slider and three inspector fields had no
+  name.** The slider announced "0.3043478260869565"; it says "160 points".
+- **The three columns are named** — Library sidebar, Covers, Inspector — so a
+  reader landing on one of three unnamed scroll areas knows which.
+- **A file in the inspector's Formats block is one element**, not four texts
+  each carrying the same help string and none of them saying which file the one
+  before it belonged to.
+
+### Fixed — two colours under WCAG AA, found by a script rather than by eye
+
+`make contrast` (`Scripts/check-contrast.py`) checks the pairs **Shelf** decides
+— the opacities it applies on top of SlateKit's palette, which SlateKit's own
+check cannot see. It reads the palette out of the SlateKit checkout the app
+actually builds against and looks for each expression in the file said to hold
+it, so a colour changed in a view and not in the script fails the script rather
+than going stale.
+
+| pair | was | is | needs |
+|---|---|---|---|
+| the author's name under a missing cover | **3.09:1** | 6.36:1 | 4.5:1 |
+| the DRM badge's word on its plate | **3.96:1** | 9.44:1 | 4.5:1 |
+
+Both were secondary text dimmed a second time — `.opacity(0.6)` on a caption,
+and secondary text on a 14 % plate. Eight other pairs already passed and are in
+the table the script prints; two decorative symbols are **reported and not
+gated**, at 1.85:1 and 2.52:1, because WCAG 1.4.11 covers a graphic you need in
+order to understand or operate something and a book symbol behind a caption that
+says the title and the author is neither.
+
+### Fixed — the arrow keys leave the menu bar, four sprints after the measurement said so
+
+[ADR 0006](docs/adr/0006-editing-keys-are-not-menu-shortcuts.md) measured what a
+held key costs **with the arrow key** — 83 % of ten seconds inside
+`-[NSMenu performKeyEquivalent:]`, of which 31 % was `usleep` inside
+`NSMENU_IS_THROTTLING_REPEATED_MENU_ITEM_INVOCATIONS` — and then moved the
+*editing* keys, leaving the arrows where they were.
+[ADR 0017](docs/adr/0017-the-arrow-keys-leave-the-menu-bar.md) finishes it.
+Measured again by `Scripts/arrow-key-proof.sh`, same ten seconds, same
+generated repeat:
+
+| where the main thread was | ADR 0006 | now |
+|---|---|---|
+| `-[NSMenu performKeyEquivalent:]` | 83 % | **0.0 %** |
+| `NSMENU_IS_THROTTLING_…` → `usleep` | 31 % | **0.0 %** |
+| `_NSHighlightMenu` → layout | 27 % | **0.0 %** |
+| the monitor, and the move under it | 0.3 % | 0.7 % |
+
+7 373 samples on the main thread; `NSApplicationMain` reads 7 359 of them, which
+is the script's own proof that it can see a deep frame at all — the first
+version anchored its number at the start of the line, where `sample` never puts
+it, so every row read 0.0 % and the run looked like a triumph.
+
+The six menu items stay, without key equivalents: a menu is a keyboard route of
+its own, and an action that exists only as a bare key is an action nobody finds.
+
+**A second hole closed with it, and the menu bar had had it too:** while a sheet
+was open, 3 rated the book behind it and ↓ moved the selection underneath.
+`EditingKeyMonitor` asks `NSApp.keyWindow?.isSheet` now.
+
+### Fixed — one shortcut table, and the menu bar reads it
+
+`ShortcutReference` fed the ⌘? sheet and the welcome line; the menu bar declared
+its keys by hand. Both of the things that can go wrong had gone wrong:
+
+- **⌘A and ⇧⌘W were in the menus and in no reference a user could read.**
+  Select All Books and Close Library worked and were written down nowhere.
+- **⌥⌘I was declared twice**, on `File ▸ Import from Calibre…` and on
+  `View ▸ Inspector`. AppKit gives the first matching item the key, so the
+  inspector's shortcut had never worked at all. CONCEPT §3.3 says ⌘I is the
+  inspector and ⌥⌘I the Calibre import; the table now says that, and **Add
+  Books, which had taken ⌘I, moves to ⇧⌘I.**
+
+A menu item asks the table for both its words and its key (`View.shortcut(_:)`),
+and a row with no `menuKey` is a key the window answers itself — so "this must
+not be a menu shortcut" is data rather than somebody remembering. Six tests,
+including one that reads `App/Shelf` and refuses any `.keyboardShortcut(`
+written by hand outside the one bridge.
+
+Two more the menu bar was drawing in English on a German Mac: `View ▸ Show As`
+and `View ▸ Sort By` handed SwiftUI a `String` from the core, which it draws
+verbatim. 613 core tests, up from 606.
 
 ### Fixed — declaring German made Shelf follow the Mac, which broke eleven scripts
 

@@ -389,7 +389,18 @@ is currently assumed.
       drawn without the catalogue at all
       ([ADR 0016](adr/0016-the-core-answers-in-english-the-window-translates.md)).
       Photographed in German: `docs/screenshots/sprint-7/`
-- [ ] Accessibility: keyboard, contrast, labels
+- [x] **Accessibility: keyboard, contrast, labels.** Ten accessibility trees in
+      `docs/accessibility/`, judged by `Scripts/ax-judge.py` and green; 21
+      findings in the library window before, none after. Every sidebar row is a
+      button a keyboard can activate (SlateKit 0.4.0), every hand-drawn control
+      draws a focus ring, the arrows are off the menu bar
+      ([ADR 0017](adr/0017-the-arrow-keys-leave-the-menu-bar.md)), and
+      `make contrast` checks every colour Shelf decides against WCAG AA — two
+      failed and are fixed
+- [x] **The shortcut table feeds the menu bar.** ⌥⌘I had been declared twice and
+      ⌘A and ⇧⌘W were written down nowhere; a menu item reads its words and its
+      key out of `ShortcutReference` now, with a test that refuses a key
+      equivalent written by hand anywhere else
 - [ ] Signing, notarisation, direct download, runbook → **v1.0**
 
 ### What the localisation did not cover
@@ -408,18 +419,14 @@ is currently assumed.
 
 ## Housekeeping, when it is next convenient
 
-- [ ] **Move the arrow keys off the menu bar.** Holding → spends 31 % of the
-      time in `NSMENU_IS_THROTTLING_REPEATED_MENU_ITEM_INVOCATIONS` calling
-      `usleep` on the main thread and another 27 % highlighting and
-      unhighlighting the menu bar, which drags a full window layout behind it.
-      Shelf's own work in that sample is 0.3 %. The editing keys already avoid
-      it ([ADR 0006](adr/0006-editing-keys-are-not-menu-shortcuts.md)); the
-      arrows were left alone because moving them is a separate risk to keyboard
-      navigation and wanted its own step.
-- [ ] **Sidebar rows have no role a keyboard user can activate.** The
-      accessibility tree shows an `AXImage` and two `AXStaticText` per row, no
-      `AXButton`, no action. Sprint 7 owns accessibility, but this is the one
-      that makes the sidebar unusable rather than merely awkward.
+- [x] **Move the arrow keys off the menu bar.** Done in Sprint 7,
+      [ADR 0017](adr/0017-the-arrow-keys-leave-the-menu-bar.md). Measured again
+      by `Scripts/arrow-key-proof.sh`: 0.0 % of the main thread inside the menu
+      machinery, against ADR 0006's 83 %.
+- [x] **Sidebar rows have no role a keyboard user can activate.** Done in
+      SlateKit 0.4.0: the combined element carries `.isButton` and a default
+      action, and the accessibility tree in `docs/accessibility/grid.txt` shows
+      33 `AXButton` rows where it showed none.
 
 - [ ] **`ZipWriter` and `MinimalPNG` belong in their own target, `ShelfFixtures`.**
       They exist so the tests and `shelf-tool synthesise` can *build* test

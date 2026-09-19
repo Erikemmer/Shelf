@@ -74,9 +74,19 @@ func matches(_ element: AXUIElement, into found: inout [AXUIElement], depth: Int
     let role = string(element, kAXRoleAttribute as String) ?? ""
     switch what {
     case "cell":
-        // A cover is an AXImage whose help text is the cell's own three-line
-        // summary; the sidebar's icons are images too and have none.
-        if role == "AXImage", (string(element, kAXHelpAttribute as String)?.contains("\n") ?? false) {
+        // A cell is the one element whose help text is its own three-line
+        // summary — the title, the author and the formats, one per line.
+        //
+        // **The role is not checked**, and that is a lesson rather than
+        // laziness. It used to insist on `AXImage`, which was right until
+        // SlateKit 0.4.0 made a grid cell one accessibility element with a
+        // name of its own: the image inside it stopped existing, every script
+        // that clicks a cover found "0 cells", and because they all call this
+        // with their errors redirected, none of them said so — they clicked
+        // nothing and photographed a window that happened to look right.
+        // The help text is what identifies a cell; nothing else in the window
+        // has a multi-line one.
+        if string(element, kAXHelpAttribute as String)?.contains("\n") ?? false {
             found.append(element)
         }
     case "search":

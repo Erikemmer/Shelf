@@ -154,7 +154,7 @@ struct LocalisationTests {
         all += KoboReadingState.ReadStatus.allCases.map(\.label)
         all += DeviceFile.Match.allCases.map(\.label)
         all += CalibreCustomColumn.Kind.allCases.map(\.label)
-        all += ShortcutReference.all.map(\.action)
+        all += ShortcutReference.all.map(\.label)
         all += ShortcutGroup.allCases.map(\.rawValue)
         return all.filter { !$0.isEmpty }
     }

@@ -73,6 +73,11 @@ struct CoverGridView: View {
                 .focusable()
                 .focusEffectDisabled()
                 .focused($focus, equals: .grid)
+                // The one focusable region the arrow keys drive. Without a
+                // name it arrived as an unnamed scroll area, which says
+                // nothing about what the arrows would do in it.
+                .accessibilityLabel(Loc.string("Covers"))
+                .accessibilityHint(Loc.string("Arrow keys move through the books"))
             }
         }
     }
@@ -92,6 +97,7 @@ struct CoverGridView: View {
             Image(systemName: "books.vertical")
                 .font(.system(size: 40))
                 .foregroundStyle(Slate.textSecondary.opacity(0.5))
+                .accessibilityHidden(true)
             Text(model.entries.isEmpty ? Loc.string("This library is empty.") : Loc.string("Nothing matches."))
                 .foregroundStyle(Slate.textSecondary)
             if model.entries.isEmpty {
@@ -116,7 +122,9 @@ struct SearchField: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: "magnifyingglass").foregroundStyle(Slate.textSecondary)
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(Slate.textSecondary)
+                .accessibilityHidden(true)
             TextField(
                 Loc.string("Search"),
                 text: Binding(
@@ -137,6 +145,10 @@ struct SearchField: View {
                 model.filter.searchText = ""
                 model.focusGrid()
             }
+            // The magnifying glass is drawn beside the field, not in it, so
+            // the field itself arrived in the accessibility tree with a help
+            // string and no name at all.
+            .accessibilityLabel(Loc.string("Search"))
             if !model.filter.searchText.isEmpty {
                 Button {
                     model.filter.searchText = ""
@@ -145,6 +157,7 @@ struct SearchField: View {
                 }
                 .buttonStyle(.plain)
                 .help(Loc.string("Clear the search"))
+                .accessibilityLabel(Loc.string("Clear the search"))
             }
         }
         .padding(.horizontal, 6)
@@ -169,6 +182,12 @@ struct BookCell: View {
         SlateGridCell(
             side: side,
             title: entry.book.title,
+            // What a reader who cannot see the cell is told. The badges are
+            // drawn over the picture and, since SlateKit 0.4.0, hidden from the
+            // accessibility tree behind this one label — so what they mean has
+            // to be said here or not at all. `BookCell.spokenLabel` is in the
+            // core's order: name first, then who wrote it, then the facts.
+            label: Self.spokenLabel(for: entry, isOnDevice: model.booksOnDevice.contains(entry.id)),
             // `selection`, not `selectedBookID`. The latter is the *anchor* —
             // where the arrow keys are and what the inspector leads with — and
             // asking it meant a grid with eight books selected drew one border.
@@ -250,12 +269,36 @@ struct BookCell: View {
                     .foregroundStyle(Slate.textSecondary.opacity(0.35))
                 Text(entry.book.authorLine)
                     .font(.caption2)
-                    .foregroundStyle(Slate.textSecondary.opacity(0.6))
+                    // Not `.opacity(0.6)`, which it was: 3.09:1 against the
+                    // content background, where WCAG AA wants 4.5:1 for normal
+                    // text. It is the only *writing* in the cell that was
+                    // dimmed, and dimming it was a habit rather than a
+                    // decision — `Scripts/check-contrast.py` found it.
+                    .foregroundStyle(Slate.textSecondary)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 6)
             }
         }
+    }
+
+    /// One sentence for one book: what it is called, who wrote it, which
+    /// series, which formats, and then the three badges in the order they are
+    /// drawn — because a badge is a fact about the book and a hidden badge is a
+    /// fact nobody is told.
+    ///
+    /// `static` and taking everything it needs, so a test can read it without a
+    /// window: `BookCellLabelTests`.
+    static func spokenLabel(for entry: LibraryEntry, isOnDevice: Bool) -> String {
+        var parts = [entry.book.title]
+        if !entry.book.authorLine.isEmpty { parts.append(entry.book.authorLine) }
+        if let series = entry.book.series { parts.append(series.display) }
+        if !entry.formatLine.isEmpty { parts.append(entry.formatLine) }
+        if entry.book.stars > 0 { parts.append(Loc.string("%lld of 5", entry.book.stars)) }
+        parts.append(entry.book.isRead ? Loc.string("Read") : Loc.string("Unread"))
+        if let drm = entry.drm { parts.append(Loc.core(drm.label)) }
+        if isOnDevice { parts.append(Loc.string("On the device")) }
+        return parts.joined(separator: ", ")
     }
 
     private var help: String {

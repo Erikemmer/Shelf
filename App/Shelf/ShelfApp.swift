@@ -64,7 +64,7 @@ struct ShelfApp: App {
             viewMenu
             CommandGroup(replacing: .help) {
                 Button(Loc.string("Keyboard Shortcuts")) { isShowingShortcuts = true }
-                    .keyboardShortcut("/", modifiers: .command)
+                    .shortcut(.thisList)
             }
         }
     }
@@ -86,29 +86,28 @@ struct ShelfApp: App {
     private var fileMenu: some Commands {
         CommandGroup(replacing: .newItem) {
             Button(Loc.string("Open Library…")) { model.presentOpenPanel() }
-                .keyboardShortcut("o", modifiers: .command)
+                .shortcut(.openLibrary)
             Button(Loc.string("New Library…")) { model.presentNewLibraryPanel() }
-                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .shortcut(.newLibrary)
             openRecentMenu
             Divider()
             Button(Loc.string("Add Books…")) { model.presentAddBooksPanel() }
-                .keyboardShortcut("i", modifiers: .command)
+                .shortcut(.addBooks)
                 .disabled(model.library == nil)
             // The reason most people will open Shelf at all (CONCEPT §7).
             Button(Loc.string("Import from Calibre…")) { model.presentCalibrePanel() }
-                .keyboardShortcut("i", modifiers: [.command, .option])
+                .shortcut(.importFromCalibre)
             // ⌘E, the shortcut sheet has said so since Sprint 1. It asks; it
             // writes nothing until a person has agreed field by field.
             Button(Loc.string("Fetch Metadata…")) { model.presentFetchMetadata() }
-                .keyboardShortcut("e", modifiers: .command)
+                .shortcut(.fetchMetadata)
                 .disabled(model.library == nil || model.selection.isEmpty)
-                .disabled(model.library == nil)
             Divider()
             Button(Loc.string("Show in Finder")) { model.revealSelectedInFinder() }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .shortcut(.showInFinder)
                 .disabled(model.selectedEntry == nil)
             Button(Loc.string("Open in Default App")) { model.openSelectedInDefaultApp() }
-                .keyboardShortcut(.return, modifiers: [])
+                .shortcut(.openInDefaultApp)
                 .disabled(model.selectedEntry == nil)
         }
     }
@@ -131,7 +130,7 @@ struct ShelfApp: App {
     private var libraryMenu: some Commands {
         CommandMenu(Loc.string("Library")) {
             Button(Loc.string("Search")) { model.focusSearch() }
-                .keyboardShortcut("f", modifiers: .command)
+                .shortcut(.search)
                 .disabled(model.library == nil)
             Divider()
             // In the Library menu rather than in Edit: SwiftUI's own Select All
@@ -139,26 +138,30 @@ struct ShelfApp: App {
             // there would fight it. Here it means one thing — every book the
             // filter is showing.
             Button(Loc.string("Select All Books")) { model.selectAll() }
-                .keyboardShortcut("a", modifiers: .command)
+                .shortcut(.selectAllBooks)
                 .disabled(model.library == nil)
             Divider()
+            // **No `keyboardShortcut` on these six.** The keys are ←→↑↓, Home
+            // and End, and they are answered by `EditingKeyMonitor` instead —
+            // ADR 0017, the measurement ADR 0006 took and did not act on for
+            // the arrows: a held → spent 31 % of ten seconds inside
+            // `NSMENU_IS_THROTTLING_REPEATED_MENU_ITEM_INVOCATIONS` and
+            // another 27 % flashing the menu title, against 0.3 % doing the
+            // work. The items stay, because a menu is a keyboard route of its
+            // own (⌃F2) and because an action that exists only as a bare key
+            // is an action nobody finds; the keys themselves are in
+            // `ShortcutReference`, which is what the ⌘? sheet reads.
             Button(Loc.string("Previous Book")) { model.selectPrevious() }
-                .keyboardShortcut(.leftArrow, modifiers: [])
                 .disabled(model.library == nil)
             Button(Loc.string("Next Book")) { model.selectNext() }
-                .keyboardShortcut(.rightArrow, modifiers: [])
                 .disabled(model.library == nil)
             Button(Loc.string("Row Above")) { model.selectRowAbove() }
-                .keyboardShortcut(.upArrow, modifiers: [])
                 .disabled(model.library == nil)
             Button(Loc.string("Row Below")) { model.selectRowBelow() }
-                .keyboardShortcut(.downArrow, modifiers: [])
                 .disabled(model.library == nil)
             Button(Loc.string("First Book")) { model.selectFirst() }
-                .keyboardShortcut(.home, modifiers: [])
                 .disabled(model.library == nil)
             Button(Loc.string("Last Book")) { model.selectLast() }
-                .keyboardShortcut(.end, modifiers: [])
                 .disabled(model.library == nil)
             Divider()
             // Safe to offer precisely because the folder is the truth
@@ -175,7 +178,7 @@ struct ShelfApp: App {
             }
             .disabled(model.library == nil || model.isLoading)
             Button(Loc.string("Close Library")) { model.closeLibrary() }
-                .keyboardShortcut("w", modifiers: [.command, .shift])
+                .shortcut(.closeLibrary)
                 .disabled(model.library == nil)
         }
     }
@@ -186,7 +189,7 @@ struct ShelfApp: App {
     private var deviceMenu: some Commands {
         CommandMenu(Loc.string("Device")) {
             Button(sendLabel) { model.sendSelectionToDevice(nil) }
-                .keyboardShortcut("s", modifiers: [.command, .shift])
+                .shortcut(.sendToDevice)
                 .disabled(model.devices.selectedDevice == nil || model.selection.isEmpty)
             Button(Loc.string("Show What Is on the Device…")) { model.showDeviceContents(nil) }
                 .disabled(model.devices.selectedDevice == nil)
@@ -243,17 +246,17 @@ struct ShelfApp: App {
         CommandGroup(after: .sidebar) {
             Divider()
             Button(Loc.string("Larger Covers")) { model.enlargeCovers() }
-                .keyboardShortcut("+", modifiers: .command)
+                .shortcut(.largerCovers)
                 .disabled(model.library == nil)
             Button(Loc.string("Smaller Covers")) { model.shrinkCovers() }
-                .keyboardShortcut("-", modifiers: .command)
+                .shortcut(.smallerCovers)
                 .disabled(model.library == nil)
             Divider()
             Toggle(
                 Loc.string("Inspector"),
                 isOn: Binding(get: { model.isInspectorShown }, set: { model.isInspectorShown = $0 })
             )
-            .keyboardShortcut("i", modifiers: [.command, .option])
+            .shortcut(.inspector)
             .disabled(model.library == nil)
             Divider()
             Picker(
@@ -263,10 +266,20 @@ struct ShelfApp: App {
                 // ⌘1 and ⌘2, as CONCEPT §3.2 asks. The shortcuts are on the
                 // items rather than on a pair of buttons so the menu says what
                 // the keys do.
-                ForEach(Array(LibraryViewSettings.Mode.allCases.enumerated()), id: \.element) { offset, mode in
-                    Label(mode.label, systemImage: mode.icon)
+                ForEach(LibraryViewSettings.Mode.allCases, id: \.self) { mode in
+                    // `Loc.core`, not the bare label. `mode.label` is a
+                    // `String` from the core, and SwiftUI draws a `String`
+                    // verbatim — so a German menu bar read "Grid" and "Table"
+                    // while the strip two points below it read "Cover" and
+                    // "Tabelle". The ⌘? sheet and `SortMenu` had it right and
+                    // the menu bar did not, which is the whole argument for
+                    // one table (ADR 0016).
+                    Label(Loc.core(mode.label), systemImage: mode.icon)
                         .tag(mode)
-                        .keyboardShortcut(KeyEquivalent(Character("\(offset + 1)")), modifiers: .command)
+                        // ⌘1 and ⌘2 out of `ShortcutReference`, not counted off
+                        // the enumeration: the key a menu declares and the key
+                        // the ⌘? sheet prints are now one fact.
+                        .shortcut(mode == .grid ? .grid : .table)
                 }
             }
             .disabled(model.library == nil)
@@ -281,7 +294,7 @@ struct ShelfApp: App {
                             ? model.order.reversed : BookOrder(field)
                     } label: {
                         Label(
-                            field.label,
+                            Loc.core(field.label),
                             systemImage: model.order.field == field
                                 ? (model.order.ascending ? "arrow.up" : "arrow.down") : "")
                     }

@@ -15,7 +15,7 @@ CACHE ?= $(HOME)/Library/Caches/Shelf
 SYNTHETIC ?= $(CACHE)/synthetic
 
 .PHONY: help bootstrap test build lint format project app app-debug smoke synthetic synthetic-clean proof \
-	online-proof online-library online-shots german-shots release release-dry clean
+	online-proof online-library online-shots german-shots contrast accessibility release release-dry clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -76,6 +76,12 @@ online-shots: online-library ## Photograph Fetch Metadata against the live servi
 
 german-shots: ## Photograph the window in German (needs an unlocked screen)
 	@Scripts/german-shots.sh
+
+contrast: ## Check every colour Shelf decides against WCAG AA (needs python3)
+	@python3 Scripts/check-contrast.py
+
+accessibility: ## Dump and judge the accessibility tree of every view (needs an unlocked screen)
+	@Scripts/ax-proof.sh
 
 release: ## Build, sign, notarise and staple a downloadable Shelf (needs a Developer ID)
 	@Scripts/release.sh

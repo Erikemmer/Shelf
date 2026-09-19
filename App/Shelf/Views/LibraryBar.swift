@@ -34,6 +34,10 @@ struct LibraryBar: View {
                 .font(.callout)
                 .foregroundStyle(Slate.textSecondary)
                 .lineLimit(1)
+                // Otherwise it is a bare word in the middle of a strip full of
+                // controls, and nothing says it is what the window is showing.
+                .accessibilityLabel(Loc.string("Showing"))
+                .accessibilityValue(filterTitle)
 
             Spacer(minLength: 8)
 
@@ -47,6 +51,11 @@ struct LibraryBar: View {
                 )
                 .frame(width: 110)
                 .help(Loc.string("Cover size (⌘+ / ⌘−)"))
+                // A slider with no name reads as "45 percent" and nothing
+                // else. The value is a fraction of the range and means
+                // nothing to anybody, so the size in points is what it says.
+                .accessibilityLabel(Loc.string("Cover size"))
+                .accessibilityValue(Loc.count("%lld points", Int(model.coverSide.rounded())))
             }
 
             SearchField(focus: $focus)
@@ -64,12 +73,17 @@ struct LibraryBar: View {
             ForEach(LibraryViewSettings.Mode.allCases, id: \.self) { mode in
                 Image(systemName: mode.icon)
                     .tag(mode)
-                    .accessibilityLabel(mode.label)
+                    // `Loc.core`, not the bare label: `mode.label` is one of
+                    // the core's English words, and a `String` handed to
+                    // `accessibilityLabel` is drawn verbatim. A German window
+                    // said "Grid" and "Table".
+                    .accessibilityLabel(Loc.core(mode.label))
             }
         }
         .pickerStyle(.segmented)
         .labelsHidden()
         .frame(width: 72)
         .help(Loc.string("Covers (⌘1) or a table (⌘2)"))
+        .accessibilityLabel(Loc.string("Show as"))
     }
 }

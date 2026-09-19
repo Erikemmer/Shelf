@@ -34,7 +34,13 @@ enum Theme {
 
     /// The colour a DRM badge is drawn in. Not red: a protected file is not an
     /// error, it is a fact about the file (CONCEPT §6).
-    static let drmBadge = Slate.textSecondary
+    ///
+    /// `textPrimary` since Sprint 7, and not because it should shout. The badge
+    /// sits on a plate of its own — `textSecondary` at 14 % over the panel — and
+    /// secondary text on that plate read at **3.96:1**, under WCAG AA's 4.5:1
+    /// for normal text. Found by `Scripts/check-contrast.py`. The plate is what
+    /// makes it quiet; the word on it has to be readable.
+    static let drmBadge = Slate.textPrimary
 }
 
 /// The badge that says a file is protected.
@@ -61,6 +67,9 @@ struct DRMBadge: View {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .fill(Slate.textSecondary.opacity(0.14))
         )
+        // The padlock and the word are one fact, and the padlock's own SF
+        // Symbol name is not part of it.
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(Loc.string("%@, not touched", Loc.core(drm.label)))
         .help(
             Loc.string("%@. Shelf shows it and leaves the file exactly as it is.", Loc.core(drm.label)))
@@ -123,9 +132,53 @@ extension Shortcut {
     /// The package draws shortcuts; the table of them is Shelf's.
     ///
     /// The keys are not translated — ⌘F is ⌘F in every language — and the
-    /// action and the group are, because they are sentences (ADR 0016).
+    /// label and the group are, because they are sentences (ADR 0016).
     var slate: SlateShortcut {
-        SlateShortcut(keys: keys, action: Loc.core(action), group: Loc.core(group.title))
+        SlateShortcut(keys: keys, action: Loc.core(label), group: Loc.core(group.title))
+    }
+}
+
+extension ShortcutKey {
+    /// The core's chord as SwiftUI's. The one place the two vocabularies meet:
+    /// `ShortcutKey` lives in `ShelfCore`, which has no SwiftUI and builds on
+    /// Linux, and `KeyboardShortcut` is what a menu item takes.
+    var keyboardShortcut: KeyboardShortcut {
+        KeyboardShortcut(equivalent, modifiers: swiftUIModifiers)
+    }
+
+    private var equivalent: KeyEquivalent {
+        switch key {
+        case .character(let character): return KeyEquivalent(character)
+        case .leftArrow: return .leftArrow
+        case .rightArrow: return .rightArrow
+        case .upArrow: return .upArrow
+        case .downArrow: return .downArrow
+        case .home: return .home
+        case .end: return .end
+        case .newline: return .return
+        case .space: return .space
+        }
+    }
+
+    private var swiftUIModifiers: EventModifiers {
+        var found: EventModifiers = []
+        if modifiers.contains(.command) { found.insert(.command) }
+        if modifiers.contains(.shift) { found.insert(.shift) }
+        if modifiers.contains(.option) { found.insert(.option) }
+        if modifiers.contains(.control) { found.insert(.control) }
+        return found
+    }
+}
+
+extension View {
+    /// The key this action is answered by, out of the one table.
+    ///
+    /// `nil` where the window answers the key itself, and `.keyboardShortcut`
+    /// takes an optional — so a menu item that must *not* carry a key equivalent
+    /// says so by being in the table with no `menuKey`, rather than by somebody
+    /// remembering not to write one (ADR 0006, ADR 0017).
+    func shortcut(_ id: ShortcutAction) -> some View {
+        keyboardShortcut(ShortcutReference.find(id)?.menuKey?.keyboardShortcut)
     }
 }
 

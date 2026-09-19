@@ -38,6 +38,7 @@ struct SidebarView: View {
                 .padding(.bottom, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .accessibilityLabel(Loc.string("Library sidebar"))
             Rectangle().fill(Slate.separator).frame(height: 1)
             footer
         }
@@ -88,7 +89,11 @@ struct SidebarView: View {
                 "Books that share only a title and a first author — editions, translations and "
                     + "namesakes look like this too")
         default:
-            return Loc.string("Show %@", Loc.core(collection.title).lowercased())
+            // Not `.lowercased()`. It was, and on a German Mac "Alle Bücher"
+            // came out as "alle bücher zeigen": German capitalises its nouns,
+            // and a tooltip that lower-cases one is simply misspelt. English
+            // reads perfectly well as "Show All Books".
+            return Loc.string("Show %@", Loc.core(collection.title))
         }
     }
 

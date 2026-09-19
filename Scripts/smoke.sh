@@ -225,6 +225,31 @@ if [ "${REAL:-0}" -lt 1 ] && [ "${SMOKE_ALLOW_OFFSCREEN:-0}" != "1" ]; then
        plainly visible, set SMOKE_ALLOW_OFFSCREEN=1 and say so in the report."
 fi
 
+# **And no more than one.** One app, one library, one window (CONCEPT §3.2, and
+# the reason `AppDelegate` handles an incoming folder itself rather than through
+# `onOpenURL`, which would open a window per URL).
+#
+# This was a reported number and not an assertion until Sprint 7, and it duly
+# reported "windows: 11 (of those on screen: 7, real: 7)" and then said "ok".
+# The cause was four `NSWindow Frame …AppWindow-N` keys accumulated in the app's
+# own defaults — SwiftUI remembers a window per scene it has seen, and this
+# script's own `cleanup` kills the app. Removing those keys brought it back to
+# "5 1 1" at once. Sprint 1 recorded the same symptom as "six, growing by one
+# per launch" and could not reproduce it; now there is a check that would have.
+#
+# It is an assertion rather than a note for the same reason the zero is: a
+# number printed in a passing run is a number nobody reads.
+if [ "${REAL:-0}" -gt 1 ] && [ "${SMOKE_ALLOW_MANY_WINDOWS:-0}" != "1" ]; then
+    cleanup
+    fail "the app has ${REAL} windows on screen and should have one.
+       SwiftUI remembers a window per scene in the app's own defaults; a run
+       that was killed rather than quit can leave one behind. To see them:
+         plutil -p ~/Library/Containers/de.erikemmer.shelf/Data/Library/Preferences/de.erikemmer.shelf.plist \
+           | grep 'NSWindow Frame'
+       Removing those keys puts it back to one. If several windows are wanted
+       one day, set SMOKE_ALLOW_MANY_WINDOWS=1 and say so in the report."
+fi
+
 # ── CPU and memory ────────────────────────────────────────────────────────────
 # The cover warmer keeps a core busy for a while; the test records the trace and
 # passes as soon as it drops below the threshold. Memory is recorded alongside,

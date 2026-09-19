@@ -849,6 +849,47 @@
         }
       }
     },
+    "%lld points": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Punkt"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Punkte"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld point"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld points"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld series": {
       "extractionState": "manual",
       "localizations": {
@@ -1655,6 +1696,23 @@
         }
       }
     },
+    "Arrow keys move through the books": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit den Pfeiltasten durch die Bücher"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrow keys move through the books"
+          }
+        }
+      }
+    },
     "Asking Open Library and Google Books": {
       "extractionState": "manual",
       "localizations": {
@@ -2335,6 +2393,23 @@
         }
       }
     },
+    "Cover of %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover von %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover of %@"
+          }
+        }
+      }
+    },
     "Cover size": {
       "extractionState": "manual",
       "localizations": {
@@ -2365,6 +2440,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cover size (⌘+ / ⌘−)"
+          }
+        }
+      }
+    },
+    "Covers": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Covers"
           }
         }
       }
@@ -2896,6 +2988,23 @@
         }
       }
     },
+    "First / last book": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstes / letztes Buch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First / last book"
+          }
+        }
+      }
+    },
     "First Book": {
       "extractionState": "manual",
       "localizations": {
@@ -3351,6 +3460,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Library"
+          }
+        }
+      }
+    },
+    "Library sidebar": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seitenleiste der Bibliothek"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Library sidebar"
           }
         }
       }
@@ -3865,6 +3991,23 @@
         }
       }
     },
+    "No cover": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Cover"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No cover"
+          }
+        }
+      }
+    },
     "No cover from the service": {
       "extractionState": "manual",
       "localizations": {
@@ -4303,6 +4446,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "On some of them"
+          }
+        }
+      }
+    },
+    "On the device": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Gerät"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On the device"
           }
         }
       }
@@ -5735,6 +5895,23 @@
         }
       }
     },
+    "Show as": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anzeigen als"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show as"
+          }
+        }
+      }
+    },
     "Show in Finder": {
       "extractionState": "manual",
       "localizations": {
@@ -5799,6 +5976,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Show what is in %@"
+          }
+        }
+      }
+    },
+    "Showing": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angezeigt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Showing"
           }
         }
       }

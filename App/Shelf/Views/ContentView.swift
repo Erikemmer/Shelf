@@ -78,7 +78,7 @@ struct ContentView: View {
             FetchMetadataSheet(undoManager: undoManager).environment(model)
         }
         .onAppear {
-            editingKeys.start(handleEditingKey)
+            editingKeys.start(handleWindowKey)
             focus = model.focusTarget
             // A reader plugged in before a library is open still belongs in
             // the sidebar, so this does not wait for one.
@@ -100,14 +100,34 @@ struct ContentView: View {
         }
     }
 
-    /// The editing keys. Returns true when the key was used, which is what
-    /// keeps it from travelling on to anything else.
+    /// The keys the window answers. Returns true when the key was used, which
+    /// is what keeps it from travelling on to anything else.
     ///
-    /// Nothing happens without a selected book, and nothing happens without a
-    /// library – so the keys are inert on the welcome screen rather than being
-    /// swallowed there.
+    /// Nothing happens without a library, so the keys are inert on the welcome
+    /// screen rather than being swallowed there. The navigation keys need no
+    /// *selected* book — → with nothing selected picks the first, which is what
+    /// makes the grid reachable from the keyboard at all — and the editing keys
+    /// do, because there is nothing to edit otherwise.
+    private func handleWindowKey(_ key: WindowKey) -> Bool {
+        guard model.library != nil else { return false }
+        switch key {
+        case .left: model.selectPrevious()
+        case .right: model.selectNext()
+        case .up: model.selectRowAbove()
+        case .down: model.selectRowBelow()
+        case .home: model.selectFirst()
+        case .end: model.selectLast()
+        case .character(let characters):
+            return handleEditingKey(characters)
+        }
+        model.noteInteraction()
+        return true
+    }
+
+    /// 1–5, 0, R, T and the space bar. All of them act on the selected book, so
+    /// all of them are inert without one.
     private func handleEditingKey(_ characters: String) -> Bool {
-        guard model.library != nil, model.selectedEntry != nil else { return false }
+        guard model.selectedEntry != nil else { return false }
         switch characters {
         case "0":
             model.clearRating(undoManager: undoManager)

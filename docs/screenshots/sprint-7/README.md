@@ -22,6 +22,28 @@ Every picture below was looked at. What looking found is at the bottom.
 | `shortcuts-de.jpg` | The ⌘? sheet, built from the same `ShortcutReference` table the menu bar reads |
 | `sidebar-de.jpg` | The window after the sheet closed, for the sidebar and the status line |
 
+And the accessibility run, in English, taken by `Scripts/ax-proof.sh` on
+19 September 2026 against `~/Library/Caches/Shelf/measure-library-7b/library`
+(26 generated books of six formats, two shelves, six tags). Each picture has
+the accessibility tree that goes with it in `docs/accessibility/`.
+
+| File | What it shows |
+|---|---|
+| `focus-ring-sidebar.jpg` | Two Tabs from the grid: the ring on a sidebar row, which had none at all before SlateKit 0.4.0 |
+| `focus-ring-inspector.jpg` | One Tab after a book was clicked: the ring on the Authors field |
+| `table-ax.jpg` | The table, for the run that dumped its tree |
+| `sheet-shortcuts.jpg` | The ⌘? sheet **after** it and the menu bar were made to read one table: ⌘A and ⇧⌘W are in it now, and ⌘I is the Inspector |
+| `sheet-orphans.jpg` | Find Orphaned Folders… |
+| `sheet-fetch-metadata.jpg` | Fetch Metadata, while the two services are being asked |
+| `sheet-import.jpg` | Add Books, against a folder already in the library — so the counting protocol reads "57 skipped" and the button says "Nothing to Import" |
+| `sheet-calibre.jpg` | The Calibre counting protocol, against a synthetic Calibre library of 30 books |
+| `sheet-send-to-device.jpg` | Send to Device, against a mounted disk image called KINDLE |
+| `sheet-device-contents.jpg` | What is on the device — empty, because this run sends nothing |
+
+The eleventh sheet, the confirmation that names every file before a deletion, is
+not here: it exists only when there is something on the card to delete. It is in
+`docs/screenshots/sprint-5/`.
+
 And the English ones, taken by `Scripts/online-shot.sh` against the live
 services, because the Part A finding is about what the comparison sheet says:
 
