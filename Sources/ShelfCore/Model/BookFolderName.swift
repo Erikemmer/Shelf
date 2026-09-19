@@ -13,8 +13,18 @@ public enum BookFolderName {
     public static let maxComponentBytes = 255
 
     /// The author part: "Austen, Jane".
+    ///
+    /// Cut to the byte limit like the other two. It was not, until Sprint 8
+    /// asked every component of a built path whether it was legal and one
+    /// answered no: `titleComponent` and `fileName` both truncated and this
+    /// one did not, so a `dc:creator` holding a sentence — which real EPUBs
+    /// do, and which `AuthorSort` then turns into one long component — made a
+    /// folder the file system refuses. That failed the *import* of that book,
+    /// not only its organise, and it had been so since Sprint 1.
     public static func authorComponent(for book: Book) -> String {
-        sanitised(AuthorSort.of(book.primaryAuthor), fallback: Book.unknownAuthor)
+        truncated(
+            sanitised(AuthorSort.of(book.primaryAuthor), fallback: Book.unknownAuthor),
+            toBytes: maxComponentBytes)
     }
 
     /// The title part with the library's own running number: "Pride and

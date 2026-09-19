@@ -122,10 +122,20 @@ let usage = """
                                     writing one metadata.opf per book affected.
                                     No folder is moved. With no <source>, prints
                                     what it would do and writes nothing
+      organize <library> [--run]    where every book's folder ought to be. The
+                                    preview alone unless --run is given: old →
+                                    new, how many are already right, every
+                                    collision, everything it cannot touch.
+                                    With --run it moves them, hashing each
+                                    folder before and after, and writes a
+                                    manifest it can be undone from
+      organize-undo <library>       put every folder the manifest names back
+                                    where it came from, verified the same way
 
-    SHELF_EXIT_AFTER=<n> makes `import` and `send` leave the process after n
-    files, the way a crash does – it is how the proof run produces an
-    interrupted import and an interrupted transfer.
+    SHELF_EXIT_AFTER=<n> makes `import`, `send` and `organize` leave the
+    process after n files, the way a crash does – it is how the proof run
+    produces an interrupted import, an interrupted transfer and an interrupted
+    organise.
 
     Test material belongs under ~/Library/Caches/Shelf, never under ~/Documents.
     """
@@ -161,6 +171,8 @@ case "search-time": try await Commands.searchTime(Array(arguments.dropFirst()))
 case "verify-edits": try await Commands.verifyEdits(Array(arguments.dropFirst()))
 case "names": try await Commands.names(Array(arguments.dropFirst()))
 case "merge": try await Commands.merge(Array(arguments.dropFirst()))
+case "organize": try await Commands.organize(Array(arguments.dropFirst()))
+case "organize-undo": try await Commands.organizeUndo(Array(arguments.dropFirst()))
 default:
     print(usage)
     exit(2)
@@ -1415,6 +1427,96 @@ enum Commands {
             "\(merge.actionName): \(plan.bookCount) books · "
                 + ImportReport.duration(Date().timeIntervalSince(started)))
         print("no folder was moved — that is `organize`")
+    }
+
+    /// The preview, and only with `--run` the moving.
+    static func organize(_ arguments: [String]) async throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool organize <library> [--run]")
+            exit(2)
+        }
+        let (library, index) = try openLibrary(path)
+        let entries = try await index.allEntries()
+        let root = library.root
+        let folds = VolumeCase.folds(at: root)
+        let plan = OrganizePlanner.plan(
+            entries: entries, foldsCase: folds,
+            folderExists: { OrganizeBookProbe.exists($0, under: root) },
+            folderIsEmpty: { OrganizeBookProbe.isEmpty($0, under: root) },
+            folderHoldsBook: { OrganizeBookProbe.holdsBook(at: $0, id: $1, under: root) })
+
+        print("volume folds case: \(folds ? "yes" : "no")")
+        // The cache being wrong about where a book is, is the cache's problem:
+        // bring it level before anything else is decided.
+        if !plan.relocated.isEmpty {
+            try await writeFolders(plan.relocated.map { ($0.bookID, $0.folder) }, to: index)
+            print("\(plan.relocated.count) books were already at their new folder — the index says so now")
+        }
+        print("plan: \(plan.summary())")
+        for move in plan.moves.prefix(10) { print("  \(move.from)\n    → \(move.to)") }
+        if plan.moves.count > 10 { print("  … \(plan.moves.count - 10) more") }
+        for reason in BlockedBook.Reason.allCases {
+            let group = plan.blocked(for: reason)
+            guard !group.isEmpty else { continue }
+            print("  \(reason.label): \(group.count)")
+            for one in group.prefix(6) { print("    \(one.title) → \(one.wantedPath)") }
+        }
+
+        guard arguments.contains("--run") else {
+            print("nothing was moved — add --run")
+            return
+        }
+
+        let started = Date()
+        let outcome = try await OrganizeRunner(makeHasher: PortableSHA256Hasher.factory)
+            .run(
+                .init(library: library, plan: plan, manifest: OrganizeManifest.read(in: library)),
+                progress: { progress in
+                    // The untidy exit, exactly as `import` and `send` have one.
+                    if let after = ProcessInfo.processInfo.environment["SHELF_EXIT_AFTER"]
+                        .flatMap(Int.init), progress.done >= after
+                    {
+                        print("SHELF_EXIT_AFTER=\(after) – leaving the process now, mid-run")
+                        exit(9)
+                    }
+                })
+
+        // The folder first, the index second — always (ADR 0001).
+        try await writeFolders(outcome.moved, to: index)
+        try outcome.report.append(in: library)
+        print(outcome.report.headline)
+        print("took \(ImportReport.duration(Date().timeIntervalSince(started)))")
+        for failure in outcome.report.failures { print("  FAILED \(failure.title): \(failure.message)") }
+    }
+
+    static func organizeUndo(_ arguments: [String]) async throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool organize-undo <library>")
+            exit(2)
+        }
+        let (library, index) = try openLibrary(path)
+        let manifest = OrganizeManifest.read(in: library)
+        guard !manifest.isEmpty || manifest.inFlight != nil else {
+            print("no organise to undo — there is no manifest in this library")
+            return
+        }
+        let outcome = try await OrganizeRunner(makeHasher: PortableSHA256Hasher.factory)
+            .undo(manifest, in: library)
+        try await writeFolders(outcome.moved, to: index)
+        try outcome.report.append(in: library)
+        print(outcome.report.headline)
+        for failure in outcome.report.failures { print("  FAILED \(failure.title): \(failure.message)") }
+    }
+
+    /// Brings the index level with where the folders now are.
+    private static func writeFolders(
+        _ moved: [(bookID: UUID, folder: String)], to index: LibraryIndex
+    ) async throws {
+        for (bookID, folder) in moved {
+            guard var entry = try await index.entry(id: bookID) else { continue }
+            entry.folder = folder
+            try await index.save(entry)
+        }
     }
 
     static func bulkEdit(_ arguments: [String]) async throws {

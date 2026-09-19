@@ -86,6 +86,23 @@
         }
       }
     },
+    "%1$@ changed — tidy the folders now?": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ geändert – Ordner jetzt aufräumen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ changed — tidy the folders now?"
+          }
+        }
+      }
+    },
     "%1$@ from %2$@": {
       "extractionState": "manual",
       "localizations": {
@@ -541,6 +558,47 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@. Shelf shows it and leaves the file exactly as it is."
+          }
+        }
+      }
+    },
+    "%lld author folders were left empty by the moves and removed": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Autorenordner blieb durch die Züge leer und wurde entfernt"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Autorenordner blieben durch die Züge leer und wurden entfernt"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld author folder was left empty by the moves and removed"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld author folders were left empty by the moves and removed"
+                }
+              }
+            }
           }
         }
       }
@@ -2978,6 +3036,23 @@
         }
       }
     },
+    "Every folder in this library already matches its book.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Ordner dieser Bibliothek passt bereits zu seinem Buch."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every folder in this library already matches its book."
+          }
+        }
+      }
+    },
     "Every folder in this library belongs to a book.": {
       "extractionState": "manual",
       "localizations": {
@@ -3110,6 +3185,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fold %@ away"
+          }
+        }
+      }
+    },
+    "Folders are moved; the books inside them are not touched. Every folder is hashed before and after, and there is a way back afterwards.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordner werden bewegt, die Bücher darin nicht angefasst. Jeder Ordner wird vorher und nachher geprüft, und es gibt hinterher einen Rückweg."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folders are moved; the books inside them are not touched. Every folder is hashed before and after, and there is a way back afterwards."
+          }
+        }
+      }
+    },
+    "Folders that would move": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordner, die bewegt würden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folders that would move"
           }
         }
       }
@@ -3416,6 +3525,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Inspector"
+          }
+        }
+      }
+    },
+    "Keep Folders in Step with Metadata Changes": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordner nach Metadatenänderungen automatisch nachziehen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep Folders in Step with Metadata Changes"
           }
         }
       }
@@ -3841,6 +3967,47 @@
           "stringUnit": {
             "state": "translated",
             "value": "Move %@ to Trash"
+          }
+        }
+      }
+    },
+    "Move %lld Folders": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Ordner bewegen"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Ordner bewegen"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Move %lld Folder"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Move %lld Folders"
+                }
+              }
+            }
           }
         }
       }
@@ -4810,6 +4977,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Open Library…"
+          }
+        }
+      }
+    },
+    "Open Organize Library… Nothing moves until you say so.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Bibliothek aufräumen…“ öffnen. Es wird nichts bewegt, bis Sie es sagen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Organize Library… Nothing moves until you say so."
           }
         }
       }
@@ -6769,6 +6953,23 @@
         }
       }
     },
+    "The full report is in .shelf/Organize-Report.txt inside the library.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der vollständige Bericht steht in „.shelf/Organize-Report.txt“ in der Bibliothek."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The full report is in .shelf/Organize-Report.txt inside the library."
+          }
+        }
+      }
+    },
     "The name of the identifier – ISBN, ASIN, DOI, Goodreads": {
       "extractionState": "manual",
       "localizations": {
@@ -7126,6 +7327,23 @@
         }
       }
     },
+    "Undo Organize": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufräumen widerrufen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo Organize"
+          }
+        }
+      }
+    },
     "Unread": {
       "extractionState": "manual",
       "localizations": {
@@ -7292,6 +7510,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Working out what would be sent"
+          }
+        }
+      }
+    },
+    "Working out where every book's folder should be. Nothing is being moved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es wird ermittelt, wo der Ordner jedes Buchs liegen sollte. Es wird nichts bewegt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working out where every book's folder should be. Nothing is being moved."
           }
         }
       }
@@ -7687,6 +7922,23 @@
         }
       }
     },
+    "move the folders": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "die Ordner zu bewegen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "move the folders"
+          }
+        }
+      }
+    },
     "not a book format Shelf reads": {
       "extractionState": "manual",
       "localizations": {
@@ -7751,6 +8003,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "open %@"
+          }
+        }
+      }
+    },
+    "put the folders back": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "die Ordner zurückzulegen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "put the folders back"
           }
         }
       }
@@ -7955,6 +8224,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "this CBR could not be opened – %@"
+          }
+        }
+      }
+    },
+    "work out where the folders should be": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zu ermitteln, wo die Ordner liegen sollten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "work out where the folders should be"
           }
         }
       }

@@ -57,6 +57,16 @@ struct ShelfApp: App {
                 ) {
                     Task { await model.clearOnlineCache() }
                 }
+                Divider()
+                // Off by default, and a toggle rather than a settings window
+                // because it is the only setting Shelf has (ADR 0018). With it
+                // on, a metadata change *offers* an organise; it still never
+                // moves a folder inside a keystroke.
+                Toggle(
+                    Loc.string("Keep Folders in Step with Metadata Changes"),
+                    isOn: Binding(
+                        get: { model.keepFoldersInStep },
+                        set: { model.keepFoldersInStep = $0 }))
             }
             fileMenu
             libraryMenu
@@ -177,6 +187,11 @@ struct ShelfApp: App {
                 Task { await model.findOrphanedFolders() }
             }
             .disabled(model.library == nil || model.isLoading)
+            // The one command that moves a book's folder. It shows the whole
+            // list first and moves nothing until a button is pressed
+            // (ADR 0018).
+            Button(Loc.string("Organize Library…")) { model.beginOrganize() }
+                .disabled(model.library == nil || model.isLoading)
             Button(Loc.string("Close Library")) { model.closeLibrary() }
                 .shortcut(.closeLibrary)
                 .disabled(model.library == nil)

@@ -1547,6 +1547,126 @@ final class LibraryModel {
         }
     }
 
+    // MARK: Organising the folders (Sprint 8)
+
+    /// Where the `Organize Library…` sheet has got to.
+    enum OrganizePhase: Equatable {
+        case planning
+        /// The preview. Nothing has moved.
+        case ready(OrganizePlan)
+        case running(OrganizeRunner.Progress)
+        case done(OrganizeReport)
+    }
+
+    var organizePhase: OrganizePhase?
+    /// Whether there is a manifest to undo, so the sheet can offer it.
+    private(set) var canUndoOrganize = false
+    /// Whether the app should keep folders in step with metadata changes.
+    ///
+    /// **Off by default** (ADR 0018). A path can be referenced from outside
+    /// Shelf — a script, a hardlink backup, a Finder alias — and somebody who
+    /// has those must not be surprised. With it on, a metadata change only
+    /// *offers* an organise; nothing moves inside a keystroke either way.
+    var keepFoldersInStep: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.keepFoldersKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.keepFoldersKey) }
+    }
+
+    static let keepFoldersKey = "de.erikemmer.shelf.keepFoldersInStep"
+
+    /// Opens the sheet on a fresh preview. Nothing is moved by this.
+    func beginOrganize() {
+        organizeSuggestion = nil
+        organizePhase = .planning
+        Task { await planOrganize() }
+    }
+
+    private func planOrganize() async {
+        guard let library, let index else { return }
+        do {
+            let entries = try await index.allEntries()
+            let root = library.root
+            let plan = await Task.detached(priority: .userInitiated) {
+                OrganizePlanner.plan(
+                    entries: entries, foldsCase: VolumeCase.folds(at: root),
+                    folderExists: { OrganizeBookProbe.exists($0, under: root) },
+                    folderIsEmpty: { OrganizeBookProbe.isEmpty($0, under: root) },
+                    folderHoldsBook: { OrganizeBookProbe.holdsBook(at: $0, id: $1, under: root) })
+            }.value
+            // A stale cache is the cache's problem, and it is put right before
+            // the person is shown anything (ADR 0001).
+            if !plan.relocated.isEmpty {
+                await writeFolders(plan.relocated.map { ($0.bookID, $0.folder) })
+            }
+            canUndoOrganize = !OrganizeManifest.read(in: library).isEmpty
+            organizePhase = .ready(plan)
+        } catch {
+            organizePhase = nil
+            show(error, doing: Loc.string("work out where the folders should be"))
+        }
+    }
+
+    /// Moves the folders the preview named — and only those.
+    func runOrganize(_ plan: OrganizePlan) {
+        guard let library else { return }
+        organizePhase = .running(OrganizeRunner.Progress(done: 0, total: plan.moves.count, currentTitle: ""))
+        let manifest = OrganizeManifest.read(in: library)
+        Task {
+            do {
+                let onProgress: @Sendable (OrganizeRunner.Progress) -> Void = { [weak self] progress in
+                    Task { @MainActor in self?.organizePhase = .running(progress) }
+                }
+                let outcome = try await Task.detached(priority: .userInitiated) {
+                    try await OrganizeRunner(makeHasher: SHA256Hasher.factory)
+                        .run(.init(library: library, plan: plan, manifest: manifest), progress: onProgress)
+                }.value
+
+                // The folder first, the index second — always.
+                await writeFolders(outcome.moved)
+                try? outcome.report.append(in: library)
+                canUndoOrganize = !outcome.manifest.isEmpty
+                organizePhase = .done(outcome.report)
+                await reload()
+            } catch {
+                organizePhase = nil
+                show(error, doing: Loc.string("move the folders"))
+            }
+        }
+    }
+
+    /// Puts every folder the manifest names back where it came from.
+    func undoOrganize() {
+        guard let library else { return }
+        organizePhase = .running(OrganizeRunner.Progress(done: 0, total: 0, currentTitle: ""))
+        let manifest = OrganizeManifest.read(in: library)
+        Task {
+            do {
+                let outcome = try await Task.detached(priority: .userInitiated) {
+                    try await OrganizeRunner(makeHasher: SHA256Hasher.factory)
+                        .undo(manifest, in: library)
+                }.value
+                await writeFolders(outcome.moved)
+                try? outcome.report.append(in: library)
+                canUndoOrganize = !outcome.manifest.isEmpty
+                organizePhase = .done(outcome.report)
+                await reload()
+            } catch {
+                organizePhase = nil
+                show(error, doing: Loc.string("put the folders back"))
+            }
+        }
+    }
+
+    /// Brings the index level with where the folders now are.
+    private func writeFolders(_ moved: [(bookID: UUID, folder: String)]) async {
+        guard let index else { return }
+        for (bookID, folder) in moved {
+            guard var entry = try? await index.entry(id: bookID) else { continue }
+            entry.folder = folder
+            try? await index.save(entry)
+        }
+    }
+
     /// Why this book is in *Duplicates*, in one line — or nothing when it is
     /// not. The best-founded rule when several matched: identical bytes is a
     /// fact and identical title-and-author is a guess, and the guess is the one

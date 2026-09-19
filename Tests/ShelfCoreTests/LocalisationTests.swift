@@ -213,6 +213,10 @@ struct LocalisationTests {
     static let notWindowText: Set<String> = [
         "Library/Caches/Shelf", "Shelf/online", "User-Agent", "application/json", "Accept",
         "SHELF_ONLINE_HOST", "SHELF_TIMING", "recentLibraries", "identifier:", "shelf:",
+        // Sprint 8's one defaults key. It is declared as a `static let` rather
+        // than written inline at the `UserDefaults` call, which is why
+        // `notDrawing`'s "forKey" does not catch it.
+        "de.erikemmer.shelf.keepFoldersInStep",
         "libarchive (version unknown)", "Shelf",
         // A sort sentinel and a line break, neither of which anybody reads.
         "\\u{10FFFF}", "\\n",

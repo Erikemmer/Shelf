@@ -1,4 +1,5 @@
 import Foundation
+
 @testable import ShelfFixtures
 
 /// A throw-away folder for file-system tests, deleted when the test ends.

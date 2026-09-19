@@ -77,6 +77,13 @@ struct ContentView: View {
             // own, so a fetched field would be written with no way back.
             FetchMetadataSheet(undoManager: undoManager).environment(model)
         }
+        .sheet(
+            isPresented: Binding(
+                get: { model.organizePhase != nil },
+                set: { if !$0 { model.organizePhase = nil } })
+        ) {
+            OrganizeSheet().environment(model)
+        }
         .onAppear {
             editingKeys.start(handleWindowKey)
             focus = model.focusTarget
@@ -230,6 +237,19 @@ struct ContentView: View {
                 SlateBanner(warning, tint: Slate.accent.opacity(0.85))
                     .onTapGesture { model.dismissSyncWarning() }
                     .help(Loc.string("Click to dismiss"))
+            }
+            // What a finished merge offers, once: the books have been renamed,
+            // and their folders still carry the old spelling. Clicking opens
+            // the preview — it does not move anything by itself (ADR 0018).
+            if let count = model.organizeSuggestion {
+                SlateBanner(
+                    Loc.string(
+                        "%1$@ changed — tidy the folders now?",
+                        Loc.count("%lld books", count)),
+                    tint: Slate.accent.opacity(0.85)
+                )
+                .onTapGesture { model.beginOrganize() }
+                .help(Loc.string("Open Organize Library… Nothing moves until you say so."))
             }
         }
         .padding(.horizontal, 20)
