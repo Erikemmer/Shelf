@@ -32,6 +32,7 @@ say() { echo "calibre-shot: $1"; }
 pin_app_language en
 
 . "$HERE/screen-awake.sh"
+. "$HERE/no-foreign-shelf.sh"
 require_awake_screen "$@"
 
 [ -d "$CAL" ] || fail "'$CAL' is not a folder"
@@ -49,19 +50,7 @@ if [ -z "$APP" ]; then
 fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
 
-if pgrep -x Shelf >/dev/null; then
-    # Escape first: an instance with a sheet open refuses to quit, and the
-    # instance most likely to be running is the one a previous run of *this*
-    # script left showing a counting protocol.
-    osascript -e 'tell application "System Events" to key code 53' >/dev/null 2>&1
-    sleep 1
-    for _ in 1 2 3 4 5; do
-        pgrep -x Shelf >/dev/null || break
-        osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1
-        sleep 1.5
-    done
-    pgrep -x Shelf >/dev/null && fail "a Shelf instance will not quit – close whatever is open in it"
-fi
+require_no_foreign_shelf
 open -a "$APP" "$LIB" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
 sleep 10
 PID=$(pgrep -x Shelf | head -1)

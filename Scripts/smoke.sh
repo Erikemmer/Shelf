@@ -17,8 +17,6 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 APP="${SMOKE_APP:-}"
 LIBRARY="${1:-${SMOKE_LIBRARY:-}}"
 MAX_CPU="${SMOKE_MAX_CPU:-20}"
-# Set to 0 to abort instead of quitting an instance that is already running.
-KILL_EXISTING="${SMOKE_KILL_EXISTING:-1}"
 # Set to 1 to run alongside an instance Xcode is debugging instead of refusing.
 # The test then measures its own instance, which it tracks by pid – but the
 # keystrokes that open a library go to whichever instance is frontmost, so the
@@ -29,6 +27,8 @@ fail() {
     echo "smoke: FAILED – $1" >&2
     exit 1
 }
+
+. "$HERE/no-foreign-shelf.sh"
 
 # ── The app bundle ────────────────────────────────────────────────────────────
 if [ -z "$APP" ]; then
@@ -51,34 +51,15 @@ echo "smoke: bundle: $APP"
 
 # ── Instances that are already running ────────────────────────────────────────
 # A plain `open` would only activate an existing instance, and the test would
-# measure that one. An instance started from Xcode (⌘R) is held by the debugger:
-# it ignores "quit" and even SIGKILL, so there is nothing to do but say so.
-for pid in $(pgrep -x Shelf); do
-    PARENT=$(ps -o comm= -p "$(ps -o ppid= -p "$pid" | tr -d ' ')" 2>/dev/null)
-    case "$PARENT" in
-        *debugserver* | *lldb* | *Xcode*)
-            [ "$ALLOW_XCODE" = "1" ] && {
-                echo "smoke: note – Shelf is also running from Xcode (pid $pid); measuring our own instance"
-                continue
-            }
-            fail "Shelf is running from Xcode (pid $pid, held by ${PARENT##*/}).
-       Stop it in Xcode (⌘.) and run 'make smoke' again – a debugged process
-       cannot be quit from here.
-       To measure a separate instance alongside it: SMOKE_ALLOW_XCODE=1 make smoke"
-            ;;
-    esac
-    if [ "$KILL_EXISTING" = "1" ]; then
-        echo "smoke: quitting the Shelf already running (pid $pid)"
-    else
-        fail "Shelf is already running (pid $pid) – quit it, or unset SMOKE_KILL_EXISTING=0"
-    fi
-done
-if pgrep -x Shelf >/dev/null && [ "$ALLOW_XCODE" != "1" ]; then
-    osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1
-    sleep 2
-    pkill -x Shelf >/dev/null 2>&1
-    sleep 1
-    pgrep -x Shelf >/dev/null && fail "could not quit Shelf (pid $(pgrep -x Shelf | tr '\n' ' '))"
+# measure that one — not the build this run just made. This never tries to end
+# one it finds, debugged or not: see `Scripts/no-foreign-shelf.sh` for why.
+# `make smoke` once quit exactly such an instance, unconditionally; this is
+# the fix. `--allow-xcode` because this is the one script that can meaningfully
+# measure its own pid alongside one Xcode is debugging.
+if [ "$ALLOW_XCODE" = "1" ]; then
+    require_no_foreign_shelf --allow-xcode
+else
+    require_no_foreign_shelf
 fi
 
 cleanup() {

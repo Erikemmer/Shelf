@@ -37,6 +37,7 @@ say() { echo "table-scroll: $1"; }
 pin_app_language en
 
 . "$HERE/screen-awake.sh"
+. "$HERE/no-foreign-shelf.sh"
 require_awake_screen "$@"
 
 [ -f "$LIBRARY/.shelf/library.sqlite" ] || fail "'$LIBRARY' holds no index"
@@ -52,11 +53,7 @@ if [ -z "$APP" ]; then
 fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
 
-if pgrep -x Shelf >/dev/null; then
-    osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1
-    sleep 3
-    pgrep -x Shelf >/dev/null && fail "a Shelf instance will not quit"
-fi
+require_no_foreign_shelf
 
 BOOKS=$(sqlite3 "$LIBRARY/.shelf/library.sqlite" "SELECT COUNT(*) FROM books")
 say "library: $(basename "$LIBRARY"), $BOOKS books"

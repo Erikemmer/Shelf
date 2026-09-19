@@ -35,6 +35,7 @@ say() { echo "formats-shot: $1"; }
 pin_app_language en
 
 . "$HERE/screen-awake.sh"
+. "$HERE/no-foreign-shelf.sh"
 require_awake_screen "$@"
 
 [ -d "$SOURCE" ] || fail "'$SOURCE' is not a folder"
@@ -54,7 +55,7 @@ fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
 
 # Never end a process this script did not start.
-pgrep -x Shelf >/dev/null && fail "a Shelf is already running – close it yourself, then run this again"
+require_no_foreign_shelf
 
 open -a "$APP" "$LIB" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
 sleep 10

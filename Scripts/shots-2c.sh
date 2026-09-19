@@ -45,6 +45,7 @@ mkdir -p "$OUT"
 pin_app_language en
 
 . "$HERE/screen-awake.sh"
+. "$HERE/no-foreign-shelf.sh"
 require_awake_screen "$@"
 
 PROBE=$(mktemp -t shelf-shot).png
@@ -101,15 +102,7 @@ SHELVES
 say "  Fiction ▸ Science Fiction, Fiction ▸ Crime, Non-Fiction ▸ History, To Read"
 
 # ── The instance ─────────────────────────────────────────────────────────────
-if pgrep -x Shelf >/dev/null; then
-    osascript -e 'tell application "System Events" to key code 53' >/dev/null 2>&1
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
-        pgrep -x Shelf >/dev/null || break
-        osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1
-        sleep 1
-    done
-    pgrep -x Shelf >/dev/null && fail "a Shelf instance will not quit – close whatever is open in it"
-fi
+require_no_foreign_shelf
 open -a "$APP" "$LIBRARY" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
 sleep 9
 PID=$(pgrep -x Shelf | head -1)

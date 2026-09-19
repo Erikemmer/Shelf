@@ -46,6 +46,7 @@ mkdir -p "$OUT"
 pin_app_language en
 
 . "$HERE/screen-awake.sh"
+. "$HERE/no-foreign-shelf.sh"
 require_awake_screen "$@"
 
 # ── The permission, checked before anything is launched ───────────────────────
@@ -170,27 +171,10 @@ OVERSIZED=""
 # over from an earlier run had the import sheet open, `quit` is refused while a
 # sheet is up, `open -n` then added nothing, and the script photographed the
 # stale window four times – dimmed, with the sheet in it, from the previous
-# build – and reported success for all four. An instance that will not go is now
-# a full stop with a sentence saying what to do, not something to photograph.
-# It is never killed: ending a process this script did not start is not its call.
-if pgrep -x Shelf >/dev/null; then
-    # Escape first: it dismisses a sheet, which is the usual reason a quit is
-    # refused. Then ask, then wait and look.
-    osascript -e 'tell application "System Events" to key code 53' >/dev/null 2>&1
-    sleep 1
-    # The quit is re-issued each round rather than sent once: a quit that
-    # arrives while the sheet is still closing is refused, and only the *next*
-    # one gets through. Measured by hand – Escape and quit back to back left
-    # the app running, a second quit a moment later ended it.
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
-        pgrep -x Shelf >/dev/null || break
-        osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1
-        sleep 1
-    done
-    pgrep -x Shelf >/dev/null && fail "a Shelf instance (pid $(pgrep -x Shelf | tr '\n' ' ')) will not quit.
-       Usually a sheet or a modal panel is open in it. Close it and run this
-       again. This script does not end a process it did not start."
-fi
+# build – and reported success for all four. This never tries to end an
+# instance that is already running (Scripts/no-foreign-shelf.sh) — ending a
+# process this script did not start is not its call.
+require_no_foreign_shelf
 
 open -n -F "$APP"; sleep 4
 SHELF_PID=$(pid_with_window Shelf) || fail "Shelf started but shows no window"

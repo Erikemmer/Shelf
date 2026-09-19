@@ -16,6 +16,12 @@ It works inside `~/Library/Caches/Shelf/runbook-7b` and removes only what it
 made there. Measured on Erik's Mac (M-series, macOS 15.6) on 19 September 2026
 against a generated library of 20 EPUBs.
 
+Like every script under `Scripts/` that opens the app, it refuses outright if
+a Shelf is already running rather than trying to make it go away first
+(`Scripts/no-foreign-shelf.sh`) — a script cannot tell a leftover from an
+earlier run apart from a window Erik has open on purpose, and it is not its
+call to guess.
+
 ---
 
 ## 1. What is the truth, and what is only a cache

@@ -91,6 +91,7 @@ name_of() {
 . "$HERE/app-language.sh"
 pin_app_language "$LANGUAGE"
 . "$HERE/screen-awake.sh"
+. "$HERE/no-foreign-shelf.sh"
 require_awake_screen "$@"
 
 case "$LIB" in
@@ -114,16 +115,7 @@ if [ -z "$APP" ]; then
 fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
 
-if pgrep -x Shelf >/dev/null; then
-    osascript -e 'tell application "System Events" to key code 53' >/dev/null 2>&1
-    sleep 1
-    for _ in 1 2 3 4 5; do
-        pgrep -x Shelf >/dev/null || break
-        osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1
-        sleep 1.5
-    done
-    pgrep -x Shelf >/dev/null && fail "a Shelf instance will not quit – close whatever is open in it"
-fi
+require_no_foreign_shelf
 
 open -a "$APP" "$LIB" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
 sleep 10

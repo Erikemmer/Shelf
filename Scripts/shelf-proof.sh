@@ -42,6 +42,7 @@ say() { echo "shelf-proof: $1"; }
 # A locked screen breaks everything below without failing any of it – see
 # `screen-awake.sh`, which also holds the display awake for the run.
 . "$HERE/screen-awake.sh"
+. "$HERE/no-foreign-shelf.sh"
 require_awake_screen "$@"
 
 [ -f "$INDEX" ] || fail "'$LIBRARY' holds no index – import a library there first"
@@ -57,18 +58,7 @@ if [ -z "$APP" ]; then
 fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
 
-quit_shelf() {
-    pgrep -x Shelf >/dev/null || return 0
-    osascript -e 'tell application "System Events" to key code 53' >/dev/null 2>&1
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
-        pgrep -x Shelf >/dev/null || return 0
-        osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1
-        sleep 1
-    done
-    fail "a Shelf instance will not quit – close whatever is open in it"
-}
-
-quit_shelf
+require_no_foreign_shelf
 open -a "$APP" "$LIBRARY" || fail "could not launch $APP"
 sleep 9
 PID=$(pgrep -x Shelf | head -1)

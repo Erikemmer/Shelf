@@ -35,6 +35,7 @@ say() { echo "device-shot: $1"; }
 pin_app_language en
 
 . "$HERE/screen-awake.sh"
+. "$HERE/no-foreign-shelf.sh"
 require_awake_screen "$@"
 
 [ -f "$LIB/.shelf/library.sqlite" ] || fail "'$LIB' holds no index – run the proof run first"
@@ -61,7 +62,7 @@ if [ -z "$APP" ]; then
 fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
 
-pgrep -x Shelf >/dev/null && fail "a Shelf is already running – close it yourself, then run this again"
+require_no_foreign_shelf
 
 open -a "$APP" "$LIB" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
 sleep 10

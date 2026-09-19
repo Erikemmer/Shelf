@@ -46,6 +46,7 @@ fail() {
 pin_app_language en
 
 . "$HERE/screen-awake.sh"
+. "$HERE/no-foreign-shelf.sh"
 require_awake_screen "$@"
 
 [ -f "$INDEX" ] || fail "'$LIBRARY' holds no index – import a library there first"
@@ -62,20 +63,9 @@ fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
 
 # ── The instance ──────────────────────────────────────────────────────────────
-# Same rule as every other script here: an instance that is already running is
-# asked to quit and then checked; it is never killed.
+# Never an instance this script did not start itself (Scripts/no-foreign-shelf.sh).
 STARTED_IT=0
-if pgrep -x Shelf >/dev/null; then
-    osascript -e 'tell application "System Events" to key code 53' >/dev/null 2>&1
-    sleep 1
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
-        pgrep -x Shelf >/dev/null || break
-        osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1
-        sleep 1
-    done
-    pgrep -x Shelf >/dev/null && fail "a Shelf instance (pid $(pgrep -x Shelf | tr '\n' ' ')) will not quit.
-       Usually a sheet is open in it. Close it and run this again."
-fi
+require_no_foreign_shelf
 open -a "$APP" "$LIBRARY" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
 STARTED_IT=1
 sleep 9
