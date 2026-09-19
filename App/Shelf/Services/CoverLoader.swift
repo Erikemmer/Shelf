@@ -50,27 +50,37 @@ actor CoverLoader {
     // MARK: Requests
 
     /// The cover for a book at a size, decoding it if need be.
-    func cover(for entry: LibraryEntry, size: CoverSize, priority: LoadPriority = .interactive) async -> NSImage? {
+    ///
+    /// Hands back the `DecodedCover` rather than the `NSImage` inside it, and
+    /// that is not ceremony: this is an `actor`, so the result crosses an
+    /// isolation boundary and has to be `Sendable`. `NSImage` is annotated
+    /// `Sendable` by Xcode 27's SDK and is not by Xcode 16.4's, so returning
+    /// it made the build depend on which Xcode was in front of it — which is
+    /// what the app-build CI job found the first time it was ever allowed to
+    /// run. `DecodedCover` carries the promise, and the justification for it,
+    /// in one place (`CoverDecoder.swift`). The loader was unwrapping it here
+    /// only for every caller to use it as one thing anyway.
+    func cover(for entry: LibraryEntry, size: CoverSize, priority: LoadPriority = .interactive) async -> DecodedCover? {
         let key = CoverCacheKey(bookID: entry.id, pixelWidth: size.pixels)
-        if let hit = cache(for: size).image(for: entry.id) { return hit.image }
+        if let hit = cache(for: size).image(for: entry.id) { return hit }
 
         // Somebody is already decoding this exact cover – wait for them rather
         // than doing the same work twice. Priority does not change the result.
         let request = Request(bookID: entry.id, size: size)
         if let running = inFlight[request] {
-            return await running.value?.image
+            return await running.value
         }
-        return await decode(entry: entry, size: size, key: key, priority: priority)?.image
+        return await decode(entry: entry, size: size, key: key, priority: priority)
     }
 
     /// The best version already in memory, without decoding anything.
     ///
     /// This is what lets a cell put *something* on screen the moment it scrolls
     /// into view: the grid tier is held for every book, so this is usually a hit.
-    func cached(for bookID: UUID, size: CoverSize) -> NSImage? {
-        if let hit = cache(for: size).image(for: bookID) { return hit.image }
+    func cached(for bookID: UUID, size: CoverSize) -> DecodedCover? {
+        if let hit = cache(for: size).image(for: bookID) { return hit }
         // A larger tier will do, scaled down; the reverse would be blurry.
-        if size == .grid, let hit = largeCovers.image(for: bookID) { return hit.image }
+        if size == .grid, let hit = largeCovers.image(for: bookID) { return hit }
         return nil
     }
 

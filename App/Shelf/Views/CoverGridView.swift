@@ -317,11 +317,11 @@ struct BookCell: View {
         guard let loader = model.loader else { return }
         // Whatever is in memory first, so a scrolled-to cell is not blank while
         // it waits for its own request.
-        if let cached = await loader.cached(for: entry.id, size: size) {
+        if let cached = await loader.cached(for: entry.id, size: size)?.image {
             cover = cached
             return
         }
-        cover = await loader.cover(for: entry, size: size, priority: .interactive)
+        cover = await loader.cover(for: entry, size: size, priority: .interactive)?.image
     }
 }
 

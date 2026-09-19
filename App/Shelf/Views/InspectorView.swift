@@ -851,8 +851,8 @@ struct InspectorCover: View {
             guard let loader = model.loader else { return }
             // The grid tier first, blown up, so something appears at once; then
             // the sharp one.
-            cover = await loader.cached(for: entry.id, size: .grid)
-            cover = await loader.cover(for: entry, size: .large, priority: .interactive)
+            cover = await loader.cached(for: entry.id, size: .grid)?.image
+            cover = await loader.cover(for: entry, size: .large, priority: .interactive)?.image
             // Only the selection is worth holding at the large size.
             await loader.limitLargeCovers(to: [entry.id])
         }
