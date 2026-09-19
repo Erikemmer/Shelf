@@ -1,6 +1,11 @@
 # ADR 0007 – A metadata change does not rename the book's folder
 
-Date: 2026-09-17 · Status: accepted
+Date: 2026-09-17 · Status: superseded by
+[ADR 0018](0018-renaming-merging-and-organising-are-deliberate-operations.md)
+on 2026-09-19 — and superseded only in what it left unsaid. Every argument
+below still holds, and it is why "keep folders in step with metadata changes"
+is off by default. What ADR 0018 adds is that renaming, merging and organising
+are *deliberate, previewed* commands rather than things that never happen.
 
 ## Context
 

@@ -106,6 +106,29 @@ UI zuerst Englisch, Deutsch in Sprint 7 (wie Selector). Bezeichner Englisch.
 - Kobo: Lesefortschritt und Regale vom Gerät lesen (nur lesen)
 - Kompatible Metadaten-Dateien (`metadata.opf` je Buch, Calibre-Schema) – ein Rückweg nach Calibre bleibt offen
 - Undo für alle Metadaten-Änderungen; nichts Irreversibles ohne Dialog
+- **Schreibweisen zusammenführen.** Autor, Serie, Verlag und Tag lassen sich
+  umbenennen und mehrere zu einer Zielschreibweise zusammenführen. Wirkung auf
+  jedes betroffene Buch: `metadata.opf` neu geschrieben, Index nachgezogen,
+  `AuthorSort` / `TitleSort` neu berechnet – als *ein* Undo-Schritt, mit
+  Bericht. Shelf schlägt nichts vor und wählt nichts aus: welche drei
+  Schreibweisen dieselbe Person sind, entscheidet der Nutzer (ADR 0018)
+- **„Organize Library…“** – der Befehl, der die Ordner an die Metadaten
+  angleicht. Erst eine Vorschau (alt → neu, wie viele schon richtig liegen,
+  jede Kollision, alles Unberührbare), dann auf Knopfdruck das Bewegen nach den
+  Regeln des Imports: Hash vorher und nachher, Manifest, Wiederaufnahme nach
+  Abbruch, kein Rest, Rückweg über das Manifest (ADR 0002, ADR 0018).
+  **Ordner werden bewegt, Buchdateien nie verändert.** Ein Schalter in den
+  Einstellungen zieht die Ordner nach einer Metadatenänderung automatisch nach;
+  er ist standardmäßig **aus**, weil Pfade in Skripten und Hardlink-Backups
+  stehen können
+- **Export einer Auswahl oder der ganzen Bibliothek als Ordner** (Kopie), mit
+  wählbaren Formaten, Struktur (`Autor/Titel/` oder flach), Namensmuster und je
+  einem Schalter für `cover.jpg` und `metadata.opf`. Vier Voreinstellungen:
+  **Archiv** (alles, wieder importierbar), **Nur die Bücher** (reine Dateien,
+  mit sichtbarem Hinweis, was dabei zurückbleibt), **Für Calibre** (wie Archiv,
+  zusätzlich Regale und Gelesen-Status als Calibre-Tags, weil Calibre eine
+  unbekannte `<meta>` ignoriert). Zählprotokoll vorher, Bericht nachher; ein
+  zweiter Lauf schreibt nur die Unterschiede und liest nie zurück (ADR 0019)
 
 **Should**
 
@@ -113,7 +136,6 @@ UI zuerst Englisch, Deutsch in Sprint 7 (wie Selector). Bezeichner Englisch.
 - Serien-Ansicht (Bücher einer Serie geordnet nach Index, fehlende Bände sichtbar)
 - Eigene Calibre-Spalten (Text, Ja/Nein, Datum, Zahl) importieren und anzeigen, in v1.0 nur lesend
 - Zuletzt geöffnete Bibliotheken, mehrere Bibliotheken umschaltbar
-- Export einer Auswahl als Ordner (Kopie) mit Namensmuster `{author} - {title}`
 
 **Could**
 
@@ -150,6 +172,36 @@ My Library/
 Die Ordnerstruktur ist Calibre-kompatibel (`Autor/Titel (id)/`), damit ein Calibre-Import 1:1 übernehmen kann und ein Rückweg bleibt. `metadata.opf` folgt dem Calibre-OPF-Schema (Dublin Core + `calibre:`-Metas: `series`, `series_index`, `rating`, `timestamp`, `user_metadata` für eigene Spalten). Shelf-eigene Felder (Gelesen-Status, Regalzugehörigkeit, Gerätezuordnung) stehen in `<meta name="shelf:…">`; Calibre ignoriert sie stillschweigend.
 
 **Regel:** Ein Schreibvorgang auf `metadata.opf` schreibt in eine `.opf.part`-Datei und benennt atomar um (wie `.ingest-*.part` bei Selector). Die Buchdatei selbst wird in v1.0 nie geschrieben.
+
+**Namenskollisionen und Groß-/Kleinschreibung.** Der Soll-Pfad eines Buchs wird
+aus seinen Metadaten gebildet (`AutorSort/Titel (Nummer)/`), und zwei Bücher
+können denselben ergeben: derselbe Autor, derselbe Titel. Die laufende Nummer
+in der Titelkomponente hält sie auseinander – sie ist Teil des Namens und nicht
+Schmuck, und genau deshalb steht sie dort. Bleiben zwei Pfade trotzdem gleich,
+ist das eine **Kollision**, und eine Kollision wird angezeigt und nicht gelöst:
+Shelf bewegt beide Ordner nicht und nennt sie in der Vorschau beim Namen. Nichts
+wird überschrieben, nichts zusammengelegt (ADR 0002, Entscheidung 4).
+
+Auf dem Mac kommt ein zweiter Fall dazu, den kein anderes Betriebssystem
+kennt. **APFS ist standardmäßig case-insensitive, aber case-preserving:**
+`Fitzek` und `fitzek` sind derselbe Ordner, und ein `moveItem` von einem auf
+den anderen ist kein Umbenennen, sondern ein Schreiben in sich selbst – auf
+manchen Volumes ein Fehler, auf anderen ein Datenverlust. Deshalb gilt:
+
+- **Vergleiche über Pfade falten die Groß-/Kleinschreibung**, wo das Dateisystem
+  es tut. Ob es das tut, wird **am Volume selbst gemessen** und nicht geraten:
+  eine Datei anlegen und unter der anders geschriebenen Form suchen. Ein
+  externes, case-sensitives Volume mit derselben Bibliothek verhält sich
+  anders als die interne Platte, und was für beide gelten soll, muss beides
+  fragen.
+- **Ein Zug, der sich nur in der Groß-/Kleinschreibung unterscheidet**, ist auf
+  einem case-insensitiven Volume kein Zug zwischen zwei Ordnern, sondern eine
+  Umbenennung desselben. Er läuft über einen eindeutigen Zwischennamen
+  (`.shelf-move-<zufällig>`), weil ein direktes `moveItem` dort scheitert.
+- **Zwei Bücher, deren Soll-Pfade sich nur in der Groß-/Kleinschreibung
+  unterscheiden**, sind auf einem case-insensitiven Volume eine Kollision und
+  werden als solche gemeldet – auf einem case-sensitiven Volume sind sie zwei
+  Ordner und keine.
 
 ### 5.2 Index (SQLite)
 
@@ -268,13 +320,17 @@ Wiederverwendung aus Selector (kopieren, nicht koppeln, weil fachlich verschiede
 
 **Sprint 6 – Online-Metadaten.** Open Library, Google Books, Vergleichsansicht, Cover-Nachladen.
 
-**Sprint 7 – Polish & Release.** Deutsch, Barrierefreiheit, Shortcut-Übersicht, Signierung + Notarisierung, Direkt-Download, Runbook → **v1.0**.
+**Sprint 7 – Polish & Release.** Deutsch, Barrierefreiheit, Shortcut-Übersicht, Signierung + Notarisierung, Direkt-Download, Runbook.
 
-**Danach (Wünsche):** Konvertierung über `ebook-convert`, Reader, Send-to-Kindle, Fortschritt schreiben, regelbasierte Regale, iPad.
+**Sprint 8 – Ordnen und Export.** Der Sprint, der aus einer Lücke entstand, die beim Ausprobieren auffiel: Shelf konnte eine Sammlung bisher nur *im Fenster* ordnen. Steht derselbe Autor als „Sebastian Fitzek“, „Fitzek, Sebastian“ und „S. Fitzek“ in der Bibliothek, blieben das drei Autoren und drei Ordner. Umbenennen und Zusammenführen von Autoren, Serien, Verlagen und Tags; „Organize Library…“ mit Vorschau, Prüfsummen, Manifest und Rückweg; Export in vier Voreinstellungen, davon eine, die den Rückweg nach Calibre verlustfrei macht. Beweislauf gegen 5.000 Bücher, darunter der wichtigste des Sprints: ein Archiv-Export wird in eine leere Bibliothek importiert und beide werden verglichen → **v1.0**.
+
+**Danach (Wünsche):** Konvertierung über `ebook-convert`, Reader, Send-to-Kindle, Fortschritt schreiben, regelbasierte Regale, iPad. Dazu ein lokales Modell oder eine Schnittstelle zu einem Dienst wie Claude, das Schreibweisen, Dubletten und Cover *vorschlägt*: die Vorschläge füllen dieselbe Vorschau-Liste, die der Nutzer heute von Hand füllt und bestätigt, und gehen nie selbst an Dateien. Die Grenze ist die Stelle, an der Sprint 8 sie gezogen hat – ein Vorschlag ist ein Vorschlag, und bestätigt wird von einem Menschen.
 
 ## 12. Nicht-Ziele
 
 Kein Nachbau der Calibre-Oberfläche. Keine Plugins. Kein Server, keine Web-Oberfläche. Keine Cloud-Synchronisation der Bibliothek in v1.0 (iCloud-Drive-Bibliotheken werden erkannt und mit Warnung geöffnet; SQLite in iCloud ist ein bekanntes Problem). Kein Umgehen von DRM, in keiner Form.
+
+**Was seit Sprint 8 kein Nicht-Ziel mehr ist.** „Die Ordner in Ruhe lassen“ stand hier nicht als Satz, aber es war die Haltung: ADR 0007 hielt fest, dass eine Metadatenänderung den Ordner nicht umbenennt, und daraus wurde gelesen, Shelf rühre Ordner überhaupt nicht an. Das gilt so nicht mehr. ADR 0018 trennt die beiden Dinge: **beiläufig** wird nie umbenannt, **auf ausdrückliche Anweisung, mit Vorschau und Rückweg** schon. Unverändert bleibt, was darunter liegt und wovon nichts verhandelbar ist: **eine Buchdatei wird nie geschrieben, nie überschrieben, nie gelöscht.** Ordner werden bewegt, Inhalte nicht. Und nichts wird endgültig gelöscht – was weggehen soll, geht in den Papierkorb.
 
 ## 13. Risiken
 
