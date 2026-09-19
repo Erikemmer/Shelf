@@ -1,10 +1,19 @@
 # Handoff – where Shelf stands, and what is left
 
-**v1.0 is ready to be released. What is open is what Erik has to contribute.**
+**Next step: release v1.0.** What is open is what Erik has to contribute.
 
-Sprints 1–7 are done. `main` is green, 631 core tests on macOS and on Linux, the
-version in `project.yml` is `1.0.0`, and `make release-dry` builds, signs and
-zips it. The tag `v1.0.0` is **not** set and will not be set without Erik's word.
+Sprints 1–8 are done. `main` is green, **675 core tests**, the version in
+`project.yml` is `1.0.0`, and `make release-dry` builds, signs and zips it. The
+tag `v1.0.0` is **not** set and will not be set without Erik's word.
+
+**Sprint 8 is why this file says 8 and not 7.** Trying the program found a hole
+in the concept rather than a defect in the code: Shelf could order a collection
+only inside its own window, and a library kept in it could not leave it. Both
+are answered now — rename and merge, `Organize Library…`, and an export whose
+archive re-imports as the same library. The numbers are at the top of
+`CHANGELOG.md`; the decisions are
+[ADR 0018](adr/0018-renaming-merging-and-organising-are-deliberate-operations.md)
+and [ADR 0019](adr/0019-export-the-opf-decides-what-an-export-is.md).
 
 ---
 
@@ -49,7 +58,11 @@ docker run --rm -v "$CHECK:/src" -w /src swift:6.1 bash -c \
 A `git archive` rather than the repository itself, because `Package.resolved`
 lives beside the repo and the container cannot read it — and because it then
 checks exactly what is committed. Measured 19 September 2026 on `4e53102`:
-build 36.0 s, **631 tests green on Linux**.
+build 36.0 s, **631 tests green on Linux**. **Sprint 8's 44 new tests have not
+been run on Linux**, because Docker was not started for this session — the core
+compiles without AppKit, ImageIO or PDFKit as always, and nothing in
+`ShelfCore/Organize/`, `ShelfCore/Export/` or `SidecarMetadata` imports
+anything but Foundation, but that is an argument and not a run.
 
 ### 3. SlateKit is private, and the CI cannot see it
 
@@ -108,21 +121,20 @@ them:
 
 ## If the next session is a v1.1
 
-`docs/BACKLOG.md` is the list, and three items have been sharpened rather than
-fixed and are the obvious first three:
+`docs/BACKLOG.md` is the list. The first of Sprint 7's three was fixed in
+Sprint 8; the obvious first three now are:
 
-1. **A resumed transfer reports as failures the files it wrote itself.** The
-   manifest is written every twenty files, so an *untidy* death — a crash, a
-   power cut, a cable — can leave up to nineteen on the card that no manifest
-   knows about, and the next run fails on each of them. Nothing is lost. The fix
-   is in `TransferPlanner`.
-2. **SwiftUI's Edit ▸ Undo never carries the action name**, whatever made the
+1. **SwiftUI's Edit ▸ Undo never carries the action name**, whatever made the
    change. Measured both ways in Sprint 7. The fix is
    `CommandGroup(replacing: .undoRedo)` and it puts ⌘Z inside a text field on
    the line, which is why it was not done before a release.
-3. **Editing publisher, language or date across a selection.** Deliberately left
+2. **Editing publisher, language or date across a selection.** Deliberately left
    out in Sprint 2c; a publisher across a selection is a reasonable thing to
    want.
+3. **A stored `authorSort` per author.** `AuthorSort` is a rule, and a rule gets
+   some names wrong — a Dutch *van*, a Spanish double surname. Sprint 8 made
+   renaming an author easy and left no way to correct how one *sorts*. It is a
+   schema change, which is why it was not smuggled in.
 
 ---
 
@@ -136,14 +148,16 @@ Du arbeitest mit mir (Erik Emmer) an **Shelf**, einem Mac-only eBook-Manager im
 Look & Feel von Selector. Repo: https://github.com/Erikemmer/Shelf (lokal
 `~/Documents/Shelf`). Shelf ist ein modern aussehendes Calibre: Bibliothek,
 Metadaten, Calibre-Import, Geräte – kein Reader, keine Konvertierung in v1.0.
-**Stand: v1.0 ist freigabebereit**, `main` grün, 631 Kern-Tests, SlateKit-Pin
+**Stand: v1.0 ist freigabebereit**, `main` grün, 675 Kern-Tests, SlateKit-Pin
 `0.4.1`, Version `1.0.0` in `project.yml`, Tag `v1.0.0` **nicht** gesetzt.
+Sprint 8 (Umbenennen/Zusammenführen, „Organize Library…", Export) ist fertig;
+oben in `CHANGELOG.md` stehen die Zahlen.
 
 **Lies zuerst, in dieser Reihenfolge:** `Programmier-Leitlinie.md` (bindend),
 `CLAUDE.md`, diese Datei ganz oben („Was Erik tun muss“), `CHANGELOG.md` (oben
 steht der letzte Stand), `docs/BACKLOG.md`, `docs/RUNBOOK.md`. Das Fachliche
 steht vollständig in `docs/CONCEPT.md`, das Datenmodell in `docs/DATA-MODEL.md`,
-die Entscheidungen in `docs/adr/` (0001–0017).
+die Entscheidungen in `docs/adr/` (0001–0019).
 
 **Rollen und Arbeitsweise**
 
@@ -166,26 +180,26 @@ die Entscheidungen in `docs/adr/` (0001–0017).
 
 ---
 
-## Was in `~/Library/Caches/Shelf/` von der Sitzung vom 19.09.2026 stammt
+## Was in `~/Library/Caches/Shelf/` von der Sitzung vom 19.09.2026 (Sprint 8) stammt
 
 Angelegt und benannt, wie CLAUDE.md es verlangt — **alles andere dort wurde
 nicht angefasst**:
 
 Geblieben ist nur, was noch gebraucht wird:
 
-- `measure-library-7b/` (751 MB) – die 26-Bücher-Bibliothek, gegen die
-  `make accessibility` läuft, dazu eine synthetische Calibre-Bibliothek und vier
-  Geräte-Images. `make accessibility` braucht sie
-- `release/` (146 MB) – das Ergebnis von `make release-dry`
+- `measure-library-8/shots/` (7,2 MB) – die 16-Bücher-Bibliothek, gegen die die
+  Sprint-8-Screenshots aufgenommen wurden. `make organize-library` legt sie in
+  Sekunden neu an; sie bleibt, weil sie winzig ist und weil die Bilder gegen
+  genau diese aufgenommen wurden
 
 Wieder entfernt, weil jedes davon mit einem Befehl neu entsteht:
 
-- `synthetic/` (2,6 GB) – die 5 000 Bücher des Abschlusslaufs
-  (`make synthetic`, 20 s)
-- `runbook-7b/` (644 MB) – alles, was `make runbook` anlegt; der Befehl legt es
-  ohnehin bei jedem Lauf neu an
-- `linux-check-7b/` (629 MB) – ein `git archive` von HEAD für den Container
+- `synthetic/` (5,8 GB) – die 5 000 Bücher des Abschlusslaufs
+  (`make synthetic`, 3 min, dann `make proof`)
+- `measure-library-8/b-check/` (16 MB), `c-check/` (40 MB), `export/` (86 MB),
+  `window/` (13 MB) – Arbeitsbibliotheken dieser Sitzung, jede aus
+  `shelf-tool synthesise` + `import` in unter einer Minute wieder da
 
-`linux-check-7/` der Vorsitzung (615 MB) wurde ebenfalls entfernt, weil die
-Vorsitzung es ausdrücklich so vermerkt hatte. **Alles andere in
-`~/Library/Caches/Shelf/` wurde nicht angefasst.**
+`release/` (146 MB) und `measure-library-7b/` (751 MB) stammen aus der
+Vorsitzung und **wurden nicht angefasst**; `make accessibility` braucht das
+zweite. Alles andere in `~/Library/Caches/Shelf/` ebenso.
