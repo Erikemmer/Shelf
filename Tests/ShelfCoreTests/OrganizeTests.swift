@@ -274,37 +274,137 @@ struct OrganizeTests {
         #expect(OrganizeManifest.read(in: library).inFlight == nil)
     }
 
-    /// The only `removeItem` in Shelf's library handling, and the four guards
-    /// on it. An author folder the run itself emptied goes; anything holding
-    /// anything at all stays, `.DS_Store` included.
-    @Test("an author folder emptied by the moves is removed, and one holding anything is not")
-    func emptiedFoldersGoAndOthersStay() async throws {
+    // MARK: The one folder an organise makes go away
+
+    /// Which names are the file system talking to itself. An allow-list, and
+    /// never "anything beginning with a dot": a dot file is how a great many
+    /// programs keep something that matters.
+    @Test("system residue is recognised by name, and a hidden file somebody made is not")
+    func systemResidue() {
+        for name in [".DS_Store", ".localized", ".fseventsd", ".Spotlight-V100", "Thumbs.db"] {
+            #expect(EmptiedFolder.isSystemResidue(name))
+        }
+        // Spotlight's carry a volume UUID, so they are matched by prefix.
+        #expect(EmptiedFolder.isSystemResidue(".Spotlight-V100-Store-V2"))
+        #expect(EmptiedFolder.isSystemResidue("._Emma.epub"))
+
+        // Somebody's own hidden files, which must keep a folder alive.
+        for name in [".gitignore", ".calibre", ".notes.txt", ".shelf", "cover.jpg", "Emma.epub"] {
+            #expect(!EmptiedFolder.isSystemResidue(name), "\(name) is not system residue")
+        }
+
+        #expect(EmptiedFolder.holdsNothingButResidue([]))
+        #expect(EmptiedFolder.holdsNothingButResidue([".DS_Store", ".localized"]))
+        #expect(!EmptiedFolder.holdsNothingButResidue([".DS_Store", "Emma.epub"]))
+        #expect(!EmptiedFolder.holdsNothingButResidue([".gitignore"]))
+    }
+
+    /// Which paths may be considered at all: the parent of a moved folder,
+    /// one level below the root, never `.shelf`.
+    @Test("only the author folder a move came out of is ever a candidate")
+    func onlyTheAuthorFolder() {
+        #expect(EmptiedFolder.candidate(parentOf: "Atwood, Adrian/Emma (1)") == "Atwood, Adrian")
+        // Not the root itself, and not something deeper than an author folder.
+        #expect(EmptiedFolder.candidate(parentOf: "Emma (1)") == nil)
+        #expect(EmptiedFolder.candidate(parentOf: "a/b/Emma (1)") == nil)
+        // Never Shelf's own folder.
+        #expect(EmptiedFolder.candidate(parentOf: "\(Library.privateFolderName)/moving/x") == nil)
+    }
+
+    /// **It goes to the Trash, and there is no other way out.** The runner is
+    /// handed a disposal that moves nothing and counts instead: afterwards the
+    /// folder is still on the disk, which is what says the runner has no
+    /// `removeItem` of its own behind the seam.
+    @Test("an emptied author folder is handed to the disposal, never removed directly")
+    func emptiedFolderGoesThroughTheSeam() async throws {
         let temporary = try TemporaryFolder()
         let library = try self.library(temporary)
         let mover = try book(library, title: "Emma", at: "Wrong/Emma (1)")
-        // A second author folder that will still hold something afterwards.
-        let stayer = try book(library, title: "Persuasion", at: "Keep/Persuasion (2)")
-        try Data("finder".utf8).write(
-            to: library.root.appendingPathComponent("Keep/.DS_Store"))
+        // The Finder has been in here. That used to keep the folder for ever.
+        try Data("finder".utf8).write(to: library.root.appendingPathComponent("Wrong/.DS_Store"))
 
-        let runner = OrganizeRunner(makeHasher: PortableSHA256Hasher.factory)
-        let exists: (String) -> Bool = {
-            FileManager.default.fileExists(atPath: library.root.appendingPathComponent($0).path)
-        }
+        let asked = Recorder()
+        let spy = FolderDisposal { url in asked.record(url.lastPathComponent) }
         let plan = OrganizePlanner.plan(
-            entries: [mover, stayer], foldsCase: VolumeCase.folds(at: library.root),
-            folderExists: exists)
-        let outcome = try await runner.run(.init(library: library, plan: plan))
+            entries: [mover], foldsCase: VolumeCase.folds(at: library.root),
+            folderExists: { OrganizeBookProbe.exists($0, under: library.root) })
+        let outcome = try await OrganizeRunner(
+            makeHasher: PortableSHA256Hasher.factory, disposal: spy
+        ).run(.init(library: library, plan: plan))
 
         #expect(outcome.report.failures.isEmpty)
-        // "Wrong" held only the book that moved, so it is gone and is named.
-        #expect(!exists("Wrong"))
-        #expect(outcome.report.emptiedFolders.contains("Wrong"))
-        // "Keep" still holds a .DS_Store, so it stays. A folder the Finder has
-        // been into is a folder somebody may have put something in.
-        #expect(exists("Keep"))
-        #expect(!outcome.report.emptiedFolders.contains("Keep"))
-        #expect(outcome.report.rendered().contains("The only things removed were the empty folders"))
+        #expect(asked.names == ["Wrong"])
+        #expect(outcome.report.emptiedFolders == ["Wrong"])
+        // The spy moved nothing, so the folder is still there. If the runner
+        // had a removeItem of its own, this would be gone.
+        #expect(FileManager.default.fileExists(atPath: library.root.appendingPathComponent("Wrong").path))
+        #expect(outcome.report.rendered().contains("in the Trash"))
+    }
+
+    /// A folder that still holds something somebody made is not offered to the
+    /// disposal at all — not even to be refused.
+    @Test("a folder holding anything of somebody's own is never offered for disposal")
+    func aFolderWithContentsIsNotOffered() async throws {
+        let temporary = try TemporaryFolder()
+        let library = try self.library(temporary)
+        let mover = try book(library, title: "Emma", at: "Keep/Emma (1)")
+        try Data("mine".utf8).write(to: library.root.appendingPathComponent("Keep/.gitignore"))
+
+        let asked = Recorder()
+        let spy = FolderDisposal { url in asked.record(url.lastPathComponent) }
+        let plan = OrganizePlanner.plan(
+            entries: [mover], foldsCase: VolumeCase.folds(at: library.root),
+            folderExists: { OrganizeBookProbe.exists($0, under: library.root) })
+        let outcome = try await OrganizeRunner(
+            makeHasher: PortableSHA256Hasher.factory, disposal: spy
+        ).run(.init(library: library, plan: plan))
+
+        #expect(asked.names.isEmpty)
+        #expect(outcome.report.emptiedFolders.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: library.root.appendingPathComponent("Keep/.gitignore").path))
+    }
+
+    /// A disposal that fails leaves the folder where it is *and* keeps it out
+    /// of the report — a folder reported as gone that is still there is worse
+    /// than one that was never touched.
+    @Test("a disposal that fails is not reported as a folder that went")
+    func aFailedDisposalIsNotReported() async throws {
+        let temporary = try TemporaryFolder()
+        let library = try self.library(temporary)
+        let mover = try book(library, title: "Emma", at: "Wrong/Emma (1)")
+
+        let plan = OrganizePlanner.plan(
+            entries: [mover], foldsCase: VolumeCase.folds(at: library.root),
+            folderExists: { OrganizeBookProbe.exists($0, under: library.root) })
+        let outcome = try await OrganizeRunner(
+            makeHasher: PortableSHA256Hasher.factory, disposal: .none
+        ).run(.init(library: library, plan: plan))
+
+        #expect(outcome.report.moved.count == 1)
+        #expect(outcome.report.emptiedFolders.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: library.root.appendingPathComponent("Wrong").path))
+    }
+
+    /// What the disposal seam was asked to dispose of.
+    ///
+    /// A little class with a lock rather than a captured `var`: the closure is
+    /// `@Sendable`, so nothing else would compile, and a test that proves
+    /// *which* folders were offered has to hold the list somewhere.
+    private final class Recorder: @unchecked Sendable {
+        private let lock = NSLock()
+        private var seen: [String] = []
+
+        func record(_ name: String) {
+            lock.lock()
+            defer { lock.unlock() }
+            seen.append(name)
+        }
+
+        var names: [String] {
+            lock.lock()
+            defer { lock.unlock() }
+            return seen
+        }
     }
 
     /// `VolumeCase` measures rather than assumes, and the test says what this

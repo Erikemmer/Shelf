@@ -33,8 +33,10 @@ public struct OrganizeReport: Equatable, Sendable {
     public var alreadyInPlace: Int
     public var blocked: [BlockedBook]
     public var failures: [Failure]
-    /// Author folders this run emptied and then removed. Named rather than
-    /// counted, because removing anything is worth reading by name.
+    /// Author folders this run emptied and then put in the Trash. Named
+    /// rather than counted, because anything leaving a library is worth
+    /// reading by name — and they are in the Trash, so a name is enough to
+    /// find one again.
     public var emptiedFolders: [String]
     /// Set when this report is of an `Undo Organize` rather than an organise,
     /// so a person reading the file can tell the two apart.
@@ -91,7 +93,8 @@ public struct OrganizeReport: Equatable, Sendable {
 
         if !emptiedFolders.isEmpty {
             lines.append("")
-            lines.append("Author folders left empty by the moves above, and removed: \(emptiedFolders.count)")
+            lines.append(
+                "Author folders left empty by the moves above, and put in the Trash: \(emptiedFolders.count)")
             for name in emptiedFolders { lines.append("  \(name)") }
         }
 
@@ -105,7 +108,8 @@ public struct OrganizeReport: Equatable, Sendable {
         lines.append(
             emptiedFolders.isEmpty
                 ? "No book file was written, and nothing was deleted."
-                : "No book file was written. The only things removed were the empty folders listed above.")
+                : "No book file was written and nothing was deleted. The empty folders listed "
+                    + "above are in the Trash, where they can be dragged back out.")
         return lines.joined(separator: "\n") + "\n"
     }
 

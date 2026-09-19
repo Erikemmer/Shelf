@@ -152,7 +152,7 @@ struct OrganizeSheet: View {
             if !report.emptiedFolders.isEmpty {
                 Text(
                     Loc.count(
-                        "%lld author folders were left empty by the moves and removed",
+                        "%lld author folders were left empty by the moves and put in the Trash",
                         report.emptiedFolders.count)
                 )
                 .font(.caption)

@@ -13,17 +13,15 @@ import Foundation
 /// * **Nothing is overwritten.** The planner has already refused a destination
 ///   that holds anything; the runner checks again at the moment of the move,
 ///   because a plan is a statement about a moment that has passed.
-/// * **Nothing that holds anything is deleted.** The one exception is an
-///   author folder this run has just **emptied** — "Atwood, Adrian" after its
-///   last book moved to "Fitzek, Sebastian" — and the guard on it is exact:
-///   the folder must be a direct child of the library root, must not be
-///   `.shelf`, and must hold zero entries, hidden ones included. An empty
-///   directory holds no data, which is the whole difference between this and
-///   every other folder in this program; leaving them would mean an organise
-///   that tidies the books and litters the library. Each one is named in the
-///   report. Anything that still holds a file is left exactly where it is, for
-///   `Library ▸ Find Orphaned Folders…`, which moves things to the Trash
-///   behind a confirmation that names every file.
+/// * **Nothing is deleted.** The one folder this touches at all is an author
+///   folder this run has just **emptied** — "Atwood, Adrian" after its last
+///   book moved to "Fitzek, Sebastian" — and it goes to the **Trash**, never
+///   to `removeItem`. The rule is `EmptiedFolder` and the act is
+///   `FolderDisposal`, kept apart so the first can be tested on Linux and the
+///   second is the platform's. A folder holding anything but the file
+///   system's own residue is left exactly where it is, for `Library ▸ Find
+///   Orphaned Folders…`, which also moves things to the Trash behind a
+///   confirmation that names every file.
 /// * **The manifest is written as the run goes on**, so an interrupted run can
 ///   be resumed and can be undone. Every twenty moves, for the same reason the
 ///   device manifest is: often enough that an interruption costs little, seldom
@@ -32,8 +30,13 @@ import Foundation
 public struct OrganizeRunner: Sendable {
     private let makeHasher: HasherFactory
 
-    public init(makeHasher: @escaping HasherFactory) {
+    /// How an emptied author folder is disposed of. The Trash by default;
+    /// a test passes one that keeps count and moves nothing.
+    private let disposal: FolderDisposal
+
+    public init(makeHasher: @escaping HasherFactory, disposal: FolderDisposal = .trash) {
         self.makeHasher = makeHasher
+        self.disposal = disposal
     }
 
     /// Where a case-only move parks a folder between its two renames.
@@ -145,7 +148,7 @@ public struct OrganizeRunner: Sendable {
                     .init(bookID: move.bookID, from: move.from, to: move.to, digests: digests))
                 moved.append((move.bookID, move.to))
                 succeeded.append(move)
-                if let gone = removeIfEmptied(parentOf: move.from, under: root) { emptied.append(gone) }
+                if let gone = trashIfEmptied(parentOf: move.from, under: root) { emptied.append(gone) }
                 sinceLastWrite += 1
                 if sinceLastWrite >= Self.manifestBatchSize {
                     try? manifest.write(in: options.library)
@@ -346,35 +349,40 @@ public struct OrganizeRunner: Sendable {
         }
     }
 
-    /// Removes the author folder a move has just emptied, and only that.
+    /// Puts the author folder a move has just emptied into the Trash, and
+    /// only that.
     ///
-    /// Four conditions, all of them checked, because this is the only
-    /// `removeItem` in the whole of Shelf's library handling:
+    /// Everything that decides *whether* is in `EmptiedFolder`, which is pure
+    /// and runs on Linux; everything that decides *how* is behind
+    /// `FolderDisposal`, which on a Mac is the Trash. Neither is inlined here,
+    /// because this is the one place in Shelf's library handling that makes a
+    /// folder go away and both halves of it want a test of their own.
     ///
-    /// 1. it is a *direct child* of the library root — an author folder, the
-    ///    only level that can be emptied by moving a book folder out of it;
-    /// 2. it is not `.shelf`;
-    /// 3. it exists and is a directory;
-    /// 4. it holds **nothing at all**, hidden entries included. `.DS_Store`
-    ///    counts as something: a folder the Finder has been into is a folder
-    ///    somebody may have put something in.
+    /// The path handed in is always the parent of a folder **this run has just
+    /// moved out of**, so "this run emptied it" is true by construction rather
+    /// than by inspection. What is checked here is the rest: that it is a
+    /// direct child of the root, not `.shelf`, really a directory, and holds
+    /// nothing but the file system's own residue.
     ///
-    /// Returns the path it removed, for the report, or `nil`.
-    private func removeIfEmptied(parentOf movedFrom: String, under root: URL) -> String? {
-        let components = movedFrom.split(separator: "/").map(String.init)
-        guard components.count == 2 else { return nil }
-        let parent = components[0]
-        guard parent != Library.privateFolderName, !parent.isEmpty else { return nil }
+    /// Returns the folder's name for the report, or `nil` — and `nil` whenever
+    /// the disposal fails, so a folder that could not reach the Trash is left
+    /// where it is rather than reported as gone.
+    private func trashIfEmptied(parentOf movedFrom: String, under root: URL) -> String? {
+        guard let parent = EmptiedFolder.candidate(parentOf: movedFrom) else { return nil }
 
         let url = root.appendingPathComponent(parent, isDirectory: true)
         var isFolder: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder),
             isFolder.boolValue,
             let contents = try? FileManager.default.contentsOfDirectory(atPath: url.path),
-            contents.isEmpty
+            EmptiedFolder.holdsNothingButResidue(contents)
         else { return nil }
 
-        guard (try? FileManager.default.removeItem(at: url)) != nil else { return nil }
+        do {
+            try disposal.dispose(url)
+        } catch {
+            return nil
+        }
         return parent
     }
 

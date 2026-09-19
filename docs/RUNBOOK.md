@@ -471,9 +471,14 @@ What it guarantees, and what each one is worth knowing:
 - **Folders move; the bytes inside them do not.** Every folder is hashed before
   the move and again after, and a folder whose contents differ is put straight
   back and named in the report.
-- **Nothing is overwritten**, and nothing that holds anything is deleted. The
-  one exception is an author folder the run itself has just *emptied* — an
-  empty directory holds nothing — and each one is named in the report.
+- **Nothing is overwritten and nothing is deleted.** The one folder it touches
+  at all is an author folder the run itself has just *emptied* — "Atwood,
+  Adrian", after its last book moved to "Fitzek, Sebastian" — and that goes to
+  the **Trash**, where you can drag it back out. Each one is named in the
+  report. A folder still holding anything of yours is left exactly where it is;
+  the only things it will ignore are the file system's own leavings
+  (`.DS_Store`, `.localized`, Spotlight's, `Thumbs.db`), because a folder the
+  Finder has once been looked into is not a folder somebody put something in.
 - **It can be interrupted.** A manifest is written every twenty moves and
   immediately before the one move that has a halfway state. Run it again and it
   picks up.

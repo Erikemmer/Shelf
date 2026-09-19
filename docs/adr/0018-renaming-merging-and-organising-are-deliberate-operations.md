@@ -75,7 +75,20 @@ somebody who has none of them can say so once.
 * **A book file is never written, never overwritten, never deleted.** An
   organise moves *folders*. The bytes inside them are not touched, and the
   digest taken before the move and after it is what says so.
-* **Nothing is deleted outright.** What has to go goes to the Trash.
+* **Nothing is deleted outright.** What has to go goes to the Trash — and that
+  is a rule about the *mechanism*, not only about the intent. The one folder an
+  organise makes go away is an author folder it has itself just emptied, and it
+  goes through `FolderDisposal`, which on a Mac is `FileManager.trashItem`.
+  There is no `removeItem` on that path, which is what a test asserts by
+  handing the runner a disposal that moves nothing and then finding the folder
+  still on the disk. A folder is worth little; being able to look in the Trash
+  and see what a command did is worth a great deal.
+
+  What counts as emptied is `EmptiedFolder`, a pure rule tested on Linux: the
+  folder must hold nothing but the file system's own residue. An **allow-list**
+  of names, never "anything beginning with a dot" — a dot file is how a great
+  many programs keep something that matters, and `.gitignore` next to
+  `.DS_Store` must be the difference between keeping the folder and not.
 * **Shelf never guesses which spellings are the same person.** There is no
   similarity detection, no "we found 12 probable duplicates", no automatic
   merge. A merge is a selection somebody made.

@@ -809,6 +809,40 @@ has gone — the answer is **`true`**. That is the cautious way round: it costs 
 detour through a temporary name, where `false` would attempt a move that can
 destroy a folder.
 
+### The one folder an organise makes go away
+
+An organise moves a book out of `Atwood, Adrian/` into `Fitzek, Sebastian/`,
+and what is left is an author folder no book in the library points at. Leaving
+them means an organise that tidies the books and litters the library: the
+closing run's merge of fifty-five spellings would have left fifty-five of them.
+
+Two halves, kept apart so each can be tested:
+
+| | |
+|---|---|
+| **whether** — `EmptiedFolder`, pure, runs on Linux | the path must be the parent of a folder *this run has just moved out of* (true by construction: nothing else is ever passed in), a direct child of the library root, not `.shelf`, really a directory, and hold **nothing but the file system's own residue** |
+| **how** — `FolderDisposal`, a seam | on a Mac, `FileManager.trashItem`. There is no `removeItem` anywhere on this path |
+
+**Residue is an allow-list**, never "anything beginning with a dot":
+
+```
+.DS_Store  .localized  .fseventsd  .Spotlight-V100*  .TemporaryItems*
+.DocumentRevisions-V100  .apdisk  .VolumeIcon.icns
+.com.apple.timemachine.donotpresent  ._*        (AppleDouble, from a FAT copy)
+Thumbs.db  desktop.ini  .directory  .Trash-1000  (a library that has travelled)
+```
+
+A dot file is how a great many programs keep something that matters —
+`.gitignore`, `.calibre`, a note somebody hid on purpose — so `.gitignore`
+beside `.DS_Store` keeps the folder and `.DS_Store` alone does not. Before
+this rule the test was `contents.isEmpty`, which meant one `.DS_Store` kept an
+author folder for ever: the Finder writes one the moment somebody opens the
+folder to look at it, so "looked at once" became "never tidied".
+
+A disposal that **fails** leaves the folder where it is *and* keeps it out of
+the report. A folder reported as gone that is still there is worse than one
+that was never touched.
+
 ## 11. The organise manifest (`.shelf/organize-manifest.json`)
 
 ```json
