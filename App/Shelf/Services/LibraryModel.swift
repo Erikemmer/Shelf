@@ -977,28 +977,116 @@ final class LibraryModel {
         }
     }
 
-    /// The one path every cover change goes down, forwards and backwards.
+    /// The one path every direct cover action goes down — `Set Cover…`, a
+    /// drop, `Take Cover from Book File`, a download. Awaited by its caller,
+    /// so e.g. `fetchCoverFromTheNet`'s "Saved as…" note is not shown before
+    /// the file has actually landed.
     ///
-    /// The shape is `apply(_ change:)`'s and for the same reason: the *previous
-    /// value* is captured **before** anything is written, because once the file
-    /// is written nobody can ask the folder what it used to hold. Registering
-    /// the inverse from inside the undo block is what gives redo for nothing.
+    /// Registers the undo synchronously, then awaits the write. See
+    /// `performCoverUndo` for why the synchronous half is the whole of what
+    /// makes ⇧⌘Z work at all.
+    func applyCover(_ bytes: Data?, to entry: LibraryEntry, undoManager: UndoManager?) async {
+        guard let library else { return }
+        coverRefusal = nil
+        let folder = library.root.appendingPathComponent(entry.folder, isDirectory: true)
+        guard case .proceed(let previous) = prepareCoverChange(bytes, in: folder) else { return }
+        registerCoverUndo(previous: previous, entry: entry, undoManager: undoManager)
+        await commitCoverChange(bytes, to: entry, in: folder)
+    }
+
+    /// What a cover action has to decide before either write: whether there is
+    /// anything to do, and what to keep in case it has to be undone.
+    private enum CoverChangePreparation {
+        /// The picture is already what is on disk, or the bytes are refused
+        /// outright. `coverRefusal` is already set for the second case.
+        case nothingToDo
+        case proceed(previous: Data?)
+    }
+
+    /// Reads the current cover synchronously — one small file, off the fast
+    /// path for every other edit — and refuses before anything moves. Shared
+    /// by the awaited entry point and the one `registerUndo` calls, so the
+    /// two agree about what counts as a change.
+    private func prepareCoverChange(_ bytes: Data?, in folder: URL) -> CoverChangePreparation {
+        let previous = CoverFile.url(in: folder).flatMap { try? Data(contentsOf: $0) }
+        // Nothing to do, and nothing to put on the undo stack: choosing the
+        // picture that is already there is not a change.
+        guard previous != bytes else { return .nothingToDo }
+        // Before either write, so a dropped text file never moves a generation.
+        if let bytes, !CoverReplacement.accepts(bytes) {
+            coverRefusal = .notAnImage
+            return .nothingToDo
+        }
+        return .proceed(previous: previous)
+    }
+
+    /// What `registerUndo` calls, for both undo and redo. **Synchronous, and
+    /// has to be.** The closure AppKit hands an undo/redo action cannot
+    /// `await`, and only a `registerUndo` call made *while still inside* the
+    /// current undo/redo invocation lands on the opposite stack — one made
+    /// after a `Task` has let the run loop turn always goes back onto the
+    /// undo stack, however it got there.
     ///
-    /// The previous value here is the picture itself, held in memory on the
-    /// undo stack. That is a few hundred kilobytes per step — a cover is capped
-    /// at `CoverImageRule.maxEdgePixels` before it ever gets here — and it is
-    /// the only way an undo can restore a file that has gone to the Trash
-    /// without going and digging in the Trash for it.
+    /// That — and nothing about the write itself — is why ⇧⌘Z never worked
+    /// before this: the previous shape wrapped this whole call in
+    /// `Task { await model.applyCover(...) }`, which returns before
+    /// `registerUndo` inside it ever runs, by which time `isUndoing` has
+    /// already gone back to false. Every earlier redo landed on the undo
+    /// stack instead — pressing ⌘Z a second time replayed the change forward
+    /// again rather than doing nothing or a real redo. Confirmed by driving
+    /// the real window before this fix: the Edit menu read a disabled
+    /// "Redo", and a second ⌘Z moved the picture forward instead of leaving
+    /// it alone.
     ///
-    /// `nil` means "no cover", which is what undoing the *first* cover on a
-    /// book has to restore. Anything else would leave the folder saying one
-    /// thing and the book saying another.
+    /// So this registers first, synchronously, exactly where `apply(_
+    /// change:)` does for every other field, and only *then* fires the write
+    /// in a `Task` without waiting for it.
+    private func performCoverUndo(_ bytes: Data?, to entry: LibraryEntry, undoManager: UndoManager?) {
+        guard let library else { return }
+        coverRefusal = nil
+        let folder = library.root.appendingPathComponent(entry.folder, isDirectory: true)
+        guard case .proceed(let previous) = prepareCoverChange(bytes, in: folder) else { return }
+        registerCoverUndo(previous: previous, entry: entry, undoManager: undoManager)
+        Task { await self.commitCoverChange(bytes, to: entry, in: folder) }
+    }
+
+    /// Puts the inverse on the window's undo stack and names it in the Edit
+    /// menu. Shared by `applyCover` and `performCoverUndo`, which is what
+    /// keeps forwards and backwards agreeing about what the previous picture
+    /// was.
+    ///
+    /// The previous value is the picture itself, held in memory on the undo
+    /// stack. That is a few hundred kilobytes per step — a cover is capped at
+    /// `CoverImageRule.maxEdgePixels` before it ever gets here — and it is the
+    /// only way an undo can restore a file that has gone to the Trash without
+    /// going and digging in the Trash for it. `nil` means "no cover", which is
+    /// what undoing the *first* cover on a book has to restore. Anything else
+    /// would leave the folder saying one thing and the book saying another.
+    private func registerCoverUndo(previous: Data?, entry: LibraryEntry, undoManager: UndoManager?) {
+        undoManager?.registerUndo(withTarget: self) { model in
+            // `UndoManager` calls this on the thread that registered it, which
+            // is the main thread; nothing here hops queues.
+            MainActor.assumeIsolated {
+                // The entry as it is *now*, not as it was captured: its
+                // generation has moved, and handing back the stale one would
+                // write the same number twice and leave the grid on a
+                // thumbnail of the picture being undone.
+                let current = model.entries.first { $0.id == entry.id } ?? entry
+                model.performCoverUndo(previous, to: current, undoManager: undoManager)
+            }
+        }
+        undoManager?.setActionName(Loc.core(MetadataChange.Field.cover.label))
+    }
+
+    /// The actual writes: the generation first, then the picture. Shared by
+    /// the awaited path (`applyCover`) and the fire-and-forget one
+    /// (`performCoverUndo`'s `Task`).
     ///
     /// ## Why the number is written before the picture
     ///
-    /// A cover change is two writes — `metadata.opf` and a file beside it — and
-    /// one of them can fail. Which order they go in decides what a failure
-    /// *costs*, and the two orders are not symmetrical:
+    /// A cover change is two writes — `metadata.opf` and a file beside it —
+    /// and one of them can fail. Which order they go in decides what a
+    /// failure *costs*, and the two orders are not symmetrical:
     ///
     /// - **Picture first.** The new picture is on disk and the book still
     ///   claims the old generation, so the cache *hits* on the thumbnail of
@@ -1007,27 +1095,13 @@ final class LibraryModel {
     ///   which is precisely the failure `coverGeneration` exists to prevent.
     /// - **Number first.** The book claims a generation for a picture that has
     ///   not arrived, so the cache *misses*, decodes the file that is actually
-    ///   there and caches it under the new key. The window is correct. It costs
-    ///   one decode of an unchanged cover, and nothing else.
+    ///   there and caches it under the new key. The window is correct. It
+    ///   costs one decode of an unchanged cover, and nothing else.
     ///
-    /// So the number goes first and the whole thing is awaited: a half-done
-    /// cover change is then self-healing rather than quietly wrong. Bytes that
-    /// were never a picture are refused before either write, so the common
-    /// mistake costs nothing at all.
-    func applyCover(_ bytes: Data?, to entry: LibraryEntry, undoManager: UndoManager?) async {
-        guard let library else { return }
-        coverRefusal = nil
-        let folder = library.root.appendingPathComponent(entry.folder, isDirectory: true)
-        let previous = CoverFile.url(in: folder).flatMap { try? Data(contentsOf: $0) }
-        // Nothing to do, and nothing to put on the undo stack: choosing the
-        // picture that is already there is not a change.
-        guard previous != bytes else { return }
-        // Before either write, so a dropped text file never moves a generation.
-        if let bytes, !CoverReplacement.accepts(bytes) {
-            coverRefusal = .notAnImage
-            return
-        }
-
+    /// So the number goes first. What happens when the *picture* write then
+    /// fails — the number moved and stays moved — is a separate question,
+    /// answered where it is decided rather than here.
+    private func commitCoverChange(_ bytes: Data?, to entry: LibraryEntry, in folder: URL) async {
         let generation = entry.book.coverGeneration + 1
         let change = MetadataChange.make(from: entry.book) { $0.coverGeneration = generation }
         guard await write(change, to: entry, startedAt: ContinuousClock.now) else {
@@ -1050,20 +1124,6 @@ final class LibraryModel {
             coverRefusal = .cannotWrite(error.localizedDescription)
             return
         }
-
-        // Registered only now, because only now has anything happened that
-        // could be undone.
-        undoManager?.registerUndo(withTarget: self) { model in
-            MainActor.assumeIsolated {
-                // The entry as it is *now*, not as it was captured: its
-                // generation has moved, and handing back the stale one would
-                // write the same number twice and leave the grid on a
-                // thumbnail of the picture being undone.
-                let current = model.entries.first { $0.id == entry.id } ?? entry
-                Task { await model.applyCover(previous, to: current, undoManager: undoManager) }
-            }
-        }
-        undoManager?.setActionName(Loc.core(MetadataChange.Field.cover.label))
 
         if bytes == nil {
             coversOnDisk.remove(entry.id)
