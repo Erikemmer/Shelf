@@ -1,6 +1,10 @@
 # Sprint 7 screenshots — Shelf in German
 
-Taken by `Scripts/german-shots.sh` on 18 September 2026 against
+Taken by `Scripts/german-shots.sh`, **re-taken on 19 September 2026** once the
+menu bar and the ⌘? sheet had been made to read one table — `shortcuts-de.jpg`
+now shows ⌘A "Alle Bücher auswählen" and ⇧⌘W "Bibliothek schließen", which were
+in the menus and in no reference, and ⌘I on "Informationen umschalten" rather
+than on Add Books. Against
 `~/Library/Caches/Shelf/measure-library-7/online-library` (twelve generated
 EPUBs carrying twelve real books' titles, authors and ISBNs — the files are
 synthetic throughout).

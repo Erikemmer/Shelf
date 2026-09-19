@@ -210,6 +210,17 @@ struct ShelfApp: App {
         }
     }
 
+    /// Which row of the shortcut table a view mode's key lives in.
+    ///
+    /// A `switch` rather than a ternary, so a third mode is a build error here
+    /// rather than a menu item that quietly claims ⌘2.
+    private static func shortcut(for mode: LibraryViewSettings.Mode) -> ShortcutAction {
+        switch mode {
+        case .grid: return .grid
+        case .table: return .table
+        }
+    }
+
     private var sendLabel: String {
         guard let device = model.devices.selectedDevice else { return Loc.string("Send to Device") }
         return Loc.string("Send to “%@”", device.name)
@@ -279,7 +290,7 @@ struct ShelfApp: App {
                         // ⌘1 and ⌘2 out of `ShortcutReference`, not counted off
                         // the enumeration: the key a menu declares and the key
                         // the ⌘? sheet prints are now one fact.
-                        .shortcut(mode == .grid ? .grid : .table)
+                        .shortcut(Self.shortcut(for: mode))
                 }
             }
             .disabled(model.library == nil)

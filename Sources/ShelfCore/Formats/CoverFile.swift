@@ -81,8 +81,10 @@ public enum CoverFile {
     /// cold cache and 15 once the grid had been looked at.
     ///
     /// One or two `stat` calls per book — `jpg` first, because that is what
-    /// nearly every cover is. The whole of a 5 000-book library is one walk and
-    /// is done off the main thread; see `CHANGELOG.md` for the number.
+    /// nearly every cover is, and the loop stops at the first hit. Measured
+    /// over the closing run's library: **37 ms for 4 996 folders**, off the
+    /// main actor, and asked only when the answer can have changed for more
+    /// than one book at once.
     public static func booksWithACover(in root: URL, entries: [LibraryEntry]) -> Set<UUID> {
         var found: Set<UUID> = []
         for entry in entries {

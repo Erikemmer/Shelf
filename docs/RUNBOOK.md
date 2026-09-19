@@ -214,7 +214,16 @@ a custom column has to be *declared* in Calibre's own database before a value
 in an OPF means anything, and Shelf never writes to `metadata.db`
 ([ADR 0009](adr/0009-calibre-is-read-through-a-copy-of-metadata-db.md)).
 
-`.shelf/` can be left where it is. Calibre ignores a folder beginning with a dot.
+`.shelf/` can be left where it is: it begins with a dot, and Calibre skips
+hidden folders.
+
+**One honest limit on this section.** The folder layout, the OPFs and what is in
+them are quoted from a real library above, and they are what Calibre's importer
+reads. What has **not** been done here is the import itself — running it would
+mean writing into Erik's own Calibre library, which is not this project's to
+touch. The claim is that Shelf writes Calibre's schema, and that is checked by
+`Tests/ShelfCoreTests/OPFDocumentTests.swift` and by the Calibre *reader*, which
+reads back what Calibre writes. The last step is Erik's to try.
 
 ---
 
@@ -293,7 +302,15 @@ not:
   ([ADR 0002](adr/0002-copy-verify-then-trust.md)).
 - **The manifest is behind.** It holds 11 of the 20, because the killed run was
   stopped before it could record what it had written. Shelf's device manifest is
-  a cache of "what I put here", and a killed process does not get to update it.
+  a cache of "what I put here" and is written **every twenty files**
+  (`TransferRunner.manifestBatchSize`), so a process that dies without warning
+  can leave up to nineteen files on the card that no manifest knows about.
+
+  A transfer that is *stopped* rather than killed — the Cancel button, or the
+  `shelf-tool` exit the proof run uses — writes the manifest on the way out and
+  resumes cleanly: `Skipped: 40 · Failed: 0` in `Scripts/proof-run.sh` section
+  11. It is the untidy death that leaves the gap, which is to say a crash, a
+  power cut, or a cable.
 
 **What to do:** nothing, if the books being on the card is all that matters. The
 nine show up in `Device ▸ Show What Is on the Device…` anyway — that view scans

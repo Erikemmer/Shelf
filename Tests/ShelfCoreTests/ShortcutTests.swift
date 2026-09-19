@@ -99,6 +99,18 @@ struct ShortcutTests {
             .readUnread: "R",
             .editTags: "T",
             .moveThroughTheGrid: "←→↑↓",
+            // Added to the concept's table in Sprint 7, because they were in
+            // the menus and in no reference — and because ⌘I had to be taken
+            // back from Add Books to give the Inspector the key CONCEPT §3.3
+            // always gave it.
+            .addBooks: "⇧⌘I",
+            .selectAllBooks: "⌘A",
+            .closeLibrary: "⇧⌘W",
+            .grid: "⌘1",
+            .table: "⌘2",
+            .largerCovers: "⌘+",
+            .smallerCovers: "⌘−",
+            .firstOrLastBook: "↖ / ↘",
         ]
         for (id, keys) in expected {
             #expect(ShortcutReference.find(id)?.keys == keys, "\(id.rawValue)")

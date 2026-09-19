@@ -314,12 +314,23 @@ is currently assumed.
       Nothing is lost — all 20 are on the card afterwards, the `.part` was swept
       up, and `Device ▸ Show What Is on the Device…` finds the nine by name. But
       "Failed: 9" is the wrong word for "I had already done that", and the
-      manifest stays behind by nine for the life of the card. The planner skips
-      a book whose digest is in the manifest; it should also recognise a file it
-      would have written, by name **and** digest, and skip it as
+      manifest stays behind by nine for the life of the card.
+
+      **Why the proof run never saw it.** `Scripts/proof-run.sh` section 11
+      interrupts a transfer with `SHELF_EXIT_AFTER=40`, which leaves the process
+      *tidily*: the manifest is written on the way out, the resume reads it, and
+      the run reports `Skipped: 40 · Failed: 0` — which is what it did again on
+      19 September. A `kill -9` is the untested case, and the gap is arithmetic:
+      `TransferRunner.manifestBatchSize` is **20**, so up to nineteen files can
+      be on the card and in no manifest when a process dies without warning. A
+      crash, a power cut and a pulled cable are all that case.
+
+      The fix is in `TransferPlanner`, not in the runner: it skips a book whose
+      digest is in the manifest, and it should also recognise a file it would
+      have written — by name, and then by digest — and skip it as
       `alreadyOnDevice` rather than letting the copy fail on
-      `destinationExists`. That is a change to `TransferPlanner`, not to the
-      runner, and it wants a test that kills a transfer and resumes it.
+      `destinationExists`. It wants a test that kills a transfer with a signal
+      and resumes it.
 - [ ] **A real `KoboReader.sqlite`.** `SyntheticKoboDatabase` writes the tables
       and columns Shelf reads; a real one has about a hundred more columns, a
       real WAL, and firmware differences in `___PercentRead` and `ReadStatus`.
@@ -438,7 +449,15 @@ is currently assumed.
       equivalent written by hand anywhere else
 - [x] **`docs/RUNBOOK.md`**, twelve paths, every one of them run once by
       `make runbook` with its output quoted rather than described
-- [ ] Signing, notarisation, direct download → **v1.0**
+- [x] **Signing and the release path.** `make release` — archive, sign,
+      notarise, staple, assess — and `make release-dry`, which proves everything
+      up to the step that needs Apple. Run at version 1.0.0 on 19 September
+      2026: hardened runtime on, five entitlements read back out of the signed
+      build, `Shelf-1.0.0.zip` 5 172 KB ([docs/RELEASE.md](RELEASE.md))
+- [ ] **Notarisation, and a direct download.** Blocked on a Developer ID
+      certificate and a notarytool keychain profile, both of which are Erik's to
+      make and neither of which exists on this Mac. Steps 6 and 7 of
+      `Scripts/release.sh` have never run. See `docs/HANDOFF.md`
 
 ### What the localisation did not cover
 

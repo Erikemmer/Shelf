@@ -55,8 +55,11 @@ make synthetic-clean   # delete the test material, and say how much came back
 make online-proof  # ask both metadata services about ten ISBNs and refresh the
                    # test fixtures. The only thing in the build that uses the
                    # network — no test and no CI job does
-make german-shots  # photograph the window in German (its own defaults domain,
+make german-shots  # photograph the window in German (on the command line,
                    # never the Mac's language)
+make contrast      # every colour Shelf decides, against WCAG AA
+make accessibility # dump the accessibility tree of every view and judge it
+make runbook       # run every path in docs/RUNBOOK.md and print what it did
 make release-dry   # archive, sign ad hoc, verify, zip — the release path as
                    # far as the step that needs Apple
 make release       # the real one: Developer ID, notarytool, stapler, spctl
@@ -71,6 +74,7 @@ make lint && make smoke`**, all four green.
 |---|---|
 | `Sources/ShelfCore/` | everything that can be decided without a window. Builds and tests on Linux, which is what keeps AppKit out of it. |
 | `App/Shelf/` | the window: SwiftUI + AppKit, the cover pipeline, ImageIO. |
+| `Sources/ShelfFixtures/` | the test material — `ZipWriter`, `MinimalPNG`, the five `Synthetic…` builders. The tests and `shelf-tool` depend on it; the app does not, so none of it ships. |
 | `Sources/shelf-tool/` | the same import and rebuild on the command line, for proof runs. |
 | `docs/CONCEPT.md` | what Shelf is, in full. |
 | `docs/ARCHITECTURE.md` | the building blocks and the data flows. |
@@ -78,12 +82,14 @@ make lint && make smoke`**, all four green.
 | `docs/adr/` | the decisions, and what they cost. |
 | `docs/BACKLOG.md` | the sprints, and what is done. |
 | `docs/RELEASE.md` | how a build here becomes a file somebody else can open. |
+| `docs/RUNBOOK.md` | backup, restore, rebuild, move, the way back to Calibre, and what to do after a crash. Every path run once, with its output quoted. |
+| `docs/accessibility/` | the accessibility tree of every view, as `make accessibility` last wrote it. |
 | `CHANGELOG.md` | what changed, with the measured numbers. |
 
 ## Languages
 
 English and German. Every word the window draws goes through one door and lives
-in `App/Shelf/Resources/Localizable.xcstrings` — 429 entries, both languages,
+in `App/Shelf/Resources/Localizable.xcstrings` — 441 entries, both languages,
 with real plural forms rather than a trailing "s". Numbers, dates and file sizes
 are the reader's: *18.09.2026* and *134,5 kB* on a German Mac.
 
@@ -98,6 +104,25 @@ shelves are yours.
 The look lives in [SlateKit](https://github.com/Erikemmer/SlateKit), a package
 shared with Selector and used through a tag — see
 [ADR 0004](docs/adr/0004-slatekit-shared-with-selector.md).
+
+## Without a mouse, and without perfect eyes
+
+Every row of the sidebar is a button a keyboard can reach and activate, every
+control has a name, and every hand-drawn control draws a focus ring. The grid's
+cells say the whole book in one sentence — title, author, series, formats,
+rating, read, DRM, on the device — rather than arriving as four unrelated stops
+with a symbol's name among them. The arrow keys are answered by the window
+rather than by the menu bar, so holding one costs the move and nothing else
+([ADR 0017](docs/adr/0017-the-arrow-keys-leave-the-menu-bar.md)).
+
+None of that is a claim: `make accessibility` drives the app through ten views,
+writes each accessibility tree into `docs/accessibility/`, and fails on a
+control with no name, on a name that is an SF Symbol's identifier, or on a view
+that has stopped holding a button. `make contrast` checks every colour Shelf
+decides against WCAG AA.
+
+What a script cannot answer is on the run's own report: whether the order things
+are read in makes sense needs an ear.
 
 ## Test data
 

@@ -25,7 +25,9 @@
 │            RecentLibrariesStore (security-scoped bookmarks)   │
 │            SHA256Hasher (CryptoKit, the fast path)            │
 │            TimingLog (SHELF_TIMING=1; silent otherwise)       │
-│            EditingKeyMonitor (1–5, 0, R, T, ␣ at the window)  │
+│            EditingKeyMonitor (1–5, 0, R, T, ␣ and, since      │
+│              Sprint 7, ←→↑↓ ⇱⇲ — at the window, not the menu  │
+│              bar: ADR 0006 and ADR 0017)                      │
 │            FileReader (core, plus the two only a Mac reads) · │
 │              PDFFileReader (PDFKit) · CBRFileReader           │
 │              + LibArchive (dlopen, checked at runtime)        │

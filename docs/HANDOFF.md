@@ -1,235 +1,182 @@
-# Handoff – start prompt for a fresh session
+# Handoff – where Shelf stands, and what is left
+
+**v1.0 is ready to be released. What is open is what Erik has to contribute.**
+
+Sprints 1–7 are done. `main` is green, 631 core tests on macOS and on Linux, the
+version in `project.yml` is `1.0.0`, and `make release-dry` builds, signs and
+zips it. The tag `v1.0.0` is **not** set and will not be set without Erik's word.
+
+---
+
+## What Erik has to do, and nobody else can
+
+Four things, in the order they block something.
+
+### 1. A Developer ID certificate, and a notarytool profile
+
+Until these exist, **nothing has ever been notarised**, and a Shelf copied to
+another Mac says it is damaged and should be moved to the Trash — which is not a
+warning about signing, it is what an unsigned app looks like to somebody who did
+not build it.
+
+Both are Erik's to make, both cost a yearly Apple Developer Program membership,
+and `docs/RELEASE.md` says exactly how, step by step. No script here creates
+either, and neither is ever written into a file in this repository. When they
+exist, `make release` runs the whole path and steps 6 and 7 stop being skipped.
+
+### 2. GitHub Actions has not run since Sprint 4
+
+Every job ends after seven seconds with
+
+> The job was not started because recent account payments have failed or your
+> spending limit needs to be increased.
+
+Checked again on 19 September 2026 on three separate pushes. Nothing in this
+repository can fix it. It has already cost something once: the Linux build was
+broken from Sprint 5 to Sprint 7 (`import Darwin` in `shelf-tool`) and the
+Linux job is what exists to catch that.
+
+Until it is sorted, the substitute is a container on this Mac, and it is run
+before each release-shaped commit:
+
+```bash
+CHECK=~/Library/Caches/Shelf/linux-check-7b
+rm -rf "$CHECK" && mkdir -p "$CHECK" && git archive HEAD | tar -x -C "$CHECK"
+docker run --rm -v "$CHECK:/src" -w /src swift:6.1 bash -c \
+  "apt-get update -qq && apt-get install -y -qq libsqlite3-dev && swift build && swift test"
+```
+
+A `git archive` rather than the repository itself, because `Package.resolved`
+lives beside the repo and the container cannot read it — and because it then
+checks exactly what is committed. Measured 19 September 2026: build 35.5 s,
+**613 tests green on Linux**.
+
+### 3. SlateKit is private, and the CI cannot see it
+
+The core does not need it and its tests guard every push; the **app** does, and
+GitHub Actions cannot reach a private repository without credentials. The job
+skips the app build with a visible warning rather than going red. Two ways out,
+and the choice is Erik's:
+
+1. A `SLATEKIT_TOKEN` secret in the Shelf repo — a fine-grained token with read
+   access to `Erikemmer/SlateKit`. The job picks it up automatically. Nothing
+   becomes public.
+2. Make SlateKit public. The package holds only appearance and layout, no
+   subject matter — but making it public is a publication, and a session does
+   not do that on its own.
+
+### 4. The things only real hardware and real books can answer
+
+All of these are in `docs/BACKLOG.md` with what each would settle:
+
+- **A real e-reader on a cable.** Every device rule is measured against
+  `hdiutil` disk images, which is enough for markers, format choice, names,
+  verification, resume and the 4 GB limit — and cannot answer whether the
+  sandbox lets Shelf list a *real* removable volume without an open panel. That
+  is the first line of "To check on real hardware", because if it does not,
+  auto-detection is decorative.
+- **A real MOBI, AZW3, CBR and a genuinely DRM-protected file.** Everything is
+  measured against generated ones, and no genuine `.cbr` has ever been read:
+  nothing on this Mac can write a RAR.
+- **Erik's real Calibre library.** Sprint 3 is measured against a synthetic one
+  of 2 000 books. `~/Downloads/Calibre Library Erik` holds a `metadata.db` with
+  no book folders, which exercises the schema and not the import. **Erik has to
+  name the path.**
+- **Google Books answering.** Its shared anonymous quota has returned HTTP 429
+  to every request this project has ever made, so no lookup here has had both
+  services answering at once and the two-row disagreement case has never been
+  photographed. A key would fix it and would be a secret in a shipped app.
+- **The welcome screen's logo.** It still shows SlateKit's placeholder rather
+  than the app icon. That was never asked for and is a question, not a
+  slip.
+
+---
+
+## What a person still has to look at
+
+Two of them, and both are listed at the foot of every run that cannot answer
+them:
+
+- **Whether the order VoiceOver reads things in makes sense.** `make
+  accessibility` proves every control has a name and no name is an SF Symbol's;
+  whether the sequence is the useful one is a judgement and needs an ear.
+- **Whether the trackpad stays smooth while the cover cache fills.** A posted
+  scroll-wheel event does not reach the table at all, so no script can answer
+  it (`docs/BACKLOG.md`, "Measurements still to take by hand").
+
+---
+
+## If the next session is a v1.1
+
+`docs/BACKLOG.md` is the list, and three items have been sharpened rather than
+fixed and are the obvious first three:
+
+1. **A resumed transfer reports as failures the files it wrote itself.** The
+   manifest is written every twenty files, so an *untidy* death — a crash, a
+   power cut, a cable — can leave up to nineteen on the card that no manifest
+   knows about, and the next run fails on each of them. Nothing is lost. The fix
+   is in `TransferPlanner`.
+2. **SwiftUI's Edit ▸ Undo never carries the action name**, whatever made the
+   change. Measured both ways in Sprint 7. The fix is
+   `CommandGroup(replacing: .undoRedo)` and it puts ⌘Z inside a text field on
+   the line, which is why it was not done before a release.
+3. **Editing publisher, language or date across a selection.** Deliberately left
+   out in Sprint 2c; a publisher across a selection is a reasonable thing to
+   want.
+
+---
+
+## Prompt for a fresh session
 
 Copy the block below into a new Claude Code session in `~/Documents/Shelf`.
 
 ---
 
-## Prompt
-
 Du arbeitest mit mir (Erik Emmer) an **Shelf**, einem Mac-only eBook-Manager im
 Look & Feel von Selector. Repo: https://github.com/Erikemmer/Shelf (lokal
 `~/Documents/Shelf`). Shelf ist ein modern aussehendes Calibre: Bibliothek,
 Metadaten, Calibre-Import, Geräte – kein Reader, keine Konvertierung in v1.0.
-Stand: Sprints 1–6 fertig, Sprint 7 **angefangen** (Deutsch und der
-Release-Weg stehen, Barrierefreiheit und Runbook nicht), `main` grün,
-606 Kern-Tests, SlateKit-Pin 0.3.1.
+**Stand: v1.0 ist freigabebereit**, `main` grün, 631 Kern-Tests, SlateKit-Pin
+`0.4.1`, Version `1.0.0` in `project.yml`, Tag `v1.0.0` **nicht** gesetzt.
 
 **Lies zuerst, in dieser Reihenfolge:** `Programmier-Leitlinie.md` (bindend),
-`CLAUDE.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG.md`, `CHANGELOG.md` (oben
-steht der letzte Stand), diese Datei (Abschnitt „Nächster Schritt"). Das Fachliche
+`CLAUDE.md`, diese Datei ganz oben („Was Erik tun muss“), `CHANGELOG.md` (oben
+steht der letzte Stand), `docs/BACKLOG.md`, `docs/RUNBOOK.md`. Das Fachliche
 steht vollständig in `docs/CONCEPT.md`, das Datenmodell in `docs/DATA-MODEL.md`,
-die Entscheidungen in `docs/adr/`.
+die Entscheidungen in `docs/adr/` (0001–0017).
 
 **Rollen und Arbeitsweise**
 
 - Du schreibst den Code, prüfst, committest und pushst selbst. Ich lese Berichte
-  und entscheide bei echten Entscheidungen; eine zweite Claude-Sitzung reviewt
-  deine Berichte und schreibt mir den nächsten Auftrag. Frag mich nur, wenn eine
-  Entscheidung wirklich offen ist oder etwas Irreversibles anstünde; sonst
-  entscheide selbst und schreib die Entscheidung in den Bericht.
+  und entscheide bei echten Entscheidungen. Frag mich nur, wenn eine Entscheidung
+  wirklich offen ist oder etwas Irreversibles anstünde; sonst entscheide selbst
+  und schreib die Entscheidung in den Bericht.
 - Vor jeder Änderung: Ziel in einem Satz, betroffene Dateien, Risiken. Kleine
-  lauffähige Schritte. Zu jeder Änderung Tests und Doku (`CHANGELOG.md`,
-  `docs/ARCHITECTURE.md`, `docs/DATA-MODEL.md`, ADR bei Entscheidungen). Am Ende
-  jedes Berichts: Zusammenfassung in einfacher Sprache und ausdrücklich, was du
-  nicht selbst prüfen konntest.
+  lauffähige Schritte. Zu jeder Änderung Tests und Doku. Am Ende jedes Berichts:
+  Zusammenfassung in einfacher Sprache und ausdrücklich, was du nicht selbst
+  prüfen konntest.
 - **Prüfkette vor jedem Commit: `make test && make app && make lint &&
-  make smoke`.** Nur wenn alle vier grün sind, wird committet; ein roter Schritt
-  wird behoben, nie übersprungen. Ein Commit pro Anliegen, Conventional Commits,
-  `git push` nach jedem abgeschlossenen Schritt, `git status --short` vor
-  `git add -A`. WIP-Commit vor jeder Fehlersuche per Bisektion. Nie einen Prozess
-  beenden, den du nicht gestartet hast.
-- **SlateKit-Änderungen laufen über einen eigenen Arbeitsbaum, Commit, Tag und
-  Abhängigkeits-Update.** Das Paket liegt in einem eigenen Repo
-  (https://github.com/Erikemmer/SlateKit) und wird über einen **Tag** eingebunden
-  (`project.yml`, derzeit `0.3.1`), nie über einen Pfad. **Nie in
-  `~/Documents/SlateKit` arbeiten** – dort arbeitet die Selector-Sitzung, und ein
-  `git add -A` hat dort schon fremde Änderungen mitgenommen. Der ganze Weg,
-  samt der Regel über Defaults und Zweisprachigkeit, steht in `CLAUDE.md` unter
-  „Working on SlateKit“; was überhaupt in SlateKit gehört, in
-  `docs/adr/0004-slatekit-shared-with-selector.md`.
-- Nichts Irreversibles. Buchdateien werden in v1.0 nie geschrieben, gelöscht
-  oder überschrieben. Der Calibre-Ordner wird nur gelesen. Auf Geräten wird nur
-  nach Bestätigung mit Namensliste gelöscht. DRM wird nie angefasst. Keine
-  Secrets ins Repo. Testdaten nach `~/Library/Caches/Shelf/`, nie unter
-  `~/Documents` (iCloud).
-- UI-Texte Englisch **und Deutsch**: jedes gezeichnete Wort geht durch `Loc`
-  und steht in `App/Shelf/Resources/Localizable.xcstrings`, sonst wird ein Test
-  rot (ADR 0016). Bezeichner Englisch, Kommentare erklären das *Warum*. Der frühere Firmenname kommt in diesem Projekt nirgends vor.
+  make smoke`.** Alle vier grün, oder es wird nicht committet.
+- **SlateKit nur im eigenen Arbeitsbaum** (`~/Documents/SlateKit-shelf`), nie in
+  `~/Documents/SlateKit`. Der ganze Weg steht in `CLAUDE.md`.
+- Nichts Irreversibles. Buchdateien werden nie geschrieben; Calibre nur gelesen;
+  DRM nie angefasst; auf Geräten nur nach Bestätigung mit Namensliste gelöscht.
+  Unter `~/Library/Caches/Shelf/` nur löschen, was diese Sitzung angelegt hat.
+- **Den Tag `v1.0.0` setzt du nie ohne mein Wort.**
 
 ---
 
-## Nächster Schritt: Sprint 7 zu Ende bringen → v1.0
-
-**Sprint 7 ist angefangen, nicht fertig.** Drei Dinge sind erledigt und
-gepusht; vier stehen aus. Was steht, steht vollständig — es gibt keinen
-halbdeutschen Zustand und keinen halben Release-Weg.
-
-### Fertig
-
-1. **Deutsch, vollständig.** `App/Shelf/Resources/Localizable.xcstrings`, 429
-   Einträge, Englisch und Deutsch, acht mit Pluralformen. Jedes gezeichnete Wort
-   geht durch `Loc` (`App/Shelf/Views/Strings.swift`); Zahlen, Daten und Größen
-   über `FormatStyle`; fünf Tests, darunter einer, der **jeden** Satz in
-   `App/Shelf` ablehnt, der nicht durch den Katalog geht
-   ([ADR 0016](adr/0016-the-core-answers-in-english-the-window-translates.md)).
-   Bilder und was das Ansehen gefunden hat: `docs/screenshots/sprint-7/README.md`.
-2. **`make release`** – archivieren, signieren, notarisieren, stapeln, prüfen
-   ([docs/RELEASE.md](RELEASE.md)). `make release-dry` beweist den Weg bis zur
-   Notarisierung mit Ad-hoc-Signatur; **notarisiert wurde noch nie etwas**,
-   weil kein Developer-ID-Zertifikat auf diesem Mac liegt.
-3. **Die zwei Befunde aus dem Sprint-6-Screenshot**: „Unbekannt" war
-   Fixture-Text, und `Book.authorLine` zeigt bei fehlendem Autor jetzt nichts;
-   jede Zeile des Vergleichsdialogs nennt ihren Dienst, und wo die beiden
-   Dienste sich widersprechen, sind es zwei Zeilen mit je einem Kästchen.
-
-### Offen, in dieser Reihenfolge
-
-1. **Barrierefreiheit.** Nichts davon ist angefasst worden. Die zwei bekannten
-   Löcher stehen unter „Housekeeping": Seitenleisten-Zeilen haben keine Rolle,
-   die eine Tastatur aktivieren kann (`AXImage` + zwei `AXStaticText`, kein
-   `AXButton`), und die Pfeiltasten hängen an der Menüleiste (31 % der Zeit in
-   `NSMENU_IS_THROTTLING_…`). Dazu fehlen: VoiceOver-Beschriftungen für Raster,
-   Seitenleiste, Inspector, Tabelle und **alle Blätter**, eine sinnvolle
-   Vorlesereihenfolge, ein Kontrast-Skript gegen WCAG AA über die
-   Paletten-Werte, sichtbare Fokusringe, und ein AX-Baum je Ansicht als Beleg.
-   `Scripts/ax-dump.swift` gibt es schon.
-2. **Die Kürzel-Übersicht und die Menüs lesen *nicht* dieselbe Tabelle.**
-   `ShortcutReference` speist den Willkommens-Einzeiler und das ⌘?-Blatt; die
-   Menüleiste in `ShelfApp.swift` deklariert ihre Kürzel von Hand. Die beiden
-   *können* auseinanderlaufen. Ein Test, der die Tabelle gegen die
-   `.keyboardShortcut(…)`-Deklarationen in `ShelfApp.swift` hält, wäre der
-   billige Weg; die Menüs aus der Tabelle zu bauen der gründliche.
-3. **`docs/RUNBOOK.md` fehlt ganz.** Sichern und Wiederherstellen, Index neu
-   bauen, Umzug auf eine andere Platte, Rückweg nach Calibre, Absturz mitten im
-   Import oder Transfer, wo die Logs liegen — jeder Weg einmal ausgeführt und
-   die Ausgabe zitiert.
-4. **Die Liste aus `docs/BACKLOG.md`**, die v1.0 nicht mitschleppen soll: der
-   Klick aufs Cover und das Suchfeld, „Missing Cover" nach frischem Import,
-   „Published" über einer Auswahl, das nackte „Undo" nach einer
-   Online-Übernahme, Sortierung nach Tags/Format/Gelesen/Größe, und
-   `ZipWriter`/`MinimalPNG`/`SyntheticCalibreLibrary` in ein eigenes
-   `ShelfFixtures`-Target.
-5. **Abschlusslauf**: `make proof` vollständig gegen 5 000 Bücher, Kalt- und
-   Warmstart, Speicher, eine Stunde offen für Lecks, `make release-dry`,
-   CHANGELOG mit allen Zahlen, Version auf 1.0.0 in `project.yml`. **Tag
-   `v1.0.0` erst, wenn Erik es sagt.**
-
-### Was aus diesem Sprint mitzunehmen ist
-
-- **Ein Satz, den SwiftUI nicht übersetzt, sieht aus wie einer, den es
-  übersetzt.** `Text("eins " + "zwei")` ist ein `String` und wird wörtlich
-  gezeichnet; ein interpolierter Schlüssel wird vom Compiler aus den *Typen*
-  gebaut (`%1$lld of %2$lld`) und ist deshalb für keinen Test lesbar. Beides
-  ist der Grund, warum **alles** durch `Loc` geht.
-- **Der erste deutsche Lauf hatte eine englische Seitenleiste.**
-  `SlateSidebarRow` nimmt den Titel als erstes Argument — auf keiner Liste von
-  Aufrufformen. Der stumpfe Test („kein Satz in `App/Shelf` ohne `Loc`") hat
-  sechs weitere Stellen gleich mitgefunden. **Ein Test, der nur prüft, was man
-  ihm zeigt, prüft zu wenig.**
-- **Ein Kernsatz mit einem Wert darin kann nicht übersetzt werden.** „„2,5x" ist
-  keine Zahl" hat keinen Katalogschlüssel. Der Kern sagt jetzt *welche*
-  Ablehnung, das Fenster sagt sie in Worten — `BookFieldRejection`,
-  `ShelfEdit.Rejection`, `SeriesPosition.Place`.
-- **Berichte bleiben Englisch, mit Grund.** `Scripts/proof-run.sh` liest sie
-  mit `grep`, vier Screenshot-Skripte warten auf das Wort „Verified" im
-  AX-Baum. `ByteCount.format` behält deshalb die C-Locale; das Fenster hat
-  `Loc.size`.
-- **Das ⌘?-Blatt öffnet sich nicht auf ein gepostetes „?" mit ⌘.** Es ist als
-  ⌘/ deklariert und als ⌘? gezeichnet. Über den Menüpunkt geht es.
-- **`tree_has "Bewegen"` findet „BEWEGEN" nicht.** Die Gruppen im ⌘?-Blatt
-  werden in Großbuchstaben gezeichnet.
-- **Die Sprache wird nie global umgestellt.** `Scripts/german-shots.sh`
-  schreibt `AppleLanguages` in **Shelfs eigene** Defaults-Domain und nimmt sie
-  in einem `trap` wieder heraus, auch wenn der Lauf scheitert.
-
-### Was in `~/Library/Caches/Shelf/` von dieser Sitzung stammt
+## Was in `~/Library/Caches/Shelf/` von der Sitzung vom 19.09.2026 stammt
 
 Angelegt und benannt, wie CLAUDE.md es verlangt — **alles andere dort wurde
 nicht angefasst**:
 
-- `measure-library-7/` – die Zwölf-Bücher-Bibliothek der deutschen Screenshots
-- `linux-check-7/` – ein `git archive` von HEAD, in dem der Swift-Container
-  gebaut hat (615 MB, kann weg)
+- `measure-library-7b/` – die 26-Bücher-Bibliothek der Barrierefreiheits-Belege,
+  dazu eine synthetische Calibre-Bibliothek und vier Geräte-Images
+- `runbook-7b/` – alles, was `make runbook` anlegt
+- `linux-check-7b/` – ein `git archive` von HEAD für den Swift-Container
+- `synthetic/` – die 5 000 Bücher des Abschlusslaufs (`make synthetic-clean`)
 - `release/` – das Ergebnis von `make release-dry`
 
-## Was Erik ansehen muss: die CI läuft seit Sprint 4 überhaupt nicht
-
-Unverändert am 18.09.2026, **dreimal an diesem Tag nachgeprüft** (Läufe
-35381934435, 35386308364, 35386741392): jeder Lauf endet nach sieben Sekunden
-mit
-
-> The job was not started because recent account payments have failed or your
-> spending limit needs to be increased.
-
-Das ist keine Code-Sache und nichts in diesem Repository kann es beheben –
-GitHub startet die Jobs nicht. **Vier Sprints ohne CI**, und sie hat sofort
-etwas gekostet: der Linux-Build war seit Sprint 5 kaputt (`import Darwin` in
-`shelf-tool`), und genau dafür gibt es den Linux-Job.
-
-Bis das geklärt ist, ist der Ersatz ein Container auf diesem Mac:
-
-```bash
-docker run --rm -v "$PWD:/src" -w /src swift:6.1 bash -c \
-  "apt-get update -qq && apt-get install -y -qq libsqlite3-dev && swift test"
-```
-
-Achtung: `Package.resolved` liegt neben dem Repo und der Container kann sie
-nicht lesen (I/O-Fehler). Ein `git archive HEAD | tar -x -C <ordner>` und
-*dieser* Ordner als Mount umgeht es und prüft obendrein genau das, was
-committet ist. Gemessen am 18.09.2026: Build 36,9 s, **588 Tests grün**.
-
-## Eine Entscheidung, die dir gehört: SlateKit und CI
-
-`Erikemmer/SlateKit` ist **privat**. Der Kern braucht es nicht – seine Tests
-laufen auf Linux und auf macOS und sichern jeden Push ab. Die *App* braucht es,
-und GitHub Actions kommt ohne Zugangsdaten nicht an ein privates Repo. Der
-Job überspringt den App-Build deshalb mit einer sichtbaren Warnung, statt jeden
-Lauf rot zu machen. Zwei Wege, einer davon ist zu wählen:
-
-1. **Ein Secret `SLATEKIT_TOKEN`** im Shelf-Repo anlegen (fine-grained token mit
-   Leserecht auf `Erikemmer/SlateKit`). Der Job nimmt es automatisch und baut
-   die App dann mit. Nichts wird öffentlich.
-2. **SlateKit öffentlich machen.** Dann entfällt das Secret. Das Paket enthält
-   nur Aussehen und Layout, keinen Fachcode – aber es öffentlich zu machen ist
-   eine Veröffentlichung, und die trifft diese Sitzung nicht von sich aus.
-
-Bis dahin heißt „CI grün": der Kern ist auf beiden Plattformen grün und die App
-wurde nicht gebaut. Lokal baut sie `make app`, und `make smoke` startet sie.
-
-## Offene Punkte, die keiner Sitzung gehören
-
-- **Bildschirmfotos: erledigt, mit einer Einschränkung.** Die Freigabe
-  „Bildschirmaufnahme" ist erteilt, `Scripts/screenshots.sh` läuft, und die
-  Bilder liegen in `docs/screenshots/sprint-1/` (Shelf und Selector, gleiche
-  Größe), `docs/screenshots/sprint-2b/` und `docs/screenshots/sprint-2c/`.
-  Drei der vier Vergleichspixel sind byte-gleich mit Selector.
-  **Was die Skripte brauchen:** dass *keine* Shelf-Instanz läuft – sie brechen
-  sonst mit einer Erklärung ab, statt eine fremde zu fotografieren; für Selector
-  ein offenes Fenster; und **einen entsperrten Bildschirm** (siehe den Fallstrick
-  oben). Aus 2c fehlen drei Aufnahmen, weil der Bildschirm mitten im Lauf
-  gesperrt hat; `docs/screenshots/sprint-2c/README.md` sagt, welche und wofür
-  es stattdessen Belege gibt.
-- **Die übrigen Handprüfungen aus Sprint 1 sind erledigt** und stehen mit Zahlen
-  im `CHANGELOG.md`: Fensterzahl (eines, nicht sechs), Zeit bis alle sichtbaren
-  Cover stehen (852 ms kalt, 768 ms warm), gehaltene Pfeiltaste mit `sample`,
-  Spitzenspeicher im Vordergrund (301 MB).
-- **App-Icon: erledigt.** Eriks fertiges Paket liegt in `docs/icon/`, die
-  macOS-Variante ist das `AppIcon`-Asset der App, alle zehn Größen mit `sips`
-  geprüft, `iconutil -c icns` als Gegenprobe, Belege in
-  `docs/screenshots/sprint-4/`. **Eine Falle für den Nächsten:** der Dock zeigt
-  nach dem ersten Build weiter das Standardsymbol, weil LaunchServices das
-  Symbol des leeren Icon-Sets zwischengespeichert hat. `lsregister -f <app>`
-  räumt das auf; am Bundle ist nichts falsch.
-  Der Willkommensschirm zeigt weiterhin das Platzhalter-Logo aus SlateKits
-  Welcome-Gerüst, nicht das App-Icon – das war nicht beauftragt und ist keine
-  Nachlässigkeit, sondern eine offene Frage an Erik.
-- **SlateKit-Version.** Shelf hängt an `0.3.1`, Selector weiter an `0.1.6`.
-  **Selector kann jetzt gefahrlos nachziehen**: 0.3.1 macht die drei
-  Aussehensänderungen aus 0.3.0 zu Optionen mit dem alten Default und holt die
-  deutsche Lokalisierung zurück, die Selector ausliefert. Shelf setzt die
-  Optionen und sieht aus wie vorher. Geprüft ist das durch sieben Tests über die
-  Defaults, **nicht** durch einen Selector-Build – den anzufassen war nicht
-  meine Sache.
-- **`Package.resolved` ist nicht im Repo** (`.gitignore`), wie in Selector. Wer
-  reproduzierbare Abhängigkeiten will, nimmt die Zeile heraus; das ist eine
-  Entscheidung, keine Nachlässigkeit.
+`linux-check-7/` der Vorsitzung (615 MB) wurde entfernt, weil die Vorsitzung es
+ausdrücklich so vermerkt hatte.

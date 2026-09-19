@@ -73,6 +73,12 @@ Shelf übernimmt Selectors Erscheinungsbild vollständig: dunkles Schiefergrau, 
 | T | Tag-Feld im Inspector fokussieren |
 | ⌘F | Suche |
 | ⌘I | Inspector ein/aus |
+| ⇧⌘I | Add Books… (nachgetragen in Sprint 7: ⌘I gehört laut dieser Tabelle dem Inspector, und ⌥⌘I war doppelt vergeben) |
+| ⌘A | Select All Books (nachgetragen in Sprint 7: war in den Menüs und in keiner Übersicht) |
+| ⇧⌘W | Close Library (ebenso) |
+| ⌘1 / ⌘2 | Cover-Raster / Tabelle |
+| ⌘+ / ⌘− | Cover größer / kleiner |
+| ↖ / ↘ | erstes / letztes Buch |
 | ⌘E | Fetch Metadata |
 | ⌘⇧S | Send to Device (Auswahl auf gewähltes Gerät) |
 | ⌘⌥I | Import from Calibre… |

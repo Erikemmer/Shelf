@@ -7,8 +7,14 @@ on and what was *not* measured.
 
 Measured on Erik's Mac (M-series, macOS 15.6) against
 `~/Library/Caches/Shelf/measure-library-7/` (the German screenshots and the
-release path) and `~/Library/Caches/Shelf/measure-library-7b/` (everything from
-19 September: accessibility, contrast, the arrow keys).
+release path), `~/Library/Caches/Shelf/measure-library-7b/` (accessibility,
+contrast, the arrow keys) and `~/Library/Caches/Shelf/synthetic/` (the closing
+run, 5 000 books).
+
+**Sprint 7 is finished and v1.0 is ready to be released.** The version in
+`project.yml` is `1.0.0`; the tag `v1.0.0` is not set and will not be without
+Erik's word. What is still open is what only Erik can supply — a Developer ID,
+a CI that runs, and a real e-reader — and `docs/HANDOFF.md` is the list.
 
 ### Fixed — the six things v1.0 was not going to carry
 
@@ -28,6 +34,10 @@ library with its cover cache deleted:
 |---|---|---|
 | four seconds after a cold start | 26 | **15** |
 | sixteen seconds later | 15 | **15** |
+
+The walk it costs, measured over the closing run's library: **37 ms for 4 996
+book folders**, off the main actor, at the four moments the answer can change
+for more than one book at once — opening, an import, a rebuild, a cleared cache.
 
 **`Published` read blank across a selection** where `Publisher` beside it read
 "Mixed", and a blank says neither "they differ" nor "none of them has one". The
@@ -152,6 +162,81 @@ wrong:
   library whose `schemaVersion` is 99, which is also how §10 demonstrates where
   the log is.
 
+### Measured — the closing run, against 5 000 books
+
+`make proof` end to end on 19 September 2026, release build, against
+`~/Library/Caches/Shelf/synthetic` — **every section green**, thirty-eight of
+them, from generating the books to deleting from a device behind a confirmation
+that names every file.
+
+| | |
+|---|---|
+| generate 5 000 EPUBs | 20 s · 643.6 MB |
+| **import 4 996 books**, hashed on both sides | **28.8 s** · library 1.3 GB |
+| SHA-256 against `/usr/bin/shasum` | 3 of 3 agree |
+| files in the source modified by the import | **0** of 4 999 |
+| **erase the index and rebuild it from the folders** | **12.8 s** · folders with no readable book 0 |
+| one metadata edit, 200 books | median **2.3 ms** · 95th 4.2 ms · worst 14.0 ms · over the 50 ms target 0 of 200 |
+| search 4 996 books for a tag five seconds old | first (cold page cache) 1.2 ms · median **0.6 ms** · worst 0.7 ms |
+| one shelf assignment, 1 000 of them | median 2.4 ms · worst 13.1 ms · over the 20 ms target **0 of 1 000** |
+| 50 books tagged at once, then undone | 132.2 ms / 126.9 ms · 50 of 50 OPFs byte-identical again · 50 of 50 EPUBs untouched |
+| the index thrown away, 1 000 shelvings asked of the folders | **1 000 of 1 000** back, 20 of 20 shelves, the empty one out of `library.json` |
+| an import killed and resumed | one folder per book, nothing doubled, nothing orphaned |
+| every format in one library (EPUB, MOBI, AZW3, PDF, CBZ, damaged files and all) | import 9.4 s · rebuild 2.9 s · one digest per format agrees with `shasum` |
+| 250 books to a Kobo, read back off the card | 2 s · Verified 250 · Failed 0 · a second run sends nothing |
+| the same to a Kindle, which reads neither EPUB nor CBZ | 212 sent, **38 refused for want of a format**, not one EPUB on the card |
+| the library after all of the device work | byte for byte what it was |
+
+**At the window**, same library, `SHELF_TIMING=1`:
+
+| | cold (cover cache deleted) | warm (4 901 covers cached) |
+|---|---|---|
+| index read, 4 996 books | 738 ms | 738 ms |
+| **every visible cover on screen** | **1 068 ms** after the open, 1 463 ms after launch | **1 106 ms** / 1 485 ms |
+| peak memory, 30 s in | 316 MB | 212 MB |
+
+CONCEPT §11 asks for under 2 s with a warm cache: it is 1.5 s from launch, and
+the cold run is no slower — the first twenty covers are decoded out of the EPUBs
+either way, and the cache is what spares the *other* 4 976. Peak memory against
+the 1.5 GB the concept allows: **316 MB** while the warmer is working through
+5 000 covers.
+
+**An hour open, idle, on the 5 000-book library**, sixty readings a minute
+apart. It does not grow; it shrinks:
+
+| | |
+|---|---|
+| at the start, the warmer still working through 5 000 covers | **316 MB** |
+| one minute in, the warmer finished | 185 MB |
+| every reading from minute 3 to minute 47 | 185 MB, unchanged |
+| minute 48 onwards | **147 MB** |
+| after sixty minutes | **147 MB** |
+
+The one step down at minute 48 is memory being given back, not taken: the
+in-memory cover cache lets go of what nothing is looking at. There is no upward
+trend anywhere in the hour — the highest reading after the warmer finished is
+the same 185 MB as the first one.
+
+Measured on the release build of 09:40; the two edits committed after it are a
+comment and a `switch` that changes no behaviour. `make proof` was not running
+at the time, so nothing else was competing for memory.
+
+`make release-dry` at version 1.0.0: archived, signed ad hoc with the hardened
+runtime on, verified, zipped to **Shelf-1.0.0.zip, 5 172 KB**. The entitlements
+read back **out of the signed build**: app-sandbox, bookmarks.app-scope,
+removable-volumes.read-write, user-selected.read-write, network.client. Five,
+and no server entitlement — Shelf listens for nothing (CONCEPT §12). Steps 6 and
+7 have still never run: there is no Developer ID on this Mac, and that is Erik's
+to make.
+
+**CI: still not running.** Checked again on 19 September on three pushes
+(35426960588, 35427877179, 35429435673); every job ends after seven seconds with
+"The job was not started because recent account payments have failed or your
+spending limit needs to be increased". Five sprints now. The substitute is the
+Swift container on this Mac, run against a `git archive` of HEAD: **build 35.5 s,
+613 tests green on Linux** — which is what the Linux job exists to check, and it
+covers the new `ShortcutKey`, the four new sort orders and `ShelfFixtures`.
+
 ### Added — the window can be used without a mouse and read without perfect eyes
 
 Accessibility was the largest thing Sprint 7 owed and nothing of it had been
@@ -216,11 +301,31 @@ than going stale.
 | the DRM badge's word on its plate | **3.96:1** | 9.44:1 | 4.5:1 |
 
 Both were secondary text dimmed a second time — `.opacity(0.6)` on a caption,
-and secondary text on a 14 % plate. Eight other pairs already passed and are in
-the table the script prints; two decorative symbols are **reported and not
-gated**, at 1.85:1 and 2.52:1, because WCAG 1.4.11 covers a graphic you need in
-order to understand or operate something and a book symbol behind a caption that
-says the title and the author is neither.
+and secondary text on a 14 % plate. The whole table, as the script prints it
+after the fix:
+
+| pair | ratio | needs | |
+|---|---|---|---|
+| the author under a missing cover (grid placeholder caption) | 6.36:1 | 4.5:1 | PASS |
+| the DRM badge's word on its plate, over a panel | 9.44:1 | 4.5:1 | PASS |
+| a badge over the worst cover there is (white), on its 55 % black plate | 4.76:1 | 4.5:1 | PASS |
+| a badge over the darkest cover there is (black), on its 55 % black plate | 21.00:1 | 4.5:1 | PASS |
+| the table's stars when a book is rated | 11.61:1 | 4.5:1 | PASS |
+| the table's secondary columns (tags, format, size, added) | 6.36:1 | 4.5:1 | PASS |
+| the sidebar's footer and its empty-section notes | 4.96:1 | 4.5:1 | PASS |
+| a network note in the sidebar's footer | 9.06:1 | 4.5:1 | PASS |
+| · the book symbol behind a missing cover (decorative) | 1.85:1 | — | reported |
+| · the symbol over "This library is empty." (decorative) | 2.52:1 | — | reported |
+
+The last two are **reported and not gated**: WCAG 1.4.11 covers a graphic you
+need in order to understand or operate something, and a book symbol behind a
+caption that already says the title and the author is neither — it is hidden
+from the accessibility tree for the same reason.
+
+SlateKit's own palette has its own check (`make contrast` in that package,
+33 pairs, all passing), and this one deliberately does not repeat it: it reads
+the palette out of the checkout the app builds against, and covers only what
+Shelf decides on top of it.
 
 ### Fixed — the arrow keys leave the menu bar, four sprints after the measurement said so
 
