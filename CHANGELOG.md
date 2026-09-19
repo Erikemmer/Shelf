@@ -3,6 +3,106 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 9 – a cover can be changed · 19 September 2026
+
+Not in the plan. It came out of using the program: everything about a book
+could be corrected except its picture. `⌘E` could fetch a cover **once**, and
+only into a folder that had none, so an import that took the picture out of the
+wrong one of a book's four formats was permanent.
+
+### What a person can do now
+
+Four ways in, all of them on the cover in the inspector, all of them one path
+underneath (`LibraryModel.applyCover`):
+
+- **`Set Cover…`** — the open panel: PNG, JPEG, HEIC, TIFF, GIF, WebP.
+- **A picture dropped on the cover** — from the Finder as a file, or dragged
+  out of a web page as bytes.
+- **`Take Cover from Book File`** — out of the book again. EPUB, MOBI and AZW3
+  through the same reader the import uses; a PDF as page 1 rendered; a CBZ as
+  its first image. A book with several formats is **asked which**, because an
+  EPUB and a PDF of one book carry two different pictures.
+- **`Download Cover…`** — now offered over an existing cover, which Sprint 6
+  refused outright ([ADR 0020](docs/adr/0020-a-cover-may-be-replaced-and-what-guards-it-instead.md)).
+  The button says **Replace Cover** rather than *Use This Cover*, above the
+  preview of what it would write.
+
+**What lands in the Trash:** every `cover.*` that was in the folder — all of
+them, not the first one found. A disposal that cannot take one means nothing is
+written and nothing is lost. Shelf does not overwrite a cover.
+
+**What ⌘Z does:** puts the previous picture back, byte for byte, because the
+bytes are captured before anything moves. Undoing the *first* cover on a book
+takes the file away again, so the folder and the book cannot end up saying
+different things. The Edit menu reads **Undo Cover**.
+
+**What is never touched:** the book file. A cover is a file beside it.
+
+### Measured, on this Mac
+
+| | |
+|---|---|
+| tests | **699**, from 679 — 23 added, 3 deleted with `OnlineCover` |
+| a 3 200 × 4 800 PNG set as a cover | → `cover.jpg`, **1 067 × 1 600, 46 KB** (from 271 KB) |
+| a 900 × 600 JPEG, under the ceiling | written **byte for byte identical**, 23 KB |
+| `Take Cover from Book File` → PDF | page 1 at **666 × 1 000**, 18 KB |
+| `Download Cover…` over an existing one | Open Library's 1949 jacket, **330 × 500**, 79 KB |
+| the ceiling | 1 600 px on the long edge, = 1.6 × the largest tier the pipeline decodes (ADR 0005) |
+
+The grid cell **and** the inspector showed each new picture at once; it was
+still there after quitting and relaunching, and after
+`Library ▸ Rebuild Index from Folders`. The sidebar's `Missing Cover` went
+2 → 1 when a coverless book was given one and back to 2 on ⌘Z. `Google Books
+answered 429`, as it has to every request this project has ever made, so the
+download was measured against Open Library alone.
+
+### Three things that were already broken, and are fixed on the way
+
+1. **`coverRefreshRequest` had no reader at all.** It has been incremented
+   since Sprint 6 and nothing watched it, so a cover fetched from the net
+   changed the folder while the inspector went on drawing what it held.
+2. **The grid cell's task key was book-and-size.** A replaced cover never made
+   the cell ask again — nothing about the cell had changed, as far as SwiftUI
+   could see.
+3. **Only the first `cover.*` was displaced.** A folder holding `cover.jpg`
+   beside `cover.jpeg` — ordinary in a Calibre folder grown over years — kept
+   the second, and because `jpeg` is searched before `png`, the survivor was
+   then drawn *in preference to* the picture just written.
+
+### How it is built
+
+The generation lives **in the book**, so in `metadata.opf`
+(`shelf:cover_generation`, absent while it is 0), cached in the index by
+migration `v3-cover-generation`. That is what survives a rebuild: a number the
+index alone remembered would be thrown away with the cache it belongs to, and
+the grid would go back to a thumbnail of the picture just replaced.
+
+The **core has no image code and did not grow any**. `CoverImageRule` decides
+whether bytes may be written as they are or re-encoded and to what size — a
+pure function, tested on Linux — and `CoverImage` in the app measures the
+picture with ImageIO and carries that out. The same split `EmptiedFolder` has
+from `FolderDisposal`.
+
+The number is written **before** the picture, and awaited. The two orders fail
+differently: number-first leaves the cache *missing*, so it decodes the file
+that is really there and shows it correctly, at the cost of one decode;
+picture-first leaves the cache *hitting* a thumbnail of a picture that is gone,
+which is the exact failure the generation exists to prevent.
+
+### Not done, on purpose
+
+A cover for a multiple selection, and a `Remove Cover` menu item. Both are in
+`docs/BACKLOG.md` with the reasons.
+
+### What is not tested
+
+**The picture half.** `CoverImage` — measuring a file, scaling it, re-encoding
+it, and therefore everything specific to HEIC and TIFF — needs ImageIO, and
+`ShelfCoreTests` is the only test target this project has and it runs on Linux.
+The *rule* it carries out has six tests; the carrying out has none, and its only
+evidence is a run of `Scripts/cover-shot.sh` checking pixel sizes against the
+disk. An app-side test target is the honest fix and does not exist yet.
+
 ## The closing run before v1.0 · 19 September 2026
 
 Everything below was asked for *after* Sprint 8 was pushed, and every number in

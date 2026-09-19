@@ -165,11 +165,23 @@ list ([`Sources/ShelfCore/Library/BookFieldEdit.swift`](../Sources/ShelfCore/Lib
 | Rating | `<meta name="calibre:rating">` | Calibre's 0…10, five stars × 2 |
 | Read | `<meta name="shelf:read">` | Shelf's own |
 | Calibre's own columns | `<meta name="shelf:custom">` | a JSON object, label → text; read-only (ADR 0010) |
+| — (the cover, Sprint 9) | `<meta name="shelf:cover_generation">` | how often the picture has been replaced; **absent means 0** |
 
 Rules that come with the table:
 
 * **An empty field removes the element** rather than writing an empty one. A
   book with no publisher has no `<dc:publisher>`, not an empty one.
+* **`shelf:cover_generation` is not written while it is 0**, which is every book
+  that has never had its cover changed — so every book in every library written
+  before Sprint 9, and every book imported from Calibre. Writing `content="0"`
+  into every OPF would be a diff in five thousand folders that says nothing, and
+  it would make an export of a Calibre library differ from the library Calibre
+  reads. **For an export this means: a book whose cover has never been replaced
+  exports an OPF with no trace of the field at all**, and one whose cover *has*
+  been replaced exports one extra `<meta>` that Calibre ignores like every other
+  `shelf:` meta. Neither is a field Calibre can lose, because the number is not
+  about the book — it is about Shelf's own cache (§5), and a rebuild reads it
+  straight back off the disk.
 * **`shelf:shelves` is one meta holding a JSON array**, not one meta per shelf:
   `<meta name>` is looked up by name, and repeated names would collapse into
   one. JSON because a shelf name may contain a comma or a pipe, and because the
@@ -294,7 +306,7 @@ migrations (`IndexSchema`). Tables as CONCEPT §5.2 names them:
 
 | table | holds | rebuildable from |
 |---|---|---|
-| `books` | id (UUID as text), number, folder, title, title_sort, series_id, series_index, rating, is_read, publisher, published, language, description, added_at, modified_at, last_seen_at | the OPFs |
+| `books` | id (UUID as text), number, folder, title, title_sort, series_id, series_index, rating, is_read, publisher, published, language, description, **cover_generation**, added_at, modified_at, last_seen_at | the OPFs |
 | `authors`, `book_authors` | one row per name; `position` keeps the printed order | the OPFs |
 | `series` | one row per name | the OPFs |
 | `tags`, `book_tags` | one row per keyword | the OPFs |
@@ -314,6 +326,12 @@ Notes:
   a book already on a device will be recognised.
 * **`identifiers` carries a second, normalised ISBN row** (`isbn_normalised`):
   the importer compares those, so `0-306-40615-x` and `030640615X` are one book.
+* **`books.cover_generation` is a cache of the OPF's meta** and of nothing else.
+  It is what the grid reads to build a cover's cache key without opening five
+  thousand OPFs; `Rebuild Index from Folders` fills it from them. Migration
+  **`v3-cover-generation`** adds the column with `NOT NULL DEFAULT 0`, which is
+  the right answer for every book that existed before it — so there is nothing
+  to refill and no reason to make somebody with an arranged library wait.
 * **`search` is a plain FTS5 table**, not one with external content: the text
   searched spans six tables, so there is no single row to point at. Migration 2
   added the `isbn` column — FTS5 has no `ALTER TABLE … ADD COLUMN`, so the table
@@ -380,6 +398,17 @@ Rules that are easy to get wrong and are therefore written down:
   and date, a cover belongs to the book and outlives any one of its files; the
   generation is what replaces size-and-date, so a replaced cover misses instead
   of matching something stale.
+* **The generation lives in the book** — `shelf:cover_generation` in the OPF
+  (§3), cached in `books.cover_generation` (§4) — and not in this folder. The
+  folder is the truth and the index is a cache (ADR 0001): a number remembered
+  only here would be thrown away with the cache it belongs to, and the grid
+  would go straight back to a thumbnail of the picture somebody had just
+  replaced. It was 0 for every book until Sprint 9, because until Sprint 9 a
+  cover could not be replaced (ADR 0020).
+* **Replacing a cover forgets that book's files by UUID prefix**, every size and
+  every generation. The generation alone would make the next *read* miss, but
+  the old files would sit there until the next trim; somebody trying four
+  pictures in a row would leave three behind.
 * The fingerprint is **spelled out**, not derived from Swift's `hashValue`: both
   are free to change between releases, and a changed fingerprint means every
   cached cover on every machine misses at once.
@@ -721,8 +750,16 @@ concerned.
 
 Written beside the book as `cover.<ext>`, the extension taken from the **bytes**
 (`CoverFile`, as for a cover extracted from a file), through a `.part` and a
-rename. Refused when the folder already has a cover, and refused when the bytes
-are not an image Shelf recognises. The book file is never opened.
+rename. Refused when the bytes are not an image Shelf recognises. The book file
+is never opened.
+
+**It is no longer refused when the folder already has a cover** (Sprint 9,
+[ADR 0020](adr/0020-a-cover-may-be-replaced-and-what-guards-it-instead.md)).
+The download goes down the same path as `Set Cover…` and a dropped picture —
+`CoverReplacement` — so the picture that was there goes to the Trash, the
+generation moves, and ⌘Z puts the old one back. What guards it instead of a
+refusal is the wording and the evidence: the button reads **Replace Cover**
+rather than *Use This Cover*, above a preview of what it would write.
 
 ### What leaves this Mac
 

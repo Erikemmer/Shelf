@@ -2,10 +2,18 @@
 
 **Next step: release v1.0.** What is open is what Erik has to contribute.
 
-Sprints 1–8 are done. `main` is green, **679 core tests** on macOS *and* on
+Sprints 1–**9** are done. `main` is green, **699 core tests** on macOS *and* on
 Linux, **CI is green on all three jobs** including the app build, the version in
 `project.yml` is `1.0.0`, and `make release-dry` builds, signs and zips it. The
 tag `v1.0.0` is **not** set and will not be set without Erik's word.
+
+**Sprint 9 is why this file says 9 and not 8.** Trying the program found the
+most visible hole in the grid: a book's cover could not be changed. It can now,
+four ways, all down one path — the old picture goes to the Trash, ⌘Z puts it
+back, and the grid shows the new one at once, after a restart and after a
+rebuild. The numbers are at the top of `CHANGELOG.md`; the one reversed
+decision is
+[ADR 0020](adr/0020-a-cover-may-be-replaced-and-what-guards-it-instead.md).
 
 **Sprint 8 is why this file says 8 and not 7.** Trying the program found a hole
 in the concept rather than a defect in the code: Shelf could order a collection
@@ -20,7 +28,8 @@ and [ADR 0019](adr/0019-export-the-opf-decides-what-an-export-is.md).
 
 ## What Erik has to do, and nobody else can
 
-**Two things.** Everything else that used to be on this list has been done.
+**Three things**, one of which is only a judgement. Everything else that used to
+be on this list has been done.
 
 ### 1. A Developer ID certificate, and a notarytool profile
 
@@ -37,7 +46,28 @@ exist, `make release` runs the whole path and steps 6 and 7 stop being skipped.
 `make release-dry` proves everything up to that point, and is run before every
 release-shaped commit.
 
-### 2. The things only real hardware and real books can answer
+### 2. Four things about covers that only you can judge
+
+None of these is a defect. They are decisions that were made for you and are
+cheap to reverse.
+
+- **The size ceiling is 1 600 px on the long edge.** Reasoned from the
+  pipeline's own numbers — 1.6 × the largest tier it ever decodes (ADR 0005) —
+  and not from looking at covers on your screen. It is one constant in
+  `CoverImageRule`. A 3 200 × 4 800 photograph comes down to 1 067 × 1 600 and
+  46 KB; if that looks soft to you on a large display, raise it.
+- **`Download Cover…` may now replace a cover you put there yourself.** Sprint 6
+  refused this on purpose and ADR 0020 reverses it. The guard is that the
+  button says *Replace Cover* over a preview, the old file is in the Trash and
+  ⌘Z works. **Look at that button in both languages and say whether it warns
+  you enough.**
+- **A cover cannot be set for a multiple selection**, deliberately. If you want
+  it, it wants its own confirmation — it is one picture onto many books.
+- **`Take Cover from Book File` was more than you asked for.** It stays, but
+  it is the one part of this sprint nobody specified, so it is the one most
+  worth your disagreement.
+
+### 3. The things only real hardware and real books can answer
 
 All of these are in `docs/BACKLOG.md` with what each would settle:
 

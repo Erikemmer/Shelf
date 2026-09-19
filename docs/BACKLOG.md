@@ -635,3 +635,61 @@ than claimed:
       the one deliberate regression against Selector's behaviour.
 
 `Scripts/proof-run.sh` measures everything that does *not* need the window.
+
+## Sprint 9 – a cover can be changed · done
+
+Not in CONCEPT §11. It came out of using the program: the cover was the one
+thing about a book that could not be corrected, which for a library manager is
+the most visible hole in the grid.
+
+- [x] **`Set Cover…`** from the open panel (PNG, JPEG, HEIC, TIFF, GIF, WebP),
+      and a picture **dropped on the cover** in the inspector — from the Finder
+      as a file, or out of a web page as bytes
+- [x] **`Take Cover from Book File`**, again: EPUB/MOBI/AZW3 through the reader
+      the import uses, a PDF as page 1 rendered, a CBZ as its first image. A
+      book with several formats is *asked* which, because an EPUB and a PDF of
+      one book carry two different pictures
+- [x] **`Download Cover…` over an existing cover**, which Sprint 6 refused
+      ([ADR 0020](adr/0020-a-cover-may-be-replaced-and-what-guards-it-instead.md))
+- [x] **`Book.coverGeneration`** in `metadata.opf` and in the index
+      (migration `v3-cover-generation`), which is what makes the grid and the
+      inspector show the new picture at once, after a restart, and after
+      `Rebuild Index from Folders`
+- [x] **The old picture goes to the Trash** and ⌘Z puts it back, byte for byte;
+      undoing the *first* cover on a book takes the file away again
+- [x] **A size ceiling**, `CoverImageRule.maxEdgePixels` = 1 600 px, so a
+      photograph from a camera does not land beside an 800 KB book at 40 MB.
+      A cover already within it and in a format a book folder can name is
+      written **byte for byte**
+
+### What Sprint 9 found on the way
+
+- [x] **`coverRefreshRequest` had no reader at all.** A cover fetched from the
+      net since Sprint 6 changed the folder, and the inspector went on drawing
+      what it held until the selection moved
+- [x] **The grid cell's task key was book-and-size**, so a replaced cover never
+      made the cell ask again
+- [x] **Only the first `cover.*` was displaced.** A folder holding `cover.jpg`
+      beside `cover.jpeg` kept the second, and `jpeg` is searched before `png`
+
+### What Sprint 9 deliberately did not do
+
+- [ ] **A cover for a multiple selection.** Every other text field in the
+      inspector is locked across a selection for the reason in `lockedBlock` —
+      a value typed once into twelve books is not an edit but a mistake with
+      twelve copies — and a cover is the strongest case of that, not the
+      weakest. If it is ever wanted it is *one picture onto many books*, which
+      is a different gesture and wants its own confirmation
+- [ ] **`Remove Cover` as a menu item.** The core can do it
+      (`CoverReplacement.remove`) because undo needs it; nothing offers it,
+      because nobody asked for it
+- [ ] **Tests for the picture half.** `CoverImage` — measuring a file, scaling
+      it, writing it again as JPEG, and therefore everything specific to HEIC
+      and TIFF — needs ImageIO, so it cannot run in `ShelfCoreTests`, which is
+      the target that runs on Linux and the only test target this project has.
+      What *is* tested is the rule it carries out (`CoverImageRule`, six tests
+      on both platforms). What is not tested is the carrying out, and the only
+      evidence for it is a run of `Scripts/cover-shot.sh`, which checks the
+      pixel sizes it produced against the disk. **An app-side test target would
+      fix this and is the honest answer**; it would be the first one in the
+      project.

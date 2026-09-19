@@ -20,6 +20,8 @@
 │            ImportModel (@MainActor: the sheet's own state)    │
 │            CoverLoader (actor: cache + dedupe only)           │
 │            CoverDecoder (ImageIO, pure, runs detached)        │
+│            CoverImage (ImageIO: measures a picture somebody   │
+│              chose, and carries out CoverImageRule's answer)  │
 │            CoverDiskCache (actor, inside the library)         │
 │            CoverWarmer (rings around the selection)           │
 │            RecentLibrariesStore (security-scoped bookmarks)   │
@@ -184,10 +186,43 @@ once per open, and `Shelf ▸ Clear Cover Cache` names its current size.
 after a sprint of "why is the second open slow"; with 8 000 books that is the
 difference between a usable app and an unusable one (CONCEPT §13).
 
-Scrolling is noticed through cells appearing rather than through
-`onScrollPhaseChange`, which needs macOS 15 while Shelf targets 14 — a cell only
-comes into existence when the grid scrolls or the window resizes, which is
-exactly the signal wanted.
+Scrolling is **not** noticed at all, and that is a decision rather than an
+omission. `onScrollPhaseChange` needs macOS 15 while Shelf targets 14; cell
+appearance was used instead and turned out to be a feedback loop — the warmer
+finished a cover, the footer's progress invalidated the sidebar, the grid
+re-laid out, cells appeared, that counted as an interaction and warming stopped.
+What pauses warming is what the user actually does: moving the selection,
+dragging the slider, typing in the search field. The measurement and the two
+faults it found are in
+[ADR 0005](adr/0005-cover-pipeline.md).
+
+### Changing a cover (Sprint 9)
+
+A cover change is two writes — `metadata.opf` and a file beside it — and the
+split between the core and the window is the same one `EmptiedFolder` has from
+`FolderDisposal`: **the core decides, the window measures and converts.**
+
+| | where | does |
+|---|---|---|
+| `CoverImageRule` | core | *decides*: may these bytes be written as they are, or re-encoded to what long edge. Pure, no image code, tested on Linux. |
+| `CoverImage` | `App/Shelf` | *measures* the picture with ImageIO and carries the decision out. The only part that needs a Mac. |
+| `CoverReplacement` | core | writes the file: `.part` first, then every `cover.*` in the folder to `FolderDisposal`, then the rename. Answers the new generation. |
+| `LibraryModel.applyCover` | `App/Shelf` | the one path all four ways in go down — file, drop, book file, net — with the undo and the order. |
+
+The core never opens an image. It knows a magic number (`CoverFile`) and a
+ceiling (`CoverImageRule.maxEdgePixels`, 1 600 px, which is 1.6× the largest
+tier the pipeline ever decodes), and that is the whole of what it knows about
+pictures. Everything that would need ImageIO — how many pixels this file has,
+how to make it smaller — is in `CoverImage`, and the Linux CI job is the guard
+rail that keeps it there.
+
+**The number is written before the picture**, and awaited. The two orders fail
+differently: number-first leaves the book claiming a generation for a picture
+that has not arrived, so the cache *misses*, decodes what is really there and
+shows it correctly at the cost of one decode; picture-first leaves the cache
+*hitting* a thumbnail of a picture that is gone, and `Rebuild Index from
+Folders` brings it back. Bytes that were never an image are refused before
+either write.
 
 ## Data flow: adding books
 
