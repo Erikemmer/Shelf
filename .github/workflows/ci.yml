@@ -28,7 +28,8 @@ jobs:
       - run: swift test
 
   # The same core on the platform Shelf ships on. `ShelfCore` has no dependency
-  # on SlateKit, so this needs no credentials and always runs.
+  # on SlateKit at all, which is why it could be trusted while the app build
+  # was being skipped.
   core-macos:
     name: ShelfCore tests (macOS)
     runs-on: macos-15
@@ -39,39 +40,30 @@ jobs:
       - run: swift --version
       - run: swift test
 
-  # The app needs SlateKit, which is a *private* repository, so this job can
-  # only run with credentials for it. Rather than fail every run with a
-  # misleading red, it says loudly why it skipped. Either add a
-  # `SLATEKIT_TOKEN` secret (a fine-grained token with read access to
-  # Erikemmer/SlateKit) or make SlateKit public – see docs/HANDOFF.md.
+  # The app, built the way `make app` builds it. SlateKit is a public package
+  # now (Erikemmer/SlateKit), so this needs no credentials and no `insteadOf`
+  # rewrite — SwiftPM resolves it over plain HTTPS like any other dependency.
+  #
+  # It used to gate itself on a `SLATEKIT_TOKEN` secret and skip with a warning
+  # when there was none, which meant it had never actually run: from Sprint 1
+  # to Sprint 8 the only thing guarding the *window* was a build on Erik's own
+  # Mac. Unsigned, because a runner has no Developer ID and this job asks
+  # "does it compile and link", not "is it shippable" — `Scripts/release.sh`
+  # is what asks the second question.
   app-macos:
     name: App build (macOS)
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Can SlateKit be reached?
-        id: access
-        env:
-          TOKEN: ${{ secrets.SLATEKIT_TOKEN }}
-        run: |
-          if [ -z "$TOKEN" ]; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=App build skipped::SlateKit is private and no SLATEKIT_TOKEN secret is set, so the app was not built. The core tests still gate this run. Add the secret or make SlateKit public – docs/HANDOFF.md."
-          else
-            echo "available=true" >> "$GITHUB_OUTPUT"
-            git config --global url."https://x-access-token:$TOKEN@github.com/".insteadOf "https://github.com/"
-          fi
       - name: Select Xcode
-        if: steps.access.outputs.available == 'true'
         run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s /Applications/Xcode.app
       - name: Install XcodeGen
-        if: steps.access.outputs.available == 'true'
         run: brew install xcodegen
+      # The project is generated from project.yml and is not in the repository
+      # (CLAUDE.md), so it has to be made here before anything can build it.
       - name: Generate the project
-        if: steps.access.outputs.available == 'true'
         run: xcodegen generate
       - name: Build app (unsigned)
-        if: steps.access.outputs.available == 'true'
         run: >
           xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Debug
           CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
