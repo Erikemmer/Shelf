@@ -6,6 +6,8 @@ shows and what was measured; this file is only about the **language**.
 
 **This run found a defect, and it is exactly the kind only a German run can
 find.** It is fixed in `c4fd660` and these pictures are from after the fix.
+`13-after-redo.jpg` and `13-edit-menu.jpg` were added later, once ⇧⌘Z itself
+was fixed, and are from a second run at the head of this branch.
 
 ---
 
@@ -41,6 +43,13 @@ ISBN, Schlagwörter**.
 - **The sidebar count** (`9-first-cover.jpg`): *Ohne Cover* goes 2 → 1 and back
   to 2 on ⌘Z. The count line is German, which it was not before Sprint 8's
   closing run.
+- **The Edit menu after ⇧⌘Z** (`13-edit-menu.jpg`): *Cover widerrufen*
+  (enabled), *Wiederholen* (disabled) — "Cover" is not repeated in the German
+  word for Redo, because German capitalises the *label* for Undo
+  (`MetadataChange.Field.cover.label`, "Cover") but "Wiederholen" alone is the
+  system's own word for the disabled Redo item and carries no field name at
+  all. That is macOS's own menu text, not Shelf's, and it is the same in
+  English: a disabled "Redo" names nothing either.
 
 ## What is still English, and is not this sprint's
 

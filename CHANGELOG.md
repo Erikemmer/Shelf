@@ -42,7 +42,7 @@ different things. The Edit menu reads **Undo Cover**.
 
 | | |
 |---|---|
-| tests | **699**, from 679 — 23 added, 3 deleted with `OnlineCover` |
+| tests | **701**, from 679 — 25 added, 3 deleted with `OnlineCover` |
 | a 3 200 × 4 800 PNG set as a cover | → `cover.jpg`, **1 067 × 1 600, 46 KB** (from 271 KB) |
 | a 900 × 600 JPEG, under the ceiling | written **byte for byte identical**, 23 KB |
 | `Take Cover from Book File` → PDF | page 1 at **666 × 1 000**, 18 KB |
@@ -112,6 +112,51 @@ A cover for a multiple selection, and a `Remove Cover` menu item. Both are in
 Twelve pictures in each language, `docs/screenshots/sprint-9/` and `de/`, each
 one judged in its README and each claim checked against the disk rather than
 against the picture. `Scripts/cover-shot.sh` is the run.
+
+### Fixed — ⇧⌘Z did nothing for a cover
+
+Found by suspicion, not by a screenshot: set a cover, ⌘Z, and the Edit menu
+read a disabled "Redo" instead of "Redo Cover" — a second ⌘Z replayed the
+change forward again rather than doing nothing or a real redo. The cause was
+`registerUndo` being called from inside `Task { await model.applyCover(...) }`,
+which returns before that call ever runs, by which time AppKit's `isUndoing`
+has already gone back to false; a `registerUndo` made after that point always
+lands back on the undo stack, however it got there. `apply(_ change:)`, the
+metadata path, already registers synchronously and fires its write in a
+detached `Task` afterward — `applyCover` now does the same, split into an
+awaited entry point and a synchronous one `registerUndo`'s closure calls
+directly (`performCoverUndo`).
+
+Verified by driving the real window before and after: the Edit menu now reads
+**Redo Cover**, enabled, and a full round trip (⌘Z, ⇧⌘Z, ⌘Z again) alternates
+**Undo Cover** / **Redo** correctly. `docs/screenshots/sprint-9/13-after-redo.jpg`
+and `13-edit-menu.jpg` are that proof, added to the existing set.
+
+### Fixed — a failed picture write left the generation bumped for nothing
+
+The generation is written before the picture on purpose (see "How it is
+built" above), but nothing put it back if the *picture* write then failed —
+a disposal that cannot move the old cover, a full disk. `metadata.opf` would
+go on claiming a replacement that never happened: harmless to the window (the
+cache miss it forces just re-decodes the unchanged file) but a small,
+permanent lie in the one file that is supposed to be the truth about the
+book. Fixed by writing the generation back down when the picture write
+throws — `CoverReplacement.commit`, pulled into the core specifically so the
+three-step sequence (bump, try the picture, revert on failure) could be
+tested rather than only asserted. Two tests.
+
+### Fixed — a script could end a Shelf it did not start
+
+`make smoke` quit a Shelf that was already running and was not its own —
+CLAUDE.md rule 6, and the session that found it said so at the time. The
+cause was not unique to `smoke.sh`: nine scripts tried to make an existing
+instance go away (Escape, then repeated `quit`) on the assumption that the
+only Shelf which could be running is a leftover from an earlier run of the
+same script — which `pgrep` cannot tell apart from a window opened on
+purpose. All eighteen scripts that launch the app now share one guard,
+`Scripts/no-foreign-shelf.sh`, that refuses outright and names the pid
+instead of trying anything. Verified directly: with a Shelf started by hand,
+`make smoke` failed immediately and left it running, untouched.
 
 ### What is not tested
 

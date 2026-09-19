@@ -3,10 +3,11 @@
 Taken by `Scripts/cover-shot.sh` against the seven-book library
 `Scripts/cover-library.sh` builds, plus — for the two download pictures — the
 twelve-book library `Scripts/online-library.sh` builds, whose books carry real
-ISBNs. 19 September 2026, window at 1440 × 877, commit `c4fd660`.
-**English here and German in `de/`** — the same script run twice, with
-`SHELF_SHOT_LANGUAGE=de` picking the German names out of one table
-(`Scripts/app-language.sh`).
+ISBNs. 19 September 2026, window at 1440 × 877 — first at commit `c4fd660`,
+then again after the redo fix (`13-after-redo.jpg`, `13-edit-menu.jpg`) at the
+head of this branch. **English here and German in `de/`** — the same script
+run twice, with `SHELF_SHOT_LANGUAGE=de` picking the German names out of one
+table (`Scripts/app-language.sh`).
 
 **Every claim under a picture was checked against the disk, not against the
 picture.** The run reads the book's folder and its `metadata.opf` after each
@@ -15,8 +16,12 @@ should be — because a screenshot of a window drawing a cached thumbnail looks
 exactly like a screenshot of a window drawing the right file. The numbers below
 are the run's own output.
 
-**Looking at them found two defects that no test had**, both fixed in
-`c4fd660` and both described where they were found.
+**Looking at them found two defects that no test had** (the grid cell after
+⌘Z, and the German field labels in the download sheet), both fixed in
+`c4fd660` and both described where they were found. A third — ⇧⌘Z landing on
+the wrong stack — was found by suspicion and a manual check before any
+screenshot existed for it; `13-after-redo.jpg` and `13-edit-menu.jpg` are that
+proof, added afterward.
 
 ---
 
@@ -87,6 +92,40 @@ generation before the picture, and writing it is what invalidates the view, so
 the cell woke while the old file was still on disk and was never woken again.
 The grid now watches `coverRefreshRequest`, which is bumped once everything is
 done. Nothing but looking at two pictures side by side would have caught it.
+
+## `13-after-redo.jpg` and `13-edit-menu.jpg` — ⇧⌘Z
+
+**Added after the run above — ⇧⌘Z did nothing for a cover until this fix.**
+The cause: `applyCover` registered the redo from inside `Task { await
+model.applyCover(...) }`, which returns before that registration ever runs, by
+which time AppKit's `isUndoing` has already gone back to false. Every redo
+landed on the *undo* stack instead of the redo stack; the Edit menu read a
+disabled "Redo", and a second ⌘Z replayed the change forward again rather than
+doing nothing or a real redo. Fixed by registering synchronously, exactly
+where the metadata path already does it (`apply(_ change:)`).
+
+`13-after-redo.jpg` is not distinguishable from `5-cover-after.jpg` by the
+picture alone — a redo that lands on the wrong stack still shows the right
+picture the *first* time. **Measured: `cover.jpg`, 1 067 × 1 600, 46 KB,
+generation 4** — the same file and pixel size `5-cover-after.jpg` reports, and
+the run asserts they match rather than trusting the screenshot.
+`13-edit-menu.jpg`, cropped from the same moment, is what actually tells the
+two apart: **Undo Cover**, enabled; **Redo**, disabled — the alternating
+pattern a working undo/redo stack produces, not the "Redo" that stayed
+enabled and kept replaying forward under the bug.
+
+**The Trash grows by one on every ⌘Z and every ⇧⌘Z, not only on the first
+replacement.** Undo and redo are not special: each one goes down
+`applyCover` like any other change, and every write of a cover displaces
+whatever was there through `FolderDisposal` — never `removeItem`. Measured
+this run: **246 → 247 items** across one round trip (undo, then redo). A
+library where covers are set and undone often will have a Trash that
+remembers every one of them; that is `FolderDisposal`'s whole point — a
+person can look in the Trash and get any of them back — not a defect in
+this feature.
+
+*Judgement:* right, and this is the picture that proves it rather than
+merely showing it.
 
 ## `7-not-an-image.jpg` — a text file dropped on the cover
 

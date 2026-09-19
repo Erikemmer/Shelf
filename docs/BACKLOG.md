@@ -671,6 +671,17 @@ the most visible hole in the grid.
       made the cell ask again
 - [x] **Only the first `cover.*` was displaced.** A folder holding `cover.jpg`
       beside `cover.jpeg` kept the second, and `jpeg` is searched before `png`
+- [x] **⇧⌘Z did nothing for a cover.** `registerUndo` was called from inside a
+      `Task`, which runs after AppKit's `isUndoing` has already gone back to
+      false, so every redo landed back on the undo stack. Found by suspicion
+      and confirmed by driving the window, not by a test — `LibraryModel` has
+      none of its own
+- [x] **A failed picture write left the generation bumped for nothing.**
+      Fixed by writing it back down (`CoverReplacement.commit`), which is also
+      what gave the fix a test at all
+- [x] **`make smoke` and eight other scripts could end a Shelf they did not
+      start.** One shared guard now (`Scripts/no-foreign-shelf.sh`); it refuses
+      and names the pid instead of trying to make an instance go away
 
 ### What Sprint 9 deliberately did not do
 

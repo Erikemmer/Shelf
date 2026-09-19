@@ -57,6 +57,7 @@ say() { echo "cover-shot: $1"; }
 name_of() {
     if [ "$LANGUAGE" = "de" ]; then
         case "$1" in
+            edit) echo "Bearbeiten" ;;
             setCover) echo "Cover festlegen…" ;;
             takeCover) echo "Cover aus der Buchdatei holen" ;;
             download) echo "Cover herunterladen…" ;;
@@ -72,6 +73,7 @@ name_of() {
         esac
     else
         case "$1" in
+            edit) echo "Edit" ;;
             setCover) echo "Set Cover…" ;;
             takeCover) echo "Take Cover from Book File" ;;
             download) echo "Download Cover…" ;;
@@ -122,6 +124,19 @@ sleep 10
 PID=$(pgrep -x Shelf | head -1)
 [ -n "$PID" ] || fail "Shelf did not start"
 say "pid $PID"
+
+# Only ever the instance this run's own $PID names — never rediscovered by
+# `pgrep -x Shelf`, which by the time this fires could be a *different* Shelf
+# if something else was started in between. Runs on every exit, including a
+# `fail` partway through, so a run that stops early does not leave its own
+# instance behind for the next run's `require_no_foreign_shelf` to trip over.
+cleanup() {
+    [ -n "${PID:-}" ] || return
+    osascript -e 'tell application "Shelf" to quit' >/dev/null 2>&1
+    sleep 2
+    kill -0 "$PID" 2>/dev/null && kill "$PID" 2>/dev/null
+}
+trap 'cleanup; restore_app_language' EXIT
 
 front() {
     osascript -e "tell application \"System Events\" to set frontmost of (first application process whose unix id is $PID) to true" >/dev/null 2>&1
@@ -373,6 +388,45 @@ UNDONE=$(facts_of "$FOLDER")
        came back: $UNDONE"
 say "⌘Z → $UNDONE, generation $(generation_of "$FOLDER") (a generation counts up, never back)"
 shoot 6-after-undo
+
+# ── 4a. ⇧⌘Z puts it forward again ─────────────────────────────────────────────
+# Not obvious from the picture alone that this ever worked: a redo that lands
+# on the *undo* stack instead of the redo stack looks, from a screenshot,
+# exactly like a redo that landed on the redo stack — the picture comes back
+# either way. What actually distinguishes them is the Edit menu (captured
+# below) and a second round trip, which a wrongly-registered redo fails
+# differently. Trash count is read through Finder because `ls ~/.Trash`
+# cannot: TCC hides its contents from a plain directory read.
+TRASH_BEFORE=$(osascript -e 'tell application "Finder" to return count of items of trash' 2>/dev/null)
+front
+sleep 0.5
+osascript -e 'tell application "System Events" to keystroke "z" using {command down, shift down}' >/dev/null 2>&1
+sleep 4
+REDONE=$(facts_of "$FOLDER")
+[ "$REDONE" = "$AFTER" ] || fail "redo did not restore the picture that was undone
+       expected: $AFTER
+       came back: $REDONE"
+say "⇧⌘Z → $REDONE, generation $(generation_of "$FOLDER")"
+shoot 13-after-redo
+TRASH_AFTER=$(osascript -e 'tell application "Finder" to return count of items of trash' 2>/dev/null)
+say "Trash: $TRASH_BEFORE → $TRASH_AFTER items (undo and redo each displace a file; neither one is ever removeItem)"
+# The Edit menu itself, cropped, so "Undo Cover" (not "Redo") after a redo is
+# on the record rather than only asserted in prose.
+front
+sleep 0.3
+EDIT_NAME="$(name_of edit)"
+EDIT_POS=$(osascript -e "tell application \"System Events\" to tell (first application process whose unix id is $PID) to return position of menu bar item \"$EDIT_NAME\" of menu bar 1" 2>/dev/null)
+if [ -n "$EDIT_POS" ]; then
+    EX=$(echo "$EDIT_POS" | cut -d, -f1 | tr -d ' ')
+    EY=$(echo "$EDIT_POS" | cut -d, -f2 | tr -d ' ')
+    osascript -e "tell application \"System Events\" to tell (first application process whose unix id is $PID) to click menu bar item \"$EDIT_NAME\" of menu bar 1" >/dev/null 2>&1
+    sleep 1.2
+    screencapture -o -x -R "$EX,$((EY + 20)),320,90" "/tmp/cover-shot-edit.png" 2>/dev/null
+    sips -s format jpeg -s formatOptions 75 "/tmp/cover-shot-edit.png" --out "$OUT/13-edit-menu.jpg" >/dev/null 2>&1
+    rm -f /tmp/cover-shot-edit.png
+    osascript -e 'tell application "System Events" to key code 53' >/dev/null 2>&1
+    say "13-edit-menu.jpg — the Edit menu right after ⇧⌘Z"
+fi
 
 # ── 5. Something that is not a picture ───────────────────────────────────────
 # Refused before the old cover is touched, and the folder is left exactly as it
