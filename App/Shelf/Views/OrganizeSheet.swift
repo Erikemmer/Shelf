@@ -55,7 +55,7 @@ struct OrganizeSheet: View {
     @ViewBuilder
     private func preview(_ plan: OrganizePlan) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(Loc.core(plan.summary()))
+            Text(plan.summary())
                 .foregroundStyle(Slate.textPrimary)
 
             Text(
@@ -141,7 +141,7 @@ struct OrganizeSheet: View {
 
     private func finished(_ report: OrganizeReport) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(Loc.core(report.headline))
+            Text(report.headline)
                 .foregroundStyle(Slate.textPrimary)
             if !report.emptiedFolders.isEmpty {
                 Text(

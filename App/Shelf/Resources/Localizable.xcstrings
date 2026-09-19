@@ -103,6 +103,23 @@
         }
       }
     },
+    "%1$@ copied · %2$@ hard links": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ kopiert · %2$@ Hardlinks"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ copied · %2$@ hard links"
+          }
+        }
+      }
+    },
     "%1$@ from %2$@": {
       "extractionState": "manual",
       "localizations": {
@@ -842,6 +859,47 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld files an earlier export wrote are no longer wanted and will be taken away": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Datei aus einem früheren Export wird nicht mehr gebraucht und wird entfernt"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Dateien aus einem früheren Export werden nicht mehr gebraucht und werden entfernt"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld file an earlier export wrote is no longer wanted and will be taken away"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld files an earlier export wrote are no longer wanted and will be taken away"
                 }
               }
             }
@@ -1659,6 +1717,23 @@
         }
       }
     },
+    "All": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All"
+          }
+        }
+      }
+    },
     "All Books": {
       "extractionState": "manual",
       "localizations": {
@@ -1829,6 +1904,23 @@
         }
       }
     },
+    "Archive": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archiv"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archive"
+          }
+        }
+      }
+    },
     "Arrow keys move through the books": {
       "extractionState": "manual",
       "localizations": {
@@ -1876,6 +1968,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Author"
+          }
+        }
+      }
+    },
+    "Author / Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autor / Titel"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Author / Title"
           }
         }
       }
@@ -2169,6 +2278,23 @@
         }
       }
     },
+    "Choose an empty folder, or one an earlier export wrote.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wählen Sie einen leeren Ordner oder einen, in den schon einmal exportiert wurde."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose an empty folder, or one an earlier export wrote."
+          }
+        }
+      }
+    },
     "Choose another file for this book. It is copied in beside the ones that are there; nothing is written over.": {
       "extractionState": "manual",
       "localizations": {
@@ -2267,6 +2393,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Choose your Calibre library – the folder that holds metadata.db. Shelf only reads it."
+          }
+        }
+      }
+    },
+    "Choose…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wählen…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose…"
           }
         }
       }
@@ -3070,6 +3213,108 @@
         }
       }
     },
+    "Everything Archive writes, plus the two things Calibre cannot read: each shelf becomes a tag like “Shelf/Fiction/Sci-Fi”, and a book that has been read gets the tag “Read”. That is a mapping, not the real fields — Shelf's own are still written beside them and Calibre still ignores those.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles, was „Archiv“ schreibt, dazu die zwei Dinge, die Calibre nicht lesen kann: Jedes Regal wird zu einem Tag wie „Shelf/Fiction/Sci-Fi“, und ein gelesenes Buch bekommt den Tag „Read“. Das ist eine Abbildung und nicht das echte Feld – Shelfs eigene Felder werden daneben weiter geschrieben, und Calibre ignoriert sie weiterhin."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Everything Archive writes, plus the two things Calibre cannot read: each shelf becomes a tag like “Shelf/Fiction/Sci-Fi”, and a book that has been read gets the tag “Read”. That is a mapping, not the real fields — Shelf's own are still written beside them and Calibre still ignores those."
+          }
+        }
+      }
+    },
+    "Everything: the book files, the covers and a metadata.opf each. This can be imported back into Shelf with nothing lost.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles: die Buchdateien, die Cover und je eine metadata.opf. Das lässt sich verlustfrei wieder in Shelf importieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Everything: the book files, the covers and a metadata.opf each. This can be imported back into Shelf with nothing lost."
+          }
+        }
+      }
+    },
+    "Export": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export"
+          }
+        }
+      }
+    },
+    "Export Here": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hierhin exportieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Here"
+          }
+        }
+      }
+    },
+    "Export Library…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bibliothek exportieren…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Library…"
+          }
+        }
+      }
+    },
+    "Export Selected Books…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgewählte Bücher exportieren…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Selected Books…"
+          }
+        }
+      }
+    },
     "Fetch Metadata": {
       "extractionState": "manual",
       "localizations": {
@@ -3223,6 +3468,23 @@
         }
       }
     },
+    "For Calibre": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für Calibre"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For Calibre"
+          }
+        }
+      }
+    },
     "Format": {
       "extractionState": "manual",
       "localizations": {
@@ -3338,6 +3600,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Hands the file to Books, Preview or whatever reads it (↩)"
+          }
+        }
+      }
+    },
+    "Hard links where possible": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hardlinks, wo möglich"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hard links where possible"
           }
         }
       }
@@ -3525,6 +3804,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Inspector"
+          }
+        }
+      }
+    },
+    "Into": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Into"
+          }
+        }
+      }
+    },
+    "Just the books": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur die Bücher"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Just the books"
           }
         }
       }
@@ -4097,6 +4410,23 @@
         }
       }
     },
+    "Name pattern": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Namensmuster"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name pattern"
+          }
+        }
+      }
+    },
     "Navigate": {
       "extractionState": "manual",
       "localizations": {
@@ -4416,6 +4746,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "No device is connected."
+          }
+        }
+      }
+    },
+    "No folder chosen yet": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch kein Ordner gewählt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No folder chosen yet"
           }
         }
       }
@@ -4930,6 +5277,23 @@
         }
       }
     },
+    "On the same disk a link costs no space at all. Safe because Shelf never writes a book file. Across disks it is a copy.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf derselben Platte kostet ein Link überhaupt keinen Platz. Unbedenklich, weil Shelf nie eine Buchdatei schreibt. Über Plattengrenzen hinweg wird kopiert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On the same disk a link costs no space at all. Safe because Shelf never writes a book file. Across disks it is a copy."
+          }
+        }
+      }
+    },
     "On “%@”": {
       "extractionState": "manual",
       "localizations": {
@@ -4943,6 +5307,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "On “%@”"
+          }
+        }
+      }
+    },
+    "One flat folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein flacher Ordner"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One flat folder"
           }
         }
       }
@@ -6783,6 +7164,23 @@
         }
       }
     },
+    "Structure": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Struktur"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Structure"
+          }
+        }
+      }
+    },
     "Table": {
       "extractionState": "manual",
       "localizations": {
@@ -6885,6 +7283,23 @@
         }
       }
     },
+    "The book files alone. The rating, the read status, the tags and the shelves will not go with them — they live in the metadata.opf, and that is not written.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur die Buchdateien. Bewertung, Gelesen-Status, Tags und Regale gehen nicht mit – sie stehen in der metadata.opf, und die wird nicht geschrieben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The book files alone. The rating, the read status, the tags and the shelves will not go with them — they live in the metadata.opf, and that is not written."
+          }
+        }
+      }
+    },
     "The books stay in the library. Only the shelf goes.": {
       "extractionState": "manual",
       "localizations": {
@@ -6970,6 +7385,40 @@
         }
       }
     },
+    "The full report is in Shelf-Export-Report.txt in that folder.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der vollständige Bericht steht als „Shelf-Export-Report.txt“ in diesem Ordner."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The full report is in Shelf-Export-Report.txt in that folder."
+          }
+        }
+      }
+    },
+    "The last export into this folder used different options, so all of it is written again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der letzte Export in diesen Ordner benutzte andere Einstellungen, deshalb wird alles neu geschrieben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The last export into this folder used different options, so all of it is written again."
+          }
+        }
+      }
+    },
     "The name of the identifier – ISBN, ASIN, DOI, Goodreads": {
       "extractionState": "manual",
       "localizations": {
@@ -6983,6 +7432,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "The name of the identifier – ISBN, ASIN, DOI, Goodreads"
+          }
+        }
+      }
+    },
+    "The name pattern has no {title} or {author} in it, so every book would be called the same thing.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Namensmuster steht weder {title} noch {author}, also hieße jedes Buch gleich."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The name pattern has no {title} or {author} in it, so every book would be called the same thing."
+          }
+        }
+      }
+    },
+    "The rating, the read status, the tags and the shelves are not in this folder. They live in the metadata.opf, which was not written.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bewertung, Gelesen-Status, Tags und Regale sind nicht in diesem Ordner. Sie stehen in der metadata.opf, und die wurde nicht geschrieben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The rating, the read status, the tags and the shelves are not in this folder. They live in the metadata.opf, which was not written."
           }
         }
       }
@@ -7204,6 +7687,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "This list"
+          }
+        }
+      }
+    },
+    "Tick at least one format, or nothing will be written.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haken Sie mindestens ein Format an, sonst wird nichts geschrieben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tick at least one format, or nothing will be written."
           }
         }
       }
@@ -7769,6 +8269,23 @@
         }
       }
     },
+    "cover.jpg": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cover.jpg"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cover.jpg"
+          }
+        }
+      }
+    },
     "create a library at %@": {
       "extractionState": "manual",
       "localizations": {
@@ -7799,6 +8316,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "empty removes it from metadata.opf"
+          }
+        }
+      }
+    },
+    "export the library": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "die Bibliothek zu exportieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "export the library"
           }
         }
       }
@@ -7922,6 +8456,23 @@
         }
       }
     },
+    "metadata.opf": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "metadata.opf"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "metadata.opf"
+          }
+        }
+      }
+    },
     "move the folders": {
       "extractionState": "manual",
       "localizations": {
@@ -7935,6 +8486,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "move the folders"
+          }
+        }
+      }
+    },
+    "none of its formats was chosen": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "keines seiner Formate wurde gewählt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "none of its formats was chosen"
           }
         }
       }
@@ -8109,6 +8677,74 @@
         }
       }
     },
+    "something is already there, and it is not empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dort liegt schon etwas, und es ist nicht leer"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "something is already there, and it is not empty"
+          }
+        }
+      }
+    },
+    "the book's folder is not where the index says it is": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "der Ordner des Buchs liegt nicht dort, wo der Index ihn vermutet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "the book's folder is not where the index says it is"
+          }
+        }
+      }
+    },
+    "the file is not in the library folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "die Datei liegt nicht im Bibliotheksordner"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "the file is not in the library folder"
+          }
+        }
+      }
+    },
+    "the first author": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "der erste Autor"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "the first author"
+          }
+        }
+      }
+    },
     "the folder for “%@” could not be created.": {
       "extractionState": "manual",
       "localizations": {
@@ -8160,6 +8796,57 @@
         }
       }
     },
+    "the library's own running number": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "die laufende Nummer der Bibliothek"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "the library's own running number"
+          }
+        }
+      }
+    },
+    "the name would be too long for this file system": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "der Name wäre für dieses Dateisystem zu lang"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "the name would be too long for this file system"
+          }
+        }
+      }
+    },
+    "the number in the series, or nothing": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "die Nummer in der Serie, oder nichts"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "the number in the series, or nothing"
+          }
+        }
+      }
+    },
     "the same book twice in this import": {
       "extractionState": "manual",
       "localizations": {
@@ -8177,6 +8864,23 @@
         }
       }
     },
+    "the series name, or nothing": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "der Serienname, oder nichts"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "the series name, or nothing"
+          }
+        }
+      }
+    },
     "the service": {
       "extractionState": "manual",
       "localizations": {
@@ -8190,6 +8894,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "the service"
+          }
+        }
+      }
+    },
+    "the title": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "der Titel"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "the title"
           }
         }
       }
@@ -8224,6 +8945,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "this CBR could not be opened – %@"
+          }
+        }
+      }
+    },
+    "two books want folders that differ only in capitals, which is one folder here": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zwei Bücher wollen Ordner, die sich nur in der Groß-/Kleinschreibung unterscheiden – hier ist das ein Ordner"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "two books want folders that differ only in capitals, which is one folder here"
+          }
+        }
+      }
+    },
+    "two books want this same folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zwei Bücher wollen denselben Ordner"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "two books want this same folder"
           }
         }
       }

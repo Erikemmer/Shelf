@@ -18,6 +18,24 @@ and does it with the quiet and the speed Selector has for photographs.
 * **Copy, verify, then trust.** Every file copied in is hashed on both sides
   before it counts as taken over.
 * **A Calibre library is only ever read**, byte for byte unchanged.
+* **Your library can leave.** `File ▸ Export Library…` writes it out as an
+  ordinary folder of files — with the covers and a `metadata.opf` each, so it
+  can be imported back into Shelf, or into Calibre, with nothing lost. A second
+  run into the same folder writes only what has changed.
+
+  **The honest sentence about the way back to Calibre:** Shelf writes Calibre's
+  own schema, so the title, the authors, the publisher, the date, the language,
+  the description, the tags, the identifiers, the series and its index, the
+  rating, the sort title and the cover all come across. Two things do **not**:
+  the **read status** and the **shelves**. Shelf stores those as
+  `<meta name="shelf:read">` and `<meta name="shelf:shelves">`, and Calibre
+  ignores a meta it does not know — which is what makes them safe to write
+  into a library Calibre also reads, and why they stay behind. Nothing is lost:
+  they are there in plain text for anything that cares to look. Use the
+  **"For Calibre"** export if you want them to arrive: it writes the same files
+  and additionally maps each shelf to a tag (`Shelf/Fiction/Sci-Fi`) and a read
+  book to the tag `Read`. That is a mapping, not the real fields, and the
+  dialogue says so.
 * **DRM is detected and then left alone.** Never removed, never worked around.
 * **Nothing from the net is taken over without being ticked.** ⌘E asks Open
   Library and Google Books, shows every field old beside new **with the service

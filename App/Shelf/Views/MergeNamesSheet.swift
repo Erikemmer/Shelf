@@ -159,7 +159,7 @@ struct MergeNamesSheet: View {
         } else {
             // The count is computed from the very value the button executes,
             // so what is promised and what happens cannot differ.
-            Text(Loc.core(model.plan(for: merge).summary()))
+            Text(model.plan(for: merge).summary())
                 .font(.caption)
                 .foregroundStyle(Slate.textSecondary)
         }

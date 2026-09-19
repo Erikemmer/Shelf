@@ -1667,6 +1667,71 @@ final class LibraryModel {
         }
     }
 
+    // MARK: Exporting (Sprint 8)
+
+    enum ExportPhase: Equatable {
+        case choosing
+        case planning
+        case ready(ExportPlan)
+        case running(ExportRunner.Progress)
+        case done(ExportReport)
+    }
+
+    var exportPhase: ExportPhase?
+    /// Where it would go. Chosen through an open panel, so the sandbox lets
+    /// Shelf write there.
+    var exportDestination: URL?
+    var exportOptions = ExportPreset.archive.options
+    /// Whether only the selected books go, rather than the whole library.
+    var exportsSelectionOnly = false
+
+    func beginExport(selectionOnly: Bool) {
+        exportsSelectionOnly = selectionOnly && !selectedEntries.isEmpty
+        exportPhase = .choosing
+    }
+
+    /// What would be written. Asked again whenever an option changes, because
+    /// the count under the button has to be the count the button executes.
+    func planExport() async {
+        guard let library, let destination = exportDestination else { return }
+        exportPhase = .planning
+        let entries = exportsSelectionOnly ? selectedEntries : self.entries
+        let options = exportOptions
+        let root = library.root
+        let plan = await Task.detached(priority: .userInitiated) {
+            ExportPlanner.plan(
+                entries: entries, libraryRoot: root, options: options,
+                manifest: ExportManifest.read(at: destination))
+        }.value
+        exportPhase = .ready(plan)
+    }
+
+    func runExport(_ plan: ExportPlan) {
+        guard let library, let destination = exportDestination else { return }
+        exportPhase = .running(
+            ExportRunner.Progress(
+                filesDone: 0, filesTotal: plan.toWrite.count, bytesDone: 0,
+                bytesTotal: plan.bytesToWrite, currentTitle: ""))
+        let name = library.name
+        Task {
+            let onProgress: @Sendable (ExportRunner.Progress) -> Void = { [weak self] progress in
+                Task { @MainActor in self?.exportPhase = .running(progress) }
+            }
+            do {
+                let outcome = try await Task.detached(priority: .userInitiated) {
+                    try await ExportRunner(makeHasher: SHA256Hasher.factory)
+                        .run(
+                            .init(destination: destination, plan: plan, libraryName: name),
+                            manifest: ExportManifest.read(at: destination), progress: onProgress)
+                }.value
+                exportPhase = .done(outcome.report)
+            } catch {
+                exportPhase = nil
+                show(error, doing: Loc.string("export the library"))
+            }
+        }
+    }
+
     /// Why this book is in *Duplicates*, in one line — or nothing when it is
     /// not. The best-founded rule when several matched: identical bytes is a
     /// fact and identical title-and-author is a guess, and the guess is the one

@@ -123,9 +123,9 @@ UI zuerst Englisch, Deutsch in Sprint 7 (wie Selector). Bezeichner Englisch.
   stehen können
 - **Export einer Auswahl oder der ganzen Bibliothek als Ordner** (Kopie), mit
   wählbaren Formaten, Struktur (`Autor/Titel/` oder flach), Namensmuster und je
-  einem Schalter für `cover.jpg` und `metadata.opf`. Vier Voreinstellungen:
+  einem Schalter für `cover.jpg` und `metadata.opf`. Drei Voreinstellungen:
   **Archiv** (alles, wieder importierbar), **Nur die Bücher** (reine Dateien,
-  mit sichtbarem Hinweis, was dabei zurückbleibt), **Für Calibre** (wie Archiv,
+  mit sichtbarem Hinweis, was dabei zurückbleibt) und **Für Calibre** (wie Archiv,
   zusätzlich Regale und Gelesen-Status als Calibre-Tags, weil Calibre eine
   unbekannte `<meta>` ignoriert). Zählprotokoll vorher, Bericht nachher; ein
   zweiter Lauf schreibt nur die Unterschiede und liest nie zurück (ADR 0019)

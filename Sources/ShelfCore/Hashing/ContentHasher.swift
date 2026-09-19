@@ -46,6 +46,17 @@ public enum FileDigest {
         case cannotRead(String)
     }
 
+    /// The digest of bytes already in memory.
+    ///
+    /// For the one thing in this program that is hashed before it exists as a
+    /// file: the OPF text an export renders, whose digest is what tells the
+    /// next run whether the metadata has changed since.
+    public static func sha256(of data: Data, makeHasher: HasherFactory) -> String {
+        let hasher = makeHasher()
+        hasher.update(data)
+        return hasher.finish()
+    }
+
     public static func sha256(of url: URL, makeHasher: HasherFactory) throws -> String {
         guard let handle = FileHandle(forReadingAtPath: url.path) else {
             throw Failure.cannotRead(url.lastPathComponent)

@@ -84,6 +84,13 @@ struct ContentView: View {
         ) {
             OrganizeSheet().environment(model)
         }
+        .sheet(
+            isPresented: Binding(
+                get: { model.exportPhase != nil },
+                set: { if !$0 { model.exportPhase = nil } })
+        ) {
+            ExportSheet().environment(model)
+        }
         .onAppear {
             editingKeys.start(handleWindowKey)
             focus = model.focusTarget

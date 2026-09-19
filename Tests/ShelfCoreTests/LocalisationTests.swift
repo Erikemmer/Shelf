@@ -164,6 +164,14 @@ struct LocalisationTests {
         // `String.localizedStringWithFormat` like every other count.
         for kind in NameKind.allCases { all += [kind.label, kind.pluralLabel] }
         all += NameMerge.allActionNames
+        all += BlockedBook.Reason.allCases.map(\.label)
+        all += ExportPreset.allCases.map(\.label)
+        all += ExportPreset.allCases.map(\.explanation)
+        all += ExportOptions.Structure.allCases.map(\.label)
+        all += SkippedExport.Reason.allCases.map(\.label)
+        all += NamePattern.Token.allCases.map(\.explanation)
+        all.append(ExportOptions(formats: []).refusal ?? "")
+        all.append(ExportOptions(namePattern: "x").refusal ?? "")
         for kind in NameKind.allCases {
             all.append(NameMerge(kind: kind, sources: ["x"], target: "").refusal ?? "")
             all.append(NameMerge(kind: kind, sources: [], target: "y").refusal ?? "")

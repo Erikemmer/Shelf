@@ -107,6 +107,13 @@ struct ShelfApp: App {
             // The reason most people will open Shelf at all (CONCEPT §7).
             Button(Loc.string("Import from Calibre…")) { model.presentCalibrePanel() }
                 .shortcut(.importFromCalibre)
+            Divider()
+            // The way out. A library that cannot leave is a library nobody
+            // should put ten years into (Leitlinie, principle 3).
+            Button(Loc.string("Export Library…")) { model.beginExport(selectionOnly: false) }
+                .disabled(model.library == nil)
+            Button(Loc.string("Export Selected Books…")) { model.beginExport(selectionOnly: true) }
+                .disabled(model.library == nil || model.selectedEntries.isEmpty)
             // ⌘E, the shortcut sheet has said so since Sprint 1. It asks; it
             // writes nothing until a person has agreed field by field.
             Button(Loc.string("Fetch Metadata…")) { model.presentFetchMetadata() }

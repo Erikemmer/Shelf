@@ -131,6 +131,17 @@ let usage = """
                                     manifest it can be undone from
       organize-undo <library>       put every folder the manifest names back
                                     where it came from, verified the same way
+      export <library> <destination> [archive|books|calibre] [--flat] [--links]
+                                    write the library out as an ordinary folder
+                                    of files. `archive` can be imported back
+                                    with nothing lost, `books` is the book
+                                    files alone, `calibre` adds the shelves and
+                                    the read status as Calibre tags. A second
+                                    run writes only the differences
+      compare <one library> <other library>
+                                    whether two libraries hold the same books
+                                    with the same ratings, tags, shelves,
+                                    series and read status. Reads both
 
     SHELF_EXIT_AFTER=<n> makes `import`, `send` and `organize` leave the
     process after n files, the way a crash does – it is how the proof run
@@ -173,6 +184,8 @@ case "names": try await Commands.names(Array(arguments.dropFirst()))
 case "merge": try await Commands.merge(Array(arguments.dropFirst()))
 case "organize": try await Commands.organize(Array(arguments.dropFirst()))
 case "organize-undo": try await Commands.organizeUndo(Array(arguments.dropFirst()))
+case "export": try await Commands.export(Array(arguments.dropFirst()))
+case "compare": try await Commands.compare(Array(arguments.dropFirst()))
 default:
     print(usage)
     exit(2)
@@ -395,17 +408,15 @@ enum Commands {
 
         // MARK: Read the source
         let readStarted = Date()
-        let files = try FileManager.default
-            .contentsOfDirectory(
-                at: source, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles]
-            )
-            .filter { BookFileFormat.of($0) != nil }
-            .sorted { $0.path < $1.path }
+        // Into sub-folders, like the window's own folder drop: an exported
+        // library is `Author/Title/book.epub`, and a one-level listing finds
+        // nothing in it at all.
+        let files = bookFiles(under: source)
         print("reading \(files.count) files from \(source.path)")
 
         var candidates: [ImportCandidate] = []
         for (number, url) in files.enumerated() {
-            guard let candidate = try readCandidate(url) else { continue }
+            guard let candidate = try readCandidate(url, among: files) else { continue }
             candidates.append(candidate)
             if (number + 1) % 1_000 == 0 { print("  read \(number + 1) / \(files.count)") }
         }
@@ -448,6 +459,16 @@ enum Commands {
             candidates: candidates, knowledge: knowledge, startingNumber: plainStart,
             existingFolders: existingFolders(library))
         print("plan: \(plan.summary())")
+
+        // The shelves before the books, always. A book's OPF names its shelves
+        // as paths, and the index resolves them against the shelves it has
+        // been given and *skips what it cannot find* — so saving the books
+        // first files every one of them nowhere, without an error (ADR 0008).
+        // An archive export carries shelf paths in its OPFs, which is how a
+        // re-import comes to need this at all.
+        descriptor = try await registerShelves(
+            named: Set(candidates.flatMap { $0.book.shelves }), in: library, descriptor: descriptor,
+            index: index)
 
         // What the library already holds for each book a format is being
         // added to. Without it the runner writes an entry holding only the new
@@ -1080,6 +1101,9 @@ enum Commands {
             candidates: read.candidates, knowledge: knowledge,
             startingNumber: startingNumber, existingFolders: existingFolders(library))
         print("plan: \(plan.summary())")
+        descriptor = try await registerShelves(
+            named: Set(read.candidates.flatMap { $0.book.shelves }), in: library,
+            descriptor: descriptor, index: index)
 
         let runner = ImportRunner(makeHasher: PortableSHA256Hasher.factory)
         let copyStarted = Date()
@@ -1519,6 +1543,100 @@ enum Commands {
         }
     }
 
+    static func export(_ arguments: [String]) async throws {
+        guard arguments.count >= 2 else {
+            print("usage: shelf-tool export <library> <destination> [archive|books|calibre] [--flat] [--links]")
+            exit(2)
+        }
+        let (library, index) = try openLibrary(arguments[0])
+        let destination = URL(fileURLWithPath: arguments[1])
+        let preset: ExportPreset =
+            switch arguments.count > 2 ? arguments[2] : "archive" {
+            case "books": .booksOnly
+            case "calibre": .forCalibre
+            default: .archive
+            }
+        var options = preset.options
+        if arguments.contains("--flat") { options.structure = .flat }
+        if arguments.contains("--links") { options.prefersHardLinks = true }
+        if let refusal = options.refusal {
+            print("refused: \(refusal)")
+            exit(1)
+        }
+
+        let entries = try await index.allEntries()
+        let previous = ExportManifest.read(at: destination)
+        let plan = ExportPlanner.plan(
+            entries: entries, libraryRoot: library.root, options: options, manifest: previous)
+        print("preset: \(preset.label)")
+        print("plan: \(plan.summary())")
+        if plan.optionsChanged { print("  (the options differ from last time — everything is written again)") }
+
+        let outcome = try await ExportRunner(makeHasher: PortableSHA256Hasher.factory)
+            .run(
+                .init(destination: destination, plan: plan, libraryName: library.name),
+                manifest: previous)
+        print(outcome.report.headline)
+        print("copied \(ByteCount.format(outcome.report.copiedBytes)) · hard links \(outcome.report.hardLinkCount)")
+        for failure in outcome.report.failures { print("  FAILED \(failure.title): \(failure.message)") }
+    }
+
+    /// Whether two libraries really hold the same thing — the check the whole
+    /// export exists to pass.
+    ///
+    /// Field by field rather than by a digest of everything: a single
+    /// mismatched digest says "something differs" and this has to say *what*,
+    /// or a failure is not actionable.
+    static func compare(_ arguments: [String]) async throws {
+        guard arguments.count >= 2 else {
+            print("usage: shelf-tool compare <one library> <other library>")
+            exit(2)
+        }
+        let (_, one) = try openLibrary(arguments[0])
+        let (_, other) = try openLibrary(arguments[1])
+        let mine = try await one.allEntries()
+        let theirs = try await other.allEntries()
+
+        print("books: \(mine.count) and \(theirs.count)")
+        var problems: [String] = []
+        if mine.count != theirs.count { problems.append("the two hold a different number of books") }
+
+        // By UUID, because that is the identity (CONCEPT §5.3) and the folder
+        // names are exactly what an export is allowed to change.
+        let byID = Dictionary(theirs.map { ($0.book.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var compared = 0
+        for entry in mine {
+            guard let match = byID[entry.book.id] else {
+                problems.append("missing from the second library: \(entry.book.title)")
+                continue
+            }
+            compared += 1
+            let a = entry.book
+            let b = match.book
+            if a.title != b.title { problems.append("title differs: \(a.title) / \(b.title)") }
+            if a.authors != b.authors { problems.append("authors differ: \(a.title)") }
+            if a.rating != b.rating { problems.append("rating differs: \(a.title) (\(a.rating) / \(b.rating))") }
+            if a.isRead != b.isRead { problems.append("read status differs: \(a.title)") }
+            if a.series != b.series { problems.append("series differs: \(a.title)") }
+            if a.shelves != b.shelves {
+                problems.append("shelves differ: \(a.title) (\(a.shelves) / \(b.shelves))")
+            }
+            // A "for Calibre" export adds mapped tags on purpose, so the check
+            // is that every tag of the original is still there.
+            let missing = Set(a.tags).subtracting(Set(b.tags))
+            if !missing.isEmpty { problems.append("tags missing: \(a.title) \(missing.sorted())") }
+        }
+
+        print("compared by UUID: \(compared)")
+        if problems.isEmpty {
+            print("the two libraries agree on titles, authors, ratings, read status, series, shelves and tags")
+        } else {
+            for problem in problems.prefix(30) { print("  \(problem)") }
+            if problems.count > 30 { print("  … \(problems.count - 30) more") }
+            exit(1)
+        }
+    }
+
     static func bulkEdit(_ arguments: [String]) async throws {
         guard arguments.count >= 2, let count = Int(arguments[1]) else {
             print("usage: shelf-tool bulk-edit <library> <count>")
@@ -1807,7 +1925,7 @@ enum Commands {
     // MARK: Helpers
 
     /// Reads one file into a candidate: metadata, cover and digest.
-    static func readCandidate(_ url: URL) throws -> ImportCandidate? {
+    static func readCandidate(_ url: URL, among all: [URL] = []) throws -> ImportCandidate? {
         // `FileFacts` follows symlinks; `attributesOfItem` does not, and the
         // difference is a book imported with a size of eighty bytes.
         guard let format = BookFileFormat.of(url), let facts = FileFacts.of(url) else { return nil }
@@ -1817,10 +1935,63 @@ enum Commands {
         // CBR come back as their file names with a warning saying why — which
         // is honest, and is what `BookFileReader` says of them.
         let read = BookFileReader.read(url: facts.url, format: format)
+
+        // A `metadata.opf` beside the book outranks the book's own metadata:
+        // it is the library's record, where the rating, the read status, the
+        // tags and the shelves live (`SidecarMetadata`).
+        let folder = url.deletingLastPathComponent()
+        let siblings = all.filter { $0.deletingLastPathComponent() == folder }
+        var book = read.book
+        if let sidecar = SidecarMetadata.url(for: url, in: folder, siblings: siblings),
+            let parsed = SidecarMetadata.read(at: sidecar)
+        {
+            book = SidecarMetadata.merged(parsed, over: read.book)
+        }
+
         return ImportCandidate(
-            source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: read.book,
+            source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: book,
             cover: read.cover, coverName: read.coverName, drm: read.drm, modifiedAt: facts.modifiedAt,
             warnings: read.warnings)
+    }
+
+    /// Every book file under a folder, however deep.
+    ///
+    /// Its own function, not a loop at the call site: `FileDirectoryEnumerator`
+    /// cannot be iterated from an `async` context, and `nextObject()` in a
+    /// plain function is the way round it that does not spawn anything.
+    static func bookFiles(under source: URL) -> [URL] {
+        guard
+            let walker = FileManager.default.enumerator(
+                at: source, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles])
+        else { return [] }
+        var files: [URL] = []
+        while let next = walker.nextObject() as? URL {
+            guard BookFileFormat.of(next) != nil else { continue }
+            files.append(next)
+        }
+        return files.sorted { $0.path < $1.path }
+    }
+
+    /// Makes sure every shelf path the incoming books name exists, in
+    /// `library.json` and in the index, **before** a book is saved.
+    ///
+    /// The shape of the shelves lives in `library.json` and membership lives
+    /// in each book (ADR 0008), so a library receiving books that remember
+    /// shelves it has never heard of has to be told about them first. The
+    /// rebuild does exactly this, for exactly this reason.
+    static func registerShelves(
+        named paths: Set<String>, in library: Library, descriptor: LibraryDescriptor,
+        index: LibraryIndex
+    ) async throws -> LibraryDescriptor {
+        guard !paths.isEmpty else { return descriptor }
+        var tree = descriptor.shelfTree
+        for path in paths.sorted() { _ = tree.ensure(path: path) }
+        var updated = descriptor
+        updated.shelves = tree.shelves
+        try library.write(updated)
+        try await index.saveShelves(updated.shelves)
+        print("shelves registered before the books: \(updated.shelves.count)")
+        return updated
     }
 
     static func openOrCreate(_ url: URL) throws -> (Library, LibraryDescriptor) {
