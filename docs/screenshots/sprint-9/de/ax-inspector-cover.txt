@@ -1,0 +1,4 @@
+      AXImage desc="Cover von The Ministry Called Peace #1"
+      AXMenuButton desc="Das Cover von The Ministry Called Peace #1 ändern"
+      AXTextField value="The Ministry Called Peace #1" desc="Titel" help="Titel — ⏎ oder ein Klick daneben sichert, Esc verwirft"
+      AXTextField value="Jane Le Guin" desc="Autoren" help="Autoren — Mehrere Autoren werden durch „ & “ getrennt — ⏎ oder ein Klick daneben sichert, …"

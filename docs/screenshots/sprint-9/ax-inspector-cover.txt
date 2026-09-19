@@ -1,0 +1,3 @@
+      AXImage desc="Cover of The Ministry Called Peace #1"
+      AXMenuButton desc="Change the cover of The Ministry Called Peace #1"
+      AXTextField value="The Ministry Called Peace #1" desc="Title" help="Title — ⏎ or clicking away saves, Escape discards"
