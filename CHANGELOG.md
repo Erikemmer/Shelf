@@ -10,6 +10,109 @@ Measured on Erik's Mac (M-series, macOS 15.6) against
 release path) and `~/Library/Caches/Shelf/measure-library-7b/` (everything from
 19 September: accessibility, contrast, the arrow keys).
 
+### Fixed — the six things v1.0 was not going to carry
+
+`docs/BACKLOG.md` named six that should not reach a 1.0. Five are fixed and one
+is closed as not reproducible, with the measurement rather than an argument.
+
+**`Missing Cover` counted every book in a freshly imported library.** It was
+answered from the *decoded-cover cache* — one directory read, which is what made
+it cheap, and empty until something had been drawn — so a new library reported
+every book as missing a cover and then corrected itself as the grid filled in.
+Wrong, and then quietly right, which is worse. It is a question about the
+folders now (`CoverFile.booksWithACover`), asked in `reload` before the totals
+and the filter that read it, off the main actor. Measured against the 26-book
+library with its cover cache deleted:
+
+| | before | after |
+|---|---|---|
+| four seconds after a cold start | 26 | **15** |
+| sixteen seconds later | 15 | **15** |
+
+**`Published` read blank across a selection** where `Publisher` beside it read
+"Mixed", and a blank says neither "they differ" nor "none of them has one". The
+field rule answers three things now — `SharedValue.same`, `.noneHasOne`,
+`.mixed` — and the row says "None of them". `sharedText` stays beside it,
+because an editable field wants exactly what it gives: a string for the box and
+an empty one to leave the placeholder showing.
+
+**Four table columns had no arrow.** Tags, Format, Read and Size have been drawn
+since Sprint 2c and could not be sorted by, because `BookSort` had no case for
+them — and a column that sorted the loaded rows itself would have put the table
+in one order and left the grid and the sort menu in another. `BookSort` has ten
+cases now and the order still comes out of the index. Tags and Format sort by
+the very string their column draws; untagged books go last either way round, as
+books with no series already did.
+
+**`ZipWriter`, `MinimalPNG` and the five `Synthetic…` builders left the shipped
+core.** The backlog said 385 lines; it was **1 343**, in seven files, and every
+one of them was `ShelfCore` public surface that production never called and the
+Linux job compiled into what the app links. `ShelfFixtures` is a target of its
+own that `ShelfCoreTests` and `shelf-tool` depend on and `App/Shelf` does not,
+so a `ZipWriter` in the window would not compile; two tests say the same by
+name, so a copy pasted in fails too. The API decision the entry warned about
+came to four symbols — `OPFDocument.escaped`, `.escapedAttribute` and
+`EPUBMetadata.containerPath` / `.encryptionPath` — published because a fixture
+has to write exactly what the reader reads.
+
+**The click on a cover and the search field: closed as not reproducible.**
+`Scripts/keyboard-proof.sh` drives the real window — search, click a cover,
+press R, read the status back out of the index — and reads **5 of 5** for the
+click and 5 of 5 for Escape, now on a third library and on a build whose keys
+all go through `EditingKeyMonitor`. Sprint 2c measured 5 of 5 before and after
+its own change as well. Three measurements that cannot make it fail are enough.
+
+**The bare "Undo" is not a fetch's defect at all**, and that is the sixth. It
+was written down as one, with "an edit made in the inspector still names
+itself" beside it. Measured with the menu opened before it was read — macOS
+updates an item's title when its menu is shown, so a cold read gives the last
+title drawn:
+
+| what was done | did it edit? | the Edit menu offered |
+|---|---|---|
+| a fetch applied | yes, `<dc:date>` appeared | `Undo` |
+| R pressed on a selected book | yes, read books 1 → 0 in the index | `Undo` |
+
+So SwiftUI's own Undo item never carries the name, whatever made the change.
+The likely fix is `CommandGroup(replacing: .undoRedo)`, and it was **not**
+attempted before v1.0 on purpose: replacing the standard Undo puts ⌘Z inside a
+text field on the line for a cosmetic gain. It stays in the backlog, now with
+what it actually is.
+
+Two more found on the way. `MetadataChange.actionName` was handed to
+`setActionName` **untranslated**, so a German window would have offered
+"Widerrufen Title"; and the name for a change of several fields at once was a
+bare literal no test could see, which is now `MetadataChange.severalFields` and
+walks into the catalogue with every other core sentence. 631 core tests, up
+from 613.
+
+### Fixed — the script that pins the language did not pin the language
+
+`Scripts/app-language.sh` wrote `AppleLanguages` into Shelf's own defaults
+domain and removed it again in a trap. That is the documented way and it does
+not reliably work for a sandboxed app. Measured on 19 September 2026:
+
+```
+$ defaults write de.erikemmer.shelf AppleLanguages -array en
+$ defaults read de.erikemmer.shelf AppleLanguages
+( en )
+$ plutil -extract AppleLanguages xml1 -o - ~/Library/Containers/…/de.erikemmer.shelf.plist
+Could not extract value … No value at that key path
+→ the window comes up in German: "Ablage", "Bearbeiten", "Bibliothek"
+```
+
+`cfprefsd` hands the value back to the next `defaults read` and never writes it
+where the app looks. It worked often enough to be believed — a script that
+spends a second finding the app bundle between the write and the launch usually
+won the race — and failed silently when it did not, which is the worst way for a
+guard to behave. It cost two runs here before the plist was looked at.
+
+**The language goes on the command line now**: `open -a Shelf <library> --args
+-AppleLanguages '(en)'`. The argument domain outranks every other, is read by
+the process itself at launch, and touches no preference at all — so there is
+nothing to put back and nothing to lose. Thirteen scripts changed; each passes
+`${SHELF_LANGUAGE_ARGS:-}` at its own `open`.
+
 ### Added — `docs/RUNBOOK.md`, with every path run once and its output quoted
 
 Twelve of them: what is truth and what is cache, back up, restore, rebuild the

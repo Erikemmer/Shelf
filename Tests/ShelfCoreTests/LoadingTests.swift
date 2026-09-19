@@ -441,3 +441,63 @@ struct HashingTests {
                 == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
     }
 }
+
+/// `Missing Cover` is a question about the **folders**, and for four sprints it
+/// was answered from the decoded-cover cache — which is one directory read, and
+/// empty until something has been drawn. A freshly imported library therefore
+/// reported every book as missing a cover and then corrected itself as the grid
+/// filled in (`docs/BACKLOG.md`, Sprint 3).
+@Suite("Which books have a cover next to them")
+struct BooksWithACoverTests {
+    private func entry(_ folder: String, id: UUID = UUID()) -> LibraryEntry {
+        var book = Book(title: folder)
+        book.id = id
+        return LibraryEntry(book: book, number: 1, folder: folder)
+    }
+
+    @Test("a book whose folder holds cover.jpg has a cover")
+    func findsAJPEG() throws {
+        let root = try TemporaryFolder()
+        let with = entry("With")
+        let without = entry("Without")
+        _ = try root.folder("With")
+        _ = try root.folder("Without")
+        try root.write("With/cover.jpg", data: Data([0xFF, 0xD8, 0xFF]))
+
+        let found = CoverFile.booksWithACover(in: root.url, entries: [with, without])
+        #expect(found == [with.id])
+    }
+
+    /// Every extension `CoverFile` knows, because the cover is named after what
+    /// the bytes are and a library holds all of them.
+    @Test("every extension the cover may have is found")
+    func findsEveryExtension() throws {
+        let root = try TemporaryFolder()
+        var entries: [LibraryEntry] = []
+        for ext in CoverFile.extensions {
+            let folder = "Book \(ext)"
+            entries.append(entry(folder))
+            try root.write("\(folder)/cover.\(ext)", data: Data([0x00]))
+        }
+        #expect(CoverFile.booksWithACover(in: root.url, entries: entries).count == CoverFile.extensions.count)
+    }
+
+    /// The whole point: the answer does not depend on anything having been
+    /// drawn, so it is the same the moment the library is opened as it is an
+    /// hour later.
+    @Test("a folder with no cover file is not counted, whatever a cache holds")
+    func aFolderWithoutOneIsNotCounted() throws {
+        let root = try TemporaryFolder()
+        let lonely = entry("Lonely")
+        // A book file, and something that only looks like a cover.
+        try root.write("Lonely/book.epub", data: Data([0x00]))
+        try root.write("Lonely/cover.txt", data: Data([0x00]))
+        #expect(CoverFile.booksWithACover(in: root.url, entries: [lonely]).isEmpty)
+    }
+
+    @Test("a folder that is not there at all is not counted, and does not throw")
+    func aMissingFolderIsNotCounted() throws {
+        let root = try TemporaryFolder()
+        #expect(CoverFile.booksWithACover(in: root.url, entries: [entry("Gone")]).isEmpty)
+    }
+}

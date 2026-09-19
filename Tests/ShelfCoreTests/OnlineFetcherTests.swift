@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 /// What a request that never got an answer throws.
 ///

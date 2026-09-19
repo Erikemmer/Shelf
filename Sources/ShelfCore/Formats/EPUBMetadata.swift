@@ -42,8 +42,13 @@ public enum EPUBMetadata {
         case notAnEPUB(String)
     }
 
-    static let containerPath = "META-INF/container.xml"
-    static let encryptionPath = "META-INF/encryption.xml"
+    /// Public since Sprint 7, because `ShelfFixtures` writes an EPUB that has
+    /// to be at the two paths the reader looks at — the paths are the *shared*
+    /// fact between the reader and anything that makes one for it, and a
+    /// fixture with its own copy of a string like this is a fixture that can
+    /// quietly stop testing anything.
+    public static let containerPath = "META-INF/container.xml"
+    public static let encryptionPath = "META-INF/encryption.xml"
 
     /// Reads the EPUB at `url`.
     ///

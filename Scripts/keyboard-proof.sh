@@ -76,7 +76,7 @@ if pgrep -x Shelf >/dev/null; then
     pgrep -x Shelf >/dev/null && fail "a Shelf instance (pid $(pgrep -x Shelf | tr '\n' ' ')) will not quit.
        Usually a sheet is open in it. Close it and run this again."
 fi
-open -a "$APP" "$LIBRARY" || fail "could not launch $APP"
+open -a "$APP" "$LIBRARY" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
 STARTED_IT=1
 sleep 9
 PID=$(pgrep -x Shelf | head -1)

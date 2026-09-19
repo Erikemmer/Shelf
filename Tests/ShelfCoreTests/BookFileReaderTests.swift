@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 /// The one place that decides which reader a file gets.
 ///

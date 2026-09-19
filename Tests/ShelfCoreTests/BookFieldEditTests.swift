@@ -559,3 +559,61 @@ struct AcrossBooksTests {
         #expect(AcrossBooks.sharedStars([]) == nil)
     }
 }
+
+/// A field across a selection has three answers and not two.
+///
+/// `sharedText` answers a `String?`: a value, or `nil` for "they differ". A
+/// field **none** of the books fills in is a shared empty string — correct, and
+/// unreadable: `Published` drew a blank row while `Publisher` beside it drew
+/// "Mixed", and a blank says neither of the two things. In `docs/BACKLOG.md`
+/// from Sprint 3.
+@Suite("What a field says across a selection")
+struct SharedValueTests {
+    private func book(publisher: String? = nil) -> Book {
+        var book = Book(title: "A")
+        book.publisher = publisher
+        return book
+    }
+
+    @Test("the value they all show")
+    func theyAgree() {
+        let books = [book(publisher: "Gollancz"), book(publisher: "Gollancz")]
+        #expect(BookField.publisher.sharedValue(across: books) == .same("Gollancz"))
+    }
+
+    @Test("“Mixed” when they disagree")
+    func theyDisagree() {
+        let books = [book(publisher: "Gollancz"), book(publisher: "Heyne")]
+        #expect(BookField.publisher.sharedValue(across: books) == .mixed)
+    }
+
+    /// The case the whole thing is for.
+    @Test("“none of them has one” is not the same answer as “they differ”")
+    func noneHasOne() {
+        #expect(BookField.publisher.sharedValue(across: [book(), book()]) == .noneHasOne)
+        #expect(BookField.publisher.sharedText(across: [book(), book()]) == "")
+    }
+
+    /// One book with an empty field is still "none of them has one" — there is
+    /// nothing else it could be, and the inspector draws an editable field for
+    /// one book anyway.
+    @Test("one book with nothing in the field")
+    func oneEmptyBook() {
+        #expect(BookField.publisher.sharedValue(across: [book()]) == .noneHasOne)
+        #expect(BookField.publisher.sharedValue(across: [book(publisher: "Gollancz")]) == .same("Gollancz"))
+    }
+
+    @Test("no books at all")
+    func noBooks() {
+        #expect(BookField.publisher.sharedValue(across: []) == .noneHasOne)
+    }
+
+    /// Only a value is drawn as one. Both of the others are the *absence* of a
+    /// value and are drawn in the label's colour.
+    @Test("a value is told apart from an answer about the absence of one")
+    func isAValue() {
+        #expect(SharedValue.same("Gollancz").isAValue)
+        #expect(!SharedValue.noneHasOne.isAValue)
+        #expect(!SharedValue.mixed.isAValue)
+    }
+}

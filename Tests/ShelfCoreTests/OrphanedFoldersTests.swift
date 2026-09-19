@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 /// What an interrupted import leaves on the disk, and what the next run does
 /// with it.

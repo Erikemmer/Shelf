@@ -1,5 +1,6 @@
 import Foundation
 import ShelfCore
+import ShelfFixtures
 
 // `statfs`, and the only thing in this tool that is not portable. The tool is a
 // target of the same package as `ShelfCore`, so `swift build` on Linux builds it

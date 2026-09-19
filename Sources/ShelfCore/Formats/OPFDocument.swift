@@ -459,7 +459,7 @@ public enum OPFDocument {
     /// matches a Windows line break, and the literal CRLF went into the file
     /// and came back as a bare LF. Written down because the code reads
     /// identically either way and only the test tells them apart.
-    static func escaped(_ text: String) -> String {
+    public static func escaped(_ text: String) -> String {
         var result = ""
         result.reserveCapacity(text.utf8.count)
         for scalar in text.unicodeScalars {
@@ -491,7 +491,7 @@ public enum OPFDocument {
     /// in `unmappedMetas` are attributes, and all of them hold text a person
     /// typed or pasted.
     /// Over unicode scalars, for the same reason as `escaped`.
-    static func escapedAttribute(_ text: String) -> String {
+    public static func escapedAttribute(_ text: String) -> String {
         var result = ""
         result.reserveCapacity(text.utf8.count)
         for scalar in text.unicodeScalars {

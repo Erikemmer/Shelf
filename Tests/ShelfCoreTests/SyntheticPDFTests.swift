@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 /// The PDF *writer*, which lives in the core although PDFs are read in the app
 /// layer.

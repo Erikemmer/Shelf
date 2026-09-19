@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 @Suite("Reading ZIP archives")
 struct ZipReaderTests {

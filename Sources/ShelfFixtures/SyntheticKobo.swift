@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import ShelfCore
 
 /// A `KoboReader.sqlite` with the columns Shelf reads, for tests and for the
 /// proof run.

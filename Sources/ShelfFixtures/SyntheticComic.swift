@@ -1,4 +1,5 @@
 import Foundation
+import ShelfCore
 
 /// Writes a CBZ nobody wrote: a handful of PNG pages and, optionally, a
 /// `ComicInfo.xml`.

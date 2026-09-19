@@ -154,22 +154,37 @@ struct InspectorView: View {
     /// The same, for the one field that has a section heading of its own and so
     /// needs no label beside it.
     private func lockedBlock(_ which: BookField) -> some View {
-        let shared = model.sharedText(which)
-        return Text(shared ?? Self.mixed)
+        let shared = model.sharedValue(which)
+        return Text(Self.text(of: shared))
             .font(.caption)
-            .foregroundStyle(shared == nil ? Slate.textSecondary : Slate.textPrimary)
+            .foregroundStyle(shared.isAValue ? Slate.textPrimary : Slate.textSecondary)
             .lineLimit(6)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
             .accessibilityLabel(Loc.core(which.label))
-            .accessibilityValue(shared ?? Self.mixed)
+            .accessibilityValue(Self.text(of: shared))
             .help(Loc.string("%@ — edited one book at a time", Loc.core(which.label)))
     }
 
     private func lockedRow(_ which: BookField) -> some View {
-        SlateValueRow(name: Loc.core(which.label), value: model.sharedText(which) ?? Self.mixed)
+        SlateValueRow(name: Loc.core(which.label), value: Self.text(of: model.sharedValue(which)))
             .help(Loc.string("%@ — edited one book at a time", Loc.core(which.label)))
+    }
+
+    /// What a read-only row writes for a field across a selection.
+    ///
+    /// Three answers, because two were not enough: a field none of the books
+    /// fills in used to draw a **blank**, which says neither "they differ" nor
+    /// "none of them has one". `Published` was blank while `Publisher` beside
+    /// it read "Mixed", and the two rows meant different things and looked
+    /// like the same kind of nothing (`docs/BACKLOG.md`, Sprint 3).
+    private static func text(of shared: SharedValue) -> String {
+        switch shared {
+        case .same(let value): return value
+        case .noneHasOne: return Loc.string("None of them")
+        case .mixed: return mixed
+        }
     }
 
     /// The series name, its index beside it, and where the book sits in it.

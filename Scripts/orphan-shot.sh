@@ -66,7 +66,7 @@ if pgrep -x Shelf >/dev/null; then
     pgrep -x Shelf >/dev/null && fail "a Shelf instance will not quit – close whatever is open in it"
 fi
 
-open -a "$APP" "$LIB" || fail "could not launch $APP"
+open -a "$APP" "$LIB" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
 sleep 10
 PID=$(pgrep -x Shelf | head -1)
 [ -n "$PID" ] || fail "Shelf did not start"

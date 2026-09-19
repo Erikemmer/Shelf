@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 /// Reading comics: the file name, `ComicInfo.xml`, and which page is the cover.
 ///

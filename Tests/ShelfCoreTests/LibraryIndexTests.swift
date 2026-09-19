@@ -170,6 +170,96 @@ struct LibraryIndexTests {
                 == ["Older", "Newer"])
     }
 
+    // MARK: The four orders the table drew and could not sort by
+
+    /// From Sprint 2c until Sprint 7 the table had four columns with no arrow,
+    /// because `BookSort` had no case for them. A column that sorted the loaded
+    /// rows itself would have put the table in one order and left the grid and
+    /// the sort menu in another, so nothing was done and the header answered a
+    /// click with nothing.
+
+    @Test("by tags, in the order the column draws them, and untagged books last")
+    func sortByTags() async throws {
+        let index = try LibraryIndex(inMemory: "sort-tags")
+        try await index.save([
+            entry(title: "None", tags: [], number: 1),
+            entry(title: "Zebra tag", tags: ["zebra"], number: 2),
+            entry(title: "Two", tags: ["banana", "apple"], number: 3),
+        ])
+        // "apple, banana" — the names alphabetically, which is the order they
+        // come back in and therefore the string the column shows.
+        let titles = try await index.allEntries(sortedBy: BookOrder(.tags)).map(\.book.title)
+        #expect(titles == ["Two", "Zebra tag", "None"])
+        // Reversed, the tags turn round and the untagged book stays last: an
+        // empty answer sorts before everything, exactly as a series does.
+        let backwards = try await index.allEntries(sortedBy: BookOrder(.tags).reversed).map(\.book.title)
+        #expect(backwards == ["Zebra tag", "Two", "None"])
+    }
+
+    @Test("by format, which is every format of the book joined as the column joins them")
+    func sortByFormat() async throws {
+        let index = try LibraryIndex(inMemory: "sort-format")
+        try await index.save([
+            entry(title: "Pdf", number: 1, formats: [.pdf]),
+            entry(title: "Azw3 and Epub", number: 2, formats: [.azw3, .epub]),
+            entry(title: "Cbz", number: 3, formats: [.cbz]),
+        ])
+        let titles = try await index.allEntries(sortedBy: BookOrder(.format)).map(\.book.title)
+        #expect(titles == ["Azw3 and Epub", "Cbz", "Pdf"])
+        let backwards = try await index.allEntries(sortedBy: BookOrder(.format).reversed).map(\.book.title)
+        #expect(backwards == ["Pdf", "Cbz", "Azw3 and Epub"])
+    }
+
+    @Test("by read, read first, and ties by title")
+    func sortByRead() async throws {
+        let index = try LibraryIndex(inMemory: "sort-read")
+        try await index.save([
+            entry(title: "Unread B", isRead: false, number: 1),
+            entry(title: "Read", isRead: true, number: 2),
+            entry(title: "Unread A", isRead: false, number: 3),
+        ])
+        // `BookOrder(.read)` is read-first without being asked: that is the end
+        // of the column somebody clicking it is looking for.
+        let titles = try await index.allEntries(sortedBy: BookOrder(.read)).map(\.book.title)
+        #expect(titles == ["Read", "Unread A", "Unread B"])
+    }
+
+    @Test("by size, which is every file of the book together")
+    func sortBySize() async throws {
+        let index = try LibraryIndex(inMemory: "sort-size")
+        // `entry` gives each format 1 000 bytes plus its position, so a book
+        // with three files is the biggest and one with none is the smallest.
+        try await index.save([
+            entry(title: "One file", number: 1, formats: [.epub]),
+            entry(title: "Three files", number: 2, formats: [.epub, .mobi, .pdf]),
+            entry(title: "No file at all", number: 3, formats: []),
+        ])
+        let titles = try await index.allEntries(sortedBy: BookOrder(.size)).map(\.book.title)
+        #expect(titles == ["Three files", "One file", "No file at all"])
+        let backwards = try await index.allEntries(sortedBy: BookOrder(.size).reversed).map(\.book.title)
+        #expect(backwards == ["No file at all", "One file", "Three files"])
+    }
+
+    /// The blunt one. Every field has to be sortable both ways round and give
+    /// back every book — three of the six orders were reversible and three were
+    /// not when that was last checked by hand.
+    @Test("every sort field answers, both ways round, with every book")
+    func everyFieldSorts() async throws {
+        let index = try LibraryIndex(inMemory: "sort-all")
+        try await index.save([
+            entry(title: "A", tags: ["x"], isRead: true, number: 1),
+            entry(title: "B", series: SeriesRef(name: "S", index: 1), rating: 3, number: 2),
+            entry(title: "C", number: 3, formats: [.pdf, .cbz]),
+        ])
+        for field in BookSort.allCases {
+            for ascending in [true, false] {
+                let order = BookOrder(field: field, ascending: ascending)
+                let titles = try await index.allEntries(sortedBy: order).map(\.book.title)
+                #expect(titles.sorted() == ["A", "B", "C"], "\(field.rawValue) ascending=\(ascending)")
+            }
+        }
+    }
+
     // MARK: Search
 
     @Test("search finds a book by a prefix of its title, author, series or tag")

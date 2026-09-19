@@ -1,4 +1,5 @@
 import Foundation
+import ShelfCore
 
 /// Writes a MOBI or AZW3 file that nobody wrote, for the tests and the proof
 /// run to read.

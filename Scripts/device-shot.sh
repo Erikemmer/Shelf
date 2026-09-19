@@ -63,7 +63,7 @@ fi
 
 pgrep -x Shelf >/dev/null && fail "a Shelf is already running – close it yourself, then run this again"
 
-open -a "$APP" "$LIB" || fail "could not launch $APP"
+open -a "$APP" "$LIB" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
 sleep 10
 PID=$(pgrep -x Shelf | head -1)
 [ -n "$PID" ] || fail "Shelf did not start"

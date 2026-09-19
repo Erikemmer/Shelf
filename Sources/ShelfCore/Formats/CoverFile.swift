@@ -65,4 +65,30 @@ public enum CoverFile {
         let lower = fileName.lowercased()
         return extensions.contains { lower == "\(baseName).\($0)" }
     }
+
+    /// Which of these books have a cover file sitting next to them.
+    ///
+    /// **This is a question about the folders, not about the cover cache**, and
+    /// the difference is a defect that was in `docs/BACKLOG.md` for four
+    /// sprints: `Missing Cover` was answered from the decoded-cover cache, one
+    /// directory read, which is cheap and which is empty until something has
+    /// been drawn. A freshly imported library therefore reported **every** book
+    /// as missing a cover and then corrected itself as the grid filled in —
+    /// wrong, and then quietly right, which is worse than wrong.
+    ///
+    /// Measured on 19 September 2026 against the library the accessibility run
+    /// uses: 26 books, of which 15 have a cover. The old answer read 26 on a
+    /// cold cache and 15 once the grid had been looked at.
+    ///
+    /// One or two `stat` calls per book — `jpg` first, because that is what
+    /// nearly every cover is. The whole of a 5 000-book library is one walk and
+    /// is done off the main thread; see `CHANGELOG.md` for the number.
+    public static func booksWithACover(in root: URL, entries: [LibraryEntry]) -> Set<UUID> {
+        var found: Set<UUID> = []
+        for entry in entries {
+            let folder = root.appendingPathComponent(entry.folder, isDirectory: true)
+            if url(in: folder) != nil { found.insert(entry.id) }
+        }
+        return found
+    }
 }

@@ -3583,6 +3583,23 @@
         }
       }
     },
+    "Metadata": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metadaten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metadata"
+          }
+        }
+      }
+    },
     "Missing Cover": {
       "extractionState": "manual",
       "localizations": {
@@ -4174,6 +4191,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "No tags yet"
+          }
+        }
+      }
+    },
+    "None of them": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keines davon"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None of them"
           }
         }
       }

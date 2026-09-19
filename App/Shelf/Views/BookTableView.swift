@@ -61,7 +61,7 @@ struct BookTableView: View {
             .width(min: 60, ideal: 70)
             .customizationID(Column.rating.rawValue)
 
-            TableColumn(Loc.string("Tags")) { entry in
+            TableColumn(Loc.string("Tags"), value: \.sortableTags) { entry in
                 Text(entry.book.tags.joined(separator: ", "))
                     .foregroundStyle(Slate.textSecondary)
                     .lineLimit(1)
@@ -69,7 +69,7 @@ struct BookTableView: View {
             .width(min: 80, ideal: 160)
             .customizationID(Column.tags.rawValue)
 
-            TableColumn(Loc.string("Format")) { entry in
+            TableColumn(Loc.string("Format"), value: \.formatLine) { entry in
                 Text(entry.formatLine).foregroundStyle(Slate.textSecondary).lineLimit(1)
             }
             .width(min: 60, ideal: 80)
@@ -81,7 +81,7 @@ struct BookTableView: View {
             .width(min: 80, ideal: 100)
             .customizationID(Column.added.rawValue)
 
-            TableColumn(Loc.string("Read")) { entry in
+            TableColumn(Loc.string("Read"), value: \.sortableRead) { entry in
                 Image(systemName: entry.book.isRead ? "checkmark" : "")
                     .foregroundStyle(Slate.textSecondary)
                     .accessibilityLabel(entry.book.isRead ? Loc.string("Read") : Loc.string("Unread"))
@@ -89,7 +89,7 @@ struct BookTableView: View {
             .width(min: 40, ideal: 50)
             .customizationID(Column.read.rawValue)
 
-            TableColumn(Loc.string("Size")) { entry in
+            TableColumn(Loc.string("Size"), value: \.totalBytes) { entry in
                 Text(ByteCount.format(entry.totalBytes))
                     .foregroundStyle(Slate.textSecondary)
                     .monospacedDigit()
@@ -147,6 +147,10 @@ struct BookTableView: View {
         case .rating: return [KeyPathComparator(\LibraryEntry.book.rating, order: direction)]
         case .added: return [KeyPathComparator(\LibraryEntry.book.addedAt, order: direction)]
         case .modified: return [KeyPathComparator(\LibraryEntry.book.modifiedAt, order: direction)]
+        case .tags: return [KeyPathComparator(\LibraryEntry.sortableTags, order: direction)]
+        case .format: return [KeyPathComparator(\LibraryEntry.formatLine, order: direction)]
+        case .read: return [KeyPathComparator(\LibraryEntry.sortableRead, order: direction)]
+        case .size: return [KeyPathComparator(\LibraryEntry.totalBytes, order: direction)]
         }
     }
 
@@ -154,10 +158,14 @@ struct BookTableView: View {
     /// act on — which re-queries the index.
     ///
     /// A column this table cannot name a `BookSort` for is ignored rather than
-    /// sorted in memory. `Tags`, `Format`, `Size` and `Read` are such columns,
-    /// so they carry no arrow: a column that sorted the loaded rows itself
-    /// would put the table in one order and leave the grid and the sort menu in
-    /// another, and then the window would be claiming two things at once.
+    /// sorted in memory — a column that sorted the loaded rows itself would put
+    /// the table in one order and leave the grid and the sort menu in another,
+    /// and then the window would be claiming two things at once.
+    ///
+    /// **There are none left.** `Tags`, `Format`, `Read` and `Size` carried no
+    /// arrow from Sprint 2c until Sprint 7, because `BookSort` had no case for
+    /// them; it has four now and the order comes out of the index like every
+    /// other.
     private func adopt(_ wanted: [KeyPathComparator<LibraryEntry>]) {
         guard let first = wanted.first,
             let field = Self.fields.first(where: { $0.path == first.keyPath })?.field
@@ -175,6 +183,10 @@ struct BookTableView: View {
         (\LibraryEntry.book.rating, .rating),
         (\LibraryEntry.book.addedAt, .added),
         (\LibraryEntry.book.modifiedAt, .modified),
+        (\LibraryEntry.sortableTags, .tags),
+        (\LibraryEntry.formatLine, .format),
+        (\LibraryEntry.sortableRead, .read),
+        (\LibraryEntry.totalBytes, .size),
     ]
 
     // MARK: Formatting
@@ -222,4 +234,11 @@ extension LibraryEntry {
     /// sorted, the same rule the SQL order has — otherwise the table's own
     /// arrow and the index's answer would differ on exactly those rows.
     var sortableSeries: String { book.series?.name ?? "\u{10FFFF}" }
+
+    /// The same string the Tags column draws. The key path is what ties a
+    /// column to a `BookSort`; the order itself comes out of the index.
+    var sortableTags: String { book.tags.joined(separator: ", ") }
+
+    /// `Bool` is not `Comparable`, and a column needs something that is.
+    var sortableRead: Int { book.isRead ? 1 : 0 }
 }

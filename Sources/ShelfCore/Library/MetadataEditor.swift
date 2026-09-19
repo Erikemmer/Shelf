@@ -59,9 +59,16 @@ public struct MetadataChange: Equatable, Sendable {
     /// is "Metadata", because "Undo Title, Authors and Tags" is not a menu item.
     public var actionName: String {
         let changed = fields
-        guard let only = changed.first, changed.count == 1 else { return "Metadata" }
+        guard let only = changed.first, changed.count == 1 else { return Self.severalFields }
         return only.label
     }
+
+    /// What several fields changed at once are called in the Edit menu. Named,
+    /// so `LocalisationTests` can walk it into the catalogue like every other
+    /// sentence the core can answer with — it is the name a *fetch* usually
+    /// gets, because a fetch fills in several fields at a time, and it was the
+    /// one word in this file that no test could see.
+    public static let severalFields = "Metadata"
 
     /// The fields a person can edit. Reference data rather than an `if` chain:
     /// adding a field to the editor is a case here and nothing else, and both

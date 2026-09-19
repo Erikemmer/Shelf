@@ -149,6 +149,7 @@ struct LocalisationTests {
         all += BookSort.allCases.map(\.label)
         all += LibraryViewSettings.Mode.allCases.map(\.label)
         all += MetadataChange.Field.allCases.map(\.label)
+        all.append(MetadataChange.severalFields)
         all += SkippedImport.Reason.allCases.map(\.label)
         all += SkippedTransfer.Reason.allCases.map(\.label)
         all += KoboReadingState.ReadStatus.allCases.map(\.label)

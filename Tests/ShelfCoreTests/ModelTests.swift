@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 /// Folder and file names. A wrong name here is a book that cannot be found
 /// again, and the index is rebuilt from these paths – so every rule has a test.

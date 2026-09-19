@@ -73,17 +73,24 @@
 │             EPUBMetadata · AuthorField · FileNameMetadata ·   │
 │             Mobi/: PalmDatabase · MobiHeader · MobiMetadata · │
 │             Comic/: ComicFileName · ComicMetadata/ComicInfo · │
-│             DRMProbe · CoverFile · ZipWriter + SyntheticEPUB  │
-│             + SyntheticMobi + SyntheticComic + SyntheticPDF   │
-│             + MinimalPNG (fixtures)                           │
+│             DRMProbe · CoverFile                              │
 │  Calibre:   CalibreReader (metadata.db via a copy, WAL too) · │
 │             CalibreCensus (the counting protocol) ·           │
-│             CalibreImportSource → ImportCandidate ·           │
-│             SyntheticCalibreLibrary (the fixture)             │
+│             CalibreImportSource → ImportCandidate             │
 │  Import:    ImportPlanner → ImportRunner · ImportReport       │
 │  Loading:   LoadPriority · WarmOrder · DecodeGate ·           │
 │             InteractionWindow · CoverCacheKey/Policy          │
 │  Hashing:   ContentHasher · FileDigest · PortableSHA256Hasher │
+├───────────────────────────────────────────────────────────────┤
+│  ShelfFixtures (Swift package target, test material only)     │
+│  ZipWriter + CRC32 · MinimalPNG + Adler32 · SyntheticEPUB ·   │
+│  SyntheticMobi · SyntheticComic · SyntheticPDF ·              │
+│  SyntheticCalibreLibrary · SyntheticKobo                      │
+│                                                               │
+│  Depended on by `ShelfCoreTests` and `shelf-tool`, and by     │
+│  **nothing the app links**. No borrowed book is in this        │
+│  repository, so everything this project is measured against   │
+│  is built here (CLAUDE.md) — and none of it is shipped.       │
 └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -91,6 +98,14 @@ Rule: everything that can be **decided** without a window lives in `ShelfCore`;
 everything that can be **drawn** without knowing the subject lives in SlateKit;
 the app binds the two together. The core never imports AppKit, ImageIO or
 PDFKit — the Linux CI job is what enforces that rather than good intentions.
+
+**Test material is a target of its own** (`ShelfFixtures`), and the dependency
+arrow is what enforces it: the tests and `shelf-tool` depend on it, `App/Shelf`
+does not, so a `ZipWriter` that appeared in the window would not compile.
+Before Sprint 7 those 1 343 lines were `ShelfCore`'s own public surface —
+production never called any of it, and the Linux job compiled all of it into
+what the app links. Two tests keep it that way, by name rather than by import,
+so a copy pasted into the app fails as well.
 
 The only external dependency in the core is GRDB.swift. See
 [ADR 0003](adr/0003-zip-in-the-core.md) for why the ZIP reader is not libarchive

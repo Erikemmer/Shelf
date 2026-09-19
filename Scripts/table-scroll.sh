@@ -61,7 +61,7 @@ fi
 BOOKS=$(sqlite3 "$LIBRARY/.shelf/library.sqlite" "SELECT COUNT(*) FROM books")
 say "library: $(basename "$LIBRARY"), $BOOKS books"
 
-open -a "$APP" "$LIBRARY" || fail "could not launch $APP"
+open -a "$APP" "$LIBRARY" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
 sleep 12
 PID=$(pgrep -x Shelf | head -1)
 [ -n "$PID" ] || fail "Shelf did not start"

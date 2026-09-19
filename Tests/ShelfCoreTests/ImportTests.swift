@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 /// The planner. Pure, so the whole of "what would this import do" is tested
 /// without a disk – and the counting protocol the user confirms is the same

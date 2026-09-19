@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 /// The proof behind ADR 0001. If a rebuild reconstructs the library from the
 /// folders, then the index is a cache and may be deleted, vacuumed, replaced by

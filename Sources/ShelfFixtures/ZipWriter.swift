@@ -1,4 +1,5 @@
 import Foundation
+import ShelfCore
 
 /// Writes a ZIP archive with uncompressed entries.
 ///

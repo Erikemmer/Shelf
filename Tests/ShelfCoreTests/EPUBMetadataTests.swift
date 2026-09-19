@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 /// Reading EPUBs. Every fixture is built here, by `SyntheticEPUB` for the
 /// ordinary cases and by hand for the broken ones – because the broken ones are

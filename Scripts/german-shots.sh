@@ -3,12 +3,14 @@
 # did to the layout: a word that is half as long again breaks a sidebar row, a
 # button, or a column header, and no test can see that.
 #
-# **It does not change the Mac's language.** `defaults write -g AppleLanguages`
-# would change it for every application and for the login session; this writes
-# the same key in **Shelf's own domain**, which macOS reads for that one app and
-# nothing else. The value is removed again on the way out, including when the
-# script fails — see the trap. Anything this script writes, it writes under
-# `de.erikemmer.shelf` and under its own folder in ~/Library/Caches/Shelf.
+# **It does not change the Mac's language, and since Sprint 7 it does not change
+# a preference at all.** `defaults write -g AppleLanguages` would change the
+# language for every application and for the login session; writing the same key
+# in Shelf's own domain was the next idea and did not reliably work
+# (`Scripts/app-language.sh` says why, with the measurement). The language now
+# goes on the **command line**, in the argument domain, so it lasts exactly as
+# long as the launch. Anything this script writes, it writes under its own
+# folder in ~/Library/Caches/Shelf.
 #
 # Needs Screen Recording and Accessibility, and an unlocked screen.
 # It never ends a Shelf it did not start.
@@ -30,10 +32,8 @@ fail() {
     exit 1
 }
 
-# The language goes back however this ends — the trap is in app-language.sh,
-# which every window-driving script here now shares. One that left an app stuck
-# in a language the person did not choose would be worse than one that took no
-# pictures.
+# Which language this script is written for. `app-language.sh` is shared by
+# every window-driving script here.
 . "$HERE/app-language.sh"
 
 . "$HERE/screen-awake.sh"
@@ -67,9 +67,9 @@ pin_app_language de
 PID=""
 start_shelf() { # [library path, or nothing for the welcome screen]
     if [ -n "${1:-}" ]; then
-        open -a "$APP" "$1" || fail "could not launch $APP"
+        open -a "$APP" "$1" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
     else
-        open -a "$APP" || fail "could not launch $APP"
+        open -a "$APP" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
     fi
     sleep 9
     PID=$(pgrep -x Shelf | head -1)

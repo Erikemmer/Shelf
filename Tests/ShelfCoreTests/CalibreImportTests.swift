@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 /// The counting protocol, and the bridge from a Calibre library to the
 /// importer that was already there.

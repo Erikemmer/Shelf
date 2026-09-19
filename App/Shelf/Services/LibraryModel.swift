@@ -36,6 +36,14 @@ final class LibraryModel {
     private(set) var entries: [LibraryEntry] = []
     private(set) var isLoading = false
     /// Books whose cover is in the cache – what "Missing Cover" is answered from.
+    /// Which books have a **cover file next to them**, which is what `Missing
+    /// Cover` means.
+    ///
+    /// It used to be the books whose *decoded* cover was in the disk cache —
+    /// one directory read, which is what made it cheap, and empty until
+    /// something had been drawn. A freshly imported library therefore reported
+    /// every book as missing a cover and corrected itself as the grid filled
+    /// in. `CoverFile.booksWithACover` asks the folders instead.
     private(set) var coversOnDisk: Set<UUID> = []
 
     // MARK: What is being shown
@@ -297,7 +305,6 @@ final class LibraryModel {
             syncWarning = library.syncWarning
             warmer.reset()
 
-            coversOnDisk = await loader.cachedBookIDs()
             await reload()
             // A library that has just opened should answer the arrow keys. The
             // grid only becomes focusable once it exists, which is after this
@@ -431,6 +438,11 @@ final class LibraryModel {
         guard let index else { return }
         do {
             entries = try await index.allEntries(sortedBy: order)
+            // Before the totals and before the filter, because both of them
+            // ask it. It was neither: the set came from the cover *cache* and
+            // was refreshed at a different moment, so `Missing Cover` counted
+            // one thing and showed another until the grid had been looked at.
+            await refreshCoversOnDisk()
             totals = try await index.totals(coversOnDisk: coversOnDisk)
             tagFacets = try await index.tagFacets()
             authorFacets = try await index.authorFacets()
@@ -648,6 +660,22 @@ final class LibraryModel {
         selectedBookID = visible[next].id
     }
 
+    /// Walks the book folders and notes which have a cover file.
+    ///
+    /// Off the main actor, because it is one or two `stat` calls per book and a
+    /// library can hold thousands. Called from `reload`, before the totals and
+    /// the filter, which are the two things that read it.
+    private func refreshCoversOnDisk() async {
+        guard let root = library?.root else {
+            coversOnDisk = []
+            return
+        }
+        let books = entries
+        coversOnDisk = await Task.detached(priority: .utility) {
+            CoverFile.booksWithACover(in: root, entries: books)
+        }.value
+    }
+
     private func selectionChanged() {
         warmVisible()
     }
@@ -801,7 +829,6 @@ final class LibraryModel {
             try? library.write(stored)
             self.descriptor = stored
         }
-        if let loader { coversOnDisk = await loader.cachedBookIDs() }
         _ = index
         await reload()
     }
@@ -854,7 +881,9 @@ final class LibraryModel {
     /// have been holding.
     func fetchCoverFromTheNet() async {
         guard let online = onlineMetadata, let id = await online.fetchCover() else { return }
-        if let loader { coversOnDisk = await loader.cachedBookIDs().union([id]) }
+        // The file is on disk now, so the book has a cover whatever the walk
+        // last said.
+        coversOnDisk.insert(id)
         // The disk cache is keyed by the book's UUID, so the stale thumbnail is
         // in there under the same key: it is thrown away rather than waited out.
         await loader?.forget(id)
@@ -905,7 +934,10 @@ final class LibraryModel {
                 model.apply(change.inverse, to: entry, undoManager: undoManager)
             }
         }
-        undoManager?.setActionName(change.actionName)
+        // `Loc.core`, not the bare name: `MetadataChange.actionName` is one of
+        // the core's English words and the Edit menu draws whatever it is
+        // given. A German window offered "Widerrufen Title".
+        undoManager?.setActionName(Loc.core(change.actionName))
 
         Task { await write(change, to: entry, startedAt: startedAt) }
     }
@@ -1098,6 +1130,12 @@ final class LibraryModel {
     /// The value every selected book shows, or `nil` for "Mixed".
     func sharedText(_ field: BookField) -> String? {
         field.sharedText(across: selectedEntries.map(\.book))
+    }
+
+    /// The same, told apart into a value, "none of them has one" and "Mixed" —
+    /// which is what a row that is only read needs (`SharedValue`).
+    func sharedValue(_ field: BookField) -> SharedValue {
+        field.sharedValue(across: selectedEntries.map(\.book))
     }
 
     /// The rating every selected book has, or `nil` when they differ.

@@ -67,9 +67,9 @@ WINDOW_RECT="30,40,1440,877"
 # the app. Measured, once, at the cost of a run.
 start_shelf() { # [env assignment]
     if [ -n "${1:-}" ]; then
-        open -a "$APP" --env "$1" "$LIB" || fail "could not launch $APP"
+        open -a "$APP" --env "$1" "$LIB" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
     else
-        open -a "$APP" "$LIB" || fail "could not launch $APP"
+        open -a "$APP" "$LIB" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
     fi
     sleep 10
     PID=$(pgrep -x Shelf | head -1)

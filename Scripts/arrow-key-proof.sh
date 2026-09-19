@@ -55,7 +55,7 @@ fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
 pgrep -x Shelf >/dev/null && fail "a Shelf is already running – close it yourself, then run this again"
 
-open -a "$APP" "$LIBRARY" || fail "could not launch $APP"
+open -a "$APP" "$LIBRARY" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"
 sleep 10
 PID=$(pgrep -x Shelf | head -1)
 [ -n "$PID" ] || fail "Shelf did not start"

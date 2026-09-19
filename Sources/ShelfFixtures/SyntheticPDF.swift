@@ -1,4 +1,5 @@
 import Foundation
+import ShelfCore
 
 /// Writes a PDF nobody wrote, for the tests and the proof run to read.
 ///

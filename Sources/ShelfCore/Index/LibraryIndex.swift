@@ -1080,6 +1080,13 @@ public enum BookSort: String, CaseIterable, Sendable, Codable {
     case rating
     case added
     case modified
+    // The four the table drew as columns and could not sort by, from Sprint 2c
+    // until Sprint 7. A column with no arrow is not a small gap: the header
+    // invites a click and answers it with nothing.
+    case tags
+    case format
+    case read
+    case size
 
     public var label: String {
         switch self {
@@ -1089,6 +1096,10 @@ public enum BookSort: String, CaseIterable, Sendable, Codable {
         case .rating: return "Rating"
         case .added: return "Date Added"
         case .modified: return "Last Changed"
+        case .tags: return "Tags"
+        case .format: return "Format"
+        case .read: return "Read"
+        case .size: return "Size"
         }
     }
 
@@ -1098,8 +1109,10 @@ public enum BookSort: String, CaseIterable, Sendable, Codable {
     /// menu offers both either way — this only decides what one click gives.
     public var prefersDescending: Bool {
         switch self {
-        case .title, .author, .series: return false
-        case .rating, .added, .modified: return true
+        case .title, .author, .series, .tags, .format: return false
+        // Read first, biggest first, best first, newest first: what a person
+        // clicking one of these is usually looking for is the far end of it.
+        case .rating, .added, .modified, .read, .size: return true
         }
     }
 
@@ -1135,6 +1148,46 @@ public enum BookSort: String, CaseIterable, Sendable, Codable {
             return "b.added_at \(direction), b.title_sort COLLATE NOCASE"
         case .modified:
             return "b.modified_at \(direction), b.title_sort COLLATE NOCASE"
+        case .tags:
+            // The same string the table's Tags column draws: the tag names,
+            // alphabetically, comma-separated. Alphabetically because that is
+            // the order they come back in (`tags(for:)` orders by name), and a
+            // column sorted by a string other than the one it shows is a column
+            // in an order nobody can see.
+            //
+            // Books with no tags go last either way round, as the series rule
+            // does and for the same reason: an empty string sorts before
+            // everything, so ascending would begin with every untagged book.
+            return """
+                (SELECT GROUP_CONCAT(name, ', ') FROM
+                    (SELECT t.name AS name FROM book_tags bt JOIN tags t ON t.id = bt.tag_id
+                     WHERE bt.book_id = b.id ORDER BY t.name)) IS NULL,
+                (SELECT GROUP_CONCAT(name, ', ') FROM
+                    (SELECT t.name AS name FROM book_tags bt JOIN tags t ON t.id = bt.tag_id
+                     WHERE bt.book_id = b.id ORDER BY t.name)) COLLATE NOCASE \(direction),
+                b.title_sort COLLATE NOCASE
+                """
+        case .format:
+            // "AZW3 · EPUB", the same string the Format column draws. The raw
+            // values are lower case and the labels are the same letters in
+            // capitals, so `COLLATE NOCASE` over the raw values is the order
+            // the column shows.
+            return """
+                (SELECT GROUP_CONCAT(format, ' · ') FROM
+                    (SELECT DISTINCT f.format AS format FROM formats f
+                     WHERE f.book_id = b.id ORDER BY f.format)) COLLATE NOCASE \(direction),
+                b.title_sort COLLATE NOCASE
+                """
+        case .read:
+            return "b.is_read \(direction), b.title_sort COLLATE NOCASE"
+        case .size:
+            // Every file of the book together, which is what the Size column
+            // shows. `COALESCE`, because a book whose files have all gone
+            // missing has no rows to sum and would otherwise sort as NULL.
+            return """
+                (SELECT COALESCE(SUM(f.byte_size), 0) FROM formats f WHERE f.book_id = b.id) \(direction),
+                b.title_sort COLLATE NOCASE
+                """
         }
     }
 }

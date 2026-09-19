@@ -3,6 +3,7 @@ import GRDB
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 /// The reader against a Calibre library the tests build themselves.
 ///

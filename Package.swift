@@ -31,18 +31,38 @@ let package = Package(
             resources: [.copy("Devices/Profiles")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
+        // Test material, and nothing the app ever calls.
+        //
+        // `ZipWriter`, `MinimalPNG` and the five `Synthetic…` builders exist so
+        // that the tests and `shelf-tool synthesise` can *build* the books this
+        // project is measured against — no borrowed book is in this repository
+        // and none needs to be (CLAUDE.md). In `ShelfCore` they were 1 343
+        // lines of public surface that production never called, and every one
+        // of them was code the Linux job had to keep compiling into the
+        // shipped core.
+        //
+        // A target of their own says what they are for, and the dependency
+        // arrows say it again: the tests and the tool depend on this, and
+        // `App/Shelf` does not — so a `ZipWriter` that appeared in the app
+        // would not compile rather than merely being odd.
+        .target(
+            name: "ShelfFixtures",
+            dependencies: ["ShelfCore", .product(name: "GRDB", package: "GRDB.swift")],
+            path: "Sources/ShelfFixtures",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
         // Command-line proof that the library, the EPUB reader and the importer
         // agree with the file system on real files, before there is any window
         // to click. `make synthetic` and `make import-dry` use it.
         .executableTarget(
             name: "shelf-tool",
-            dependencies: ["ShelfCore"],
+            dependencies: ["ShelfCore", "ShelfFixtures"],
             path: "Sources/shelf-tool",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
             name: "ShelfCoreTests",
-            dependencies: ["ShelfCore"],
+            dependencies: ["ShelfCore", "ShelfFixtures"],
             path: "Tests/ShelfCoreTests",
             // Stored answers from Open Library and Google Books, fetched once
             // by `Scripts/online-proof.sh` and trimmed. The readers are tested

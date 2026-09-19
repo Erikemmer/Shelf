@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import ShelfCore
 
 /// Builds a Calibre library that nobody wrote, so the reader can be tested
 /// against one.

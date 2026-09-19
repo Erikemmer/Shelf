@@ -370,6 +370,32 @@ public enum TagEdit {
     }
 }
 
+/// What one field says across a selection of books.
+///
+/// Three answers and not two, which is the whole of the fix. `sharedText`
+/// returns `String?` — a value, or `nil` for "they differ" — and a field none
+/// of the books fills in is a *shared empty string*, which is correct and
+/// unreadable: `Published` drew a blank row while `Publisher` next to it drew
+/// "Mixed", and a blank says neither "they differ" nor "none of them has one".
+/// It was in `docs/BACKLOG.md` from Sprint 3.
+public enum SharedValue: Equatable, Sendable {
+    /// Every one of them shows this, and it is not empty.
+    case same(String)
+    /// Every one of them shows nothing at all.
+    case noneHasOne
+    /// They do not agree.
+    case mixed
+
+    /// Whether this is a value a person typed, as against one of the two
+    /// answers about the *absence* of one. The inspector draws a value in the
+    /// primary colour and both of the others in the secondary one, which is the
+    /// same distinction a label and a value already carry.
+    public var isAValue: Bool {
+        if case .same = self { return true }
+        return false
+    }
+}
+
 extension BookField {
     /// The value every one of these books shows, or `nil` when they disagree.
     ///
@@ -378,10 +404,23 @@ extension BookField {
     /// what a field *means* across several books, and because it has to use
     /// `text(of:)` — the same function a single book's field shows — or a
     /// selection of one would read differently from that book on its own.
+    ///
+    /// Kept beside `sharedValue`, and not replaced by it: an **editable** field
+    /// wants exactly this, a string to put in the box and an empty one to leave
+    /// the placeholder showing. `sharedValue` is for the rows that are only
+    /// read.
     public func sharedText(across books: [Book]) -> String? {
         guard let first = books.first else { return nil }
         let text = self.text(of: first)
         return books.dropFirst().allSatisfy { self.text(of: $0) == text } ? text : nil
+    }
+
+    /// The same question, answered so that "none of them has one" can be said
+    /// out loud.
+    public func sharedValue(across books: [Book]) -> SharedValue {
+        guard !books.isEmpty else { return .noneHasOne }
+        guard let text = sharedText(across: books) else { return .mixed }
+        return text.isEmpty ? .noneHasOne : .same(text)
     }
 }
 

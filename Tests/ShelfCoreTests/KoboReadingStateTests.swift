@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 /// Reading a Kobo back: how far somebody has read, what the device's shelves
 /// are called, and what it is reading now.

@@ -113,11 +113,13 @@ change of controls, not of layout.
       description should stay that way — a title typed once into twelve books is
       a mistake with twelve copies — but a publisher across a selection is a
       reasonable thing to want
-- [ ] **Sorting by Tags, Format, Read or Size.** Those four columns have no
-      arrow, because `BookSort` has no case for them and a column that sorted
-      only the rows in memory would put the table in one order and leave the
-      grid and the sort menu in another. Size needs a `SUM(byte_size)` join;
-      the others are straightforward
+- [x] **Sorting by Tags, Format, Read or Size.** Done in Sprint 7. `BookSort`
+      has ten cases now and the order still comes out of the index, so the
+      table's arrow, the grid and the sort menu cannot disagree. Tags and
+      Format sort by the very string their column draws; Size is the
+      `SUM(byte_size)` join the entry expected; untagged books go last either
+      way round, as books with no series already did. Five tests, one of which
+      asks every field for both directions and counts the books back.
 - [ ] **Reordering shelves among their sisters.** `Shelf.position` exists and is
       honoured; nothing in the window sets it yet, so shelves sit in the order
       they were made
@@ -135,17 +137,16 @@ change of controls, not of layout.
       ([ADR 0007](adr/0007-a-metadata-change-does-not-rename-the-folder.md)).
       Until it exists, a library that has been edited for a while has folder
       names that are historical, which costs nothing but tidiness
-- [ ] **Clicking a cover does not take the keyboard back from the search field.**
-      Carried, but narrower than it was. Sprint 2c replaced the two competing
-      `@FocusState` bindings with one window-wide value, and
-      `Scripts/keyboard-proof.sh` now drives the real window: search, click a
-      cover, press R, and read the book's status back out of the index. It reads
-      **5 of 5** — and **5 of 5 against the build from before the change too**,
-      so the symptom Sprint 2b reported could not be reproduced and the change
-      cannot be credited with fixing it. What the change did fix, measured 0 of 5
-      before and 5 of 5 after, is Escape in the search field: it now empties the
-      field as well as handing the keyboard on. There is a script to point at
-      this now, which is the real progress
+- [x] **Clicking a cover does not take the keyboard back from the search field.**
+      Closed in Sprint 7 as **not reproducible**, with the evidence rather than
+      with an argument. `Scripts/keyboard-proof.sh` drives the real window —
+      search, click a cover, press R, read the book's status back out of the
+      index — and reads **5 of 5** for the click and 5 of 5 for Escape, on a
+      third library (`measure-library-7b`, 26 books of six formats) and on a
+      build whose key handling has since moved to `EditingKeyMonitor` entirely
+      (ADR 0017). Sprint 2c already measured 5 of 5 both before and after its
+      own change. An item that three measurements cannot make fail is not an
+      open defect; if it ever comes back, that script is what will say so
 - [ ] **Debouncing the search field**, if it turns out to be wanted. It already
       waits 120 ms after the last keystroke before asking FTS5, and a search
       over 5 000 books measured 0.6 ms, so there is nothing to fix yet — written
@@ -207,25 +208,26 @@ change of controls, not of layout.
       in folders no book points at. Nothing is lost and a rebuild no longer
       trips over them. The batch size is the whole of the window; a smaller one
       narrows it, and flushing on `SIGTERM` would close it
-- [ ] **`Missing Cover` counts every book in a freshly imported library**, until
-      the cover cache has been warmed: the collection is answered from the cache
-      (one directory read, which is what makes it cheap) and a cache nobody has
-      filled is empty. It corrects itself as covers are drawn, which is worse
-      than being wrong — it is wrong and then quietly right
+- [x] **`Missing Cover` counts every book in a freshly imported library.**
+      Fixed in Sprint 7: it is a question about the **folders**, and
+      `CoverFile.booksWithACover` asks them. Measured against the 26-book
+      library with its cover cache deleted — **15 four seconds after a cold
+      start and 15 sixteen seconds later**, where the old answer read 26 and
+      then 15. One or two `stat` calls per book, in `reload`, off the main
+      actor and before the totals and the filter that read it. Four tests
 - [x] **The inspector's `Mixed` values carry no visible label.** Fixed in
       Sprint 6: the title block is drawn only for one book, where the type size
       is the label. A selection of several shows Title, Authors and Series as
       named rows in *Details* instead
-- [ ] **`Published` reads blank across a selection** where its neighbours read
-      `Mixed`. Blank says neither "they differ" nor "none of them has one".
-      Still open: `BookField.sharedText` returns the shared empty string, which
-      is *correct* and unreadable. The row needs to tell "none of them has one"
-      from "they differ", which is a change to the field rule and not to the view
-- [ ] **`ZipWriter`, `MinimalPNG` and now `SyntheticCalibreLibrary` still live
-      in `ShelfCore`.** The move to a `ShelfFixtures` target is **not** the
-      drag-and-drop the entry below assumes: `OPFDocument.escaped` is internal
-      and `SyntheticEPUB` uses it, so the move is an API decision about what
-      `ShelfCore` publishes
+- [x] **`Published` reads blank across a selection.** Fixed in Sprint 7, in the
+      field rule as the entry said it should be: `BookField.sharedValue` answers
+      `.same`, `.noneHasOne` or `.mixed`, and the read-only rows draw "None of
+      them" for the middle one. `sharedText` stays beside it, because an
+      *editable* field wants exactly what it gives — a string for the box and an
+      empty one to leave the placeholder showing. Six tests
+- [x] **`ZipWriter`, `MinimalPNG` and now `SyntheticCalibreLibrary` still live
+      in `ShelfCore`.** Moved in Sprint 7 — see the Housekeeping entry for what
+      the API decision turned out to be
 
 ## Sprint 4 – The other formats
 
@@ -390,13 +392,29 @@ is currently assumed.
 - [ ] **A real disagreement between the two services has never been seen**, so
       the proof run's "where the two disagree" table is one column of dashes.
       That is the same 429
-- [ ] **The Edit menu reads a bare "Undo" after a fetch**, not "Undo Published".
-      The undo itself works — `Scripts/online-apply-proof.sh` writes the field,
-      presses ⌘Z and reads it gone off the disk — and `setActionName` is called
-      on the same `UndoManager` that `registerUndo` was called on, which is the
-      manager ⌘Z reaches. So the name is set and the menu shows the generic
-      title anyway. Unexplained, cosmetic, and written down rather than guessed
-      at. An edit made in the inspector still names itself
+- [ ] **The Edit menu reads a bare "Undo" — after anything, not only a fetch.**
+      Sprint 6 wrote this down as a fetch's defect and added "an edit made in
+      the inspector still names itself". **That second half is wrong**, measured
+      on 19 September 2026 with the menu opened before it was read (macOS
+      updates an item's title when its menu is shown, so a cold read gives the
+      last title drawn — which is the trap this very entry fell into once):
+
+      | what was done | did it edit? | the Edit menu offered |
+      |---|---|---|
+      | a fetch applied (`Scripts/online-apply-proof.sh`) | yes, `<dc:date>` appeared | `Undo` |
+      | R pressed on a selected book | yes, read books 1 → 0 in the index | `Undo` |
+
+      The undo itself works in both cases. So the question is not "why does a
+      fetch differ" — nothing differs — but **why SwiftUI's own Undo item never
+      carries the name**, when `setActionName` is called on the manager
+      `registerUndo` was called on and that manager is the one ⌘Z reaches.
+
+      The likely fix is `CommandGroup(replacing: .undoRedo)` with items that
+      read the name themselves. It was **not** attempted before v1.0 on purpose:
+      replacing the standard Undo puts the field editor's own undo — ⌘Z while
+      typing in a text field — on the line, and that is a real regression risk
+      for a cosmetic gain. It wants a test that types into a field, presses ⌘Z,
+      and reads the field back
 
 ## Sprint 7 – Polish and release
 
@@ -447,14 +465,18 @@ is currently assumed.
       action, and the accessibility tree in `docs/accessibility/grid.txt` shows
       33 `AXButton` rows where it showed none.
 
-- [ ] **`ZipWriter` and `MinimalPNG` belong in their own target, `ShelfFixtures`.**
-      They exist so the tests and `shelf-tool synthesise` can *build* test
-      material; nothing the app does needs to write a ZIP or encode a PNG. In
-      `ShelfCore` they are 385 lines of production surface that production never
-      calls, and every one of them is code the Linux CI job has to keep
-      compiling. A separate target that the tests and `shelf-tool` depend on –
-      and the app does not – says what they are for. It is a move, not a
-      rewrite: no caller outside the tests and the tool changes.
+- [x] **`ZipWriter` and `MinimalPNG` belong in their own target, `ShelfFixtures`.**
+      Done in Sprint 7, and it turned out to be seven files and **1 343 lines**
+      rather than 385: `SyntheticEPUB`, `SyntheticMobi`, `SyntheticComic`,
+      `SyntheticPDF`, `SyntheticCalibreLibrary` and `SyntheticKobo` went with
+      them. The API decision the Sprint 3 entry warned about came to four
+      symbols — `OPFDocument.escaped`, `OPFDocument.escapedAttribute` and
+      `EPUBMetadata.containerPath` / `.encryptionPath` — published because a
+      fixture has to write exactly what the reader reads, and a fixture holding
+      its own copy of those strings is one that can quietly stop testing
+      anything. `ShelfCoreTests` and `shelf-tool` depend on the new target and
+      `App/Shelf` does not, so a `ZipWriter` in the window would not compile;
+      two tests say the same thing by name, so a copy pasted in fails too.
 
 ## Wishes, after v1.0
 

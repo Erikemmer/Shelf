@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import ShelfCore
+@testable import ShelfFixtures
 
 /// The DEFLATE decoder, checked against streams **zlib** produced.
 ///
