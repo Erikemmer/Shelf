@@ -110,17 +110,25 @@ actor CoverDiskCache {
         logger.info("cover cache cleared")
     }
 
-    /// Forgets one book's cached covers, both sizes.
+    /// Forgets one book's cached covers — every size and **every generation**.
     ///
-    /// For the one case where the file beside the book changes under the cache:
-    /// a cover fetched from the net and written into the book's folder. Without
-    /// this the grid would keep drawing the placeholder it cached until the
-    /// cache was trimmed — wrong, and then quietly right, which is the worse
-    /// kind of wrong.
+    /// For the cases where the file beside the book changes under the cache: a
+    /// cover fetched from the net, chosen from a file, dragged in, or pulled
+    /// out of the book file again. Without this the grid would keep drawing
+    /// what it cached until the cache was trimmed — wrong, and then quietly
+    /// right, which is the worse kind of wrong.
+    ///
+    /// By the name's UUID prefix rather than by rebuilding the keys, and that
+    /// is the whole point: rebuilding them needs to know which generations
+    /// have ever been written, and this type does not. Somebody trying four
+    /// pictures in a row would otherwise leave three in the folder until the
+    /// next trim. The UUID is in the name in plain text for exactly this kind
+    /// of question (`CoverCacheKey.fileName`).
     func forget(_ bookID: UUID) {
-        for size in CoverSize.allCases {
-            let key = CoverCacheKey(bookID: bookID, pixelWidth: size.pixels)
-            try? FileManager.default.removeItem(at: folder.appendingPathComponent(fileName(for: key)))
+        let prefix = bookID.uuidString
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        for name in names where name.hasPrefix(prefix) {
+            try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
         }
     }
 

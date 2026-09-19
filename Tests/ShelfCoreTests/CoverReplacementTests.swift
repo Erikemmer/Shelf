@@ -140,8 +140,49 @@ struct CoverReplacementTests {
         let result = try CoverReplacement.replace(
             with: Self.jpeg(), in: folder, previousGeneration: 0, disposal: bin.disposal)
 
-        #expect(result.written.lastPathComponent == "cover.jpg")
+        #expect(result.written?.lastPathComponent == "cover.jpg")
         #expect(temporary.names(in: "Austen, Jane/Emma (1)") == ["cover.jpg"])
+    }
+
+    // MARK: Taking one away
+
+    /// Not a menu item — **undo**. Setting the first cover on a book that had
+    /// none has to be undoable, and the only honest undo of that is a folder
+    /// with no cover in it again. Without this, undo would leave the picture
+    /// where it was and only move the number back, which is the worst of both:
+    /// the file says one thing and the book says another.
+    @Test("removing a cover takes the file away and still raises the generation")
+    func removing() throws {
+        let temporary = try TemporaryFolder()
+        let folder = try temporary.folder("Austen, Jane/Emma (1)")
+        let bin = try Bin(in: temporary.url)
+        try Self.jpeg(0xAB).write(to: folder.appendingPathComponent("cover.jpg"))
+
+        let result = try CoverReplacement.remove(
+            in: folder, previousGeneration: 2, disposal: bin.disposal)
+
+        #expect(result.written == nil)
+        #expect(result.displaced == "cover.jpg")
+        // The generation moves even though nothing was written: what the grid
+        // holds is a thumbnail of a picture that is no longer there.
+        #expect(result.generation == 3)
+        #expect(temporary.names(in: "Austen, Jane/Emma (1)").isEmpty)
+        #expect(try Data(contentsOf: bin.folder.appendingPathComponent("cover.jpg")) == Self.jpeg(0xAB))
+    }
+
+    @Test("removing a cover from a book that has none changes nothing at all")
+    func removingNothing() throws {
+        let temporary = try TemporaryFolder()
+        let folder = try temporary.folder("Austen, Jane/Emma (1)")
+        let bin = try Bin(in: temporary.url)
+
+        let result = try CoverReplacement.remove(
+            in: folder, previousGeneration: 2, disposal: bin.disposal)
+
+        #expect(result.displaced == nil)
+        // No file changed, so no cached thumbnail is stale.
+        #expect(result.generation == 2)
+        #expect(bin.taken.isEmpty)
     }
 
     // MARK: What is refused
@@ -279,5 +320,70 @@ struct CoverGenerationTests {
         #expect(change.fields == [.cover])
         #expect(change.actionName == "Cover")
         #expect(change.inverse.after.coverGeneration == 0)
+    }
+}
+
+/// How big a picture is allowed to be once it is a cover, and when it is left
+/// exactly as it arrived.
+///
+/// The *rule* is here and the ImageIO that carries it out is in `App/Shelf`,
+/// the same split `EmptiedFolder` has from `FolderDisposal` and
+/// `BookFileReader` has from `PDFFileReader`: the decision is a pure function
+/// tested on Linux, the act needs a Mac.
+///
+/// Two things are being kept apart. A person dropping a 40 MB photograph next
+/// to an 800 KB book has made a library that is mostly pictures of books. And a
+/// cover that is already the right size must come through **byte for byte**:
+/// re-encoding it would lose quality to gain nothing, which is the rule
+/// `ImportRunner.writeCover` has followed since Sprint 1.
+@Suite("How large a cover is allowed to be")
+struct CoverImageRuleTests {
+
+    private func facts(_ width: Int, _ height: Int, _ ext: String? = "jpg") -> CoverImageFacts {
+        CoverImageFacts(pixelWidth: width, pixelHeight: height, fileExtension: ext)
+    }
+
+    @Test("a cover already within the limit is written exactly as it arrived")
+    func smallEnoughIsUntouched() {
+        #expect(CoverImageRule.preparation(for: facts(1_000, 1_500)) == .asIs)
+        #expect(CoverImageRule.preparation(for: facts(1_600, 1_067)) == .asIs)
+    }
+
+    @Test("a picture longer than the limit is brought down to it")
+    func tooLargeIsScaled() {
+        #expect(
+            CoverImageRule.preparation(for: facts(4_000, 6_000))
+                == .reencode(longEdge: CoverImageRule.maxEdgePixels))
+        // Landscape too: the *long* edge is the one that is measured, whichever
+        // way round the picture is. A comic page scanned in a spread is wide.
+        #expect(
+            CoverImageRule.preparation(for: facts(6_000, 4_000))
+                == .reencode(longEdge: CoverImageRule.maxEdgePixels))
+    }
+
+    /// The open panel offers HEIC and TIFF because a Mac is full of both, and
+    /// `CoverFile` can name neither — a folder holding `cover.heic` has a book
+    /// with no cover as far as every other part of this program is concerned.
+    /// So those are always written again as JPEG, however small they are.
+    @Test("a format the folder cannot name is written again as JPEG, at its own size")
+    func unnameableIsTranscoded() {
+        #expect(CoverImageRule.preparation(for: facts(800, 1_200, nil)) == .reencode(longEdge: 1_200))
+    }
+
+    /// Scaling a 400 px scan *up* to the limit would make a blurry file four
+    /// times the size of the sharp one. The limit is a ceiling, never a target.
+    @Test("a small picture is never enlarged to meet the limit")
+    func neverEnlarged() {
+        #expect(CoverImageRule.preparation(for: facts(300, 400, nil)) == .reencode(longEdge: 400))
+    }
+
+    /// A picture ImageIO could not measure at all. Re-encoding at the ceiling
+    /// is the safe answer: whatever it is, what lands beside the book is a
+    /// JPEG of a size this program chose.
+    @Test("a picture whose size could not be read is re-encoded at the ceiling")
+    func unmeasurable() {
+        #expect(
+            CoverImageRule.preparation(for: facts(0, 0, nil))
+                == .reencode(longEdge: CoverImageRule.maxEdgePixels))
     }
 }

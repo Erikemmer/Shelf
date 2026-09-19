@@ -2,6 +2,7 @@ import AppKit
 import ShelfCore
 import SlateKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The right column: everything about the selected book, and since Sprint 2b
 /// every metadata field of it is editable.
@@ -119,7 +120,7 @@ struct InspectorView: View {
     // MARK: Cover
 
     private func cover(for entry: LibraryEntry) -> some View {
-        InspectorCover(entry: entry)
+        InspectorCover(entry: entry, undoManager: undoManager)
             .frame(maxWidth: .infinity)
     }
 
@@ -814,17 +815,130 @@ struct InspectorView: View {
     }
 }
 
-/// The cover at the inspector's size.
+/// The cover at the inspector's size, and the three ways to change it.
 ///
 /// Its own view with its own task, so selecting a book does not make the whole
 /// inspector wait for a decode.
+///
+/// **Why the actions are here and not in a menu bar menu.** A cover belongs to
+/// one book, and the one place in this window that is unambiguously about one
+/// book is the inspector. Putting `Set Cover…` in the Library menu would make
+/// it look as though it applied to the selection, which is the mistake the
+/// inspector's own text fields are locked against across a multiple selection
+/// (`lockedBlock`): a cover typed once into twelve books is not an edit but a
+/// mistake with twelve copies.
 struct InspectorCover: View {
     @Environment(LibraryModel.self) private var model
     let entry: LibraryEntry
+    /// The window's, handed in rather than read from the environment: this
+    /// view is built by `InspectorView`, which already has it, and ⌘Z has to
+    /// undo the change in the window it was made in.
+    let undoManager: UndoManager?
 
     @State private var cover: NSImage?
+    @State private var isTargeted = false
+    @State private var isChoosingFile = false
 
     var body: some View {
+        VStack(spacing: 6) {
+            picture
+                .contextMenu { actions }
+                .onDrop(of: [.fileURL, .image], isTargeted: $isTargeted) { providers in
+                    drop(providers)
+                }
+                .overlay {
+                    // The whole point of a drop target is that it says so
+                    // before the mouse button comes up.
+                    if isTargeted {
+                        RoundedRectangle(cornerRadius: Slate.cornerRadius)
+                            .strokeBorder(Slate.accent, lineWidth: 2)
+                    }
+                }
+                .accessibilityAction(named: Loc.string("Set Cover…")) { isChoosingFile = true }
+
+            Menu(Loc.string("Cover")) { actions }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .accessibilityLabel(Loc.string("Change the cover of %@", entry.book.title))
+
+            if let refusal = model.coverRefusal {
+                VStack(spacing: 2) {
+                    Text(Loc.core(refusal.message))
+                    if let detail = refusal.detail {
+                        Text(detail).foregroundStyle(Slate.textSecondary)
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(Slate.accent)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .fileImporter(
+            isPresented: $isChoosingFile, allowedContentTypes: CoverImage.accepted
+        ) { result in
+            guard case .success(let url) = result else { return }
+            model.setCover(of: entry, fromFileAt: url, undoManager: undoManager)
+        }
+    }
+
+    // MARK: The three ways in
+
+    @ViewBuilder
+    private var actions: some View {
+        Button(Loc.string("Set Cover…")) { isChoosingFile = true }
+
+        // One book, one format: a plain item. Several formats: one item each,
+        // because an EPUB and a PDF of the same book carry two different
+        // pictures and Shelf must not pick for the reader. The same reasoning
+        // as `SendToDeviceSheet`'s format choice.
+        if entry.formats.count == 1, let only = entry.formats.first {
+            Button(Loc.string("Take Cover from Book File")) { take(only) }
+        } else if !entry.formats.isEmpty {
+            Menu(Loc.string("Take Cover from Book File")) {
+                ForEach(entry.formats.sorted { $0.format < $1.format }, id: \.fileName) { format in
+                    Button(format.format.label) { take(format) }
+                }
+            }
+        }
+
+        Divider()
+        Button(Loc.string("Download Cover…")) { model.presentFetchMetadata() }
+    }
+
+    private func take(_ format: BookFormat) {
+        Task { await model.takeCoverFromBookFile(of: entry, format: format, undoManager: undoManager) }
+    }
+
+    /// An image dragged onto the picture.
+    ///
+    /// Two shapes, because the Finder and a browser offer different things: a
+    /// file on disk arrives as a URL, and a picture dragged out of a web page
+    /// or Preview arrives as bytes. `.fileURL` first, so a file keeps its own
+    /// bytes rather than whatever the drag happened to render.
+    private func drop(_ providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                Task { @MainActor in
+                    model.setCover(of: entry, fromFileAt: url, undoManager: undoManager)
+                }
+            }
+            return true
+        }
+        provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+            guard let data else { return }
+            Task { @MainActor in
+                model.setCover(of: entry, fromImageData: data, undoManager: undoManager)
+            }
+        }
+        return true
+    }
+
+    // MARK: The picture
+
+    private var picture: some View {
         Group {
             if let cover {
                 Image(nsImage: cover)
@@ -847,7 +961,12 @@ struct InspectorCover: View {
                     .accessibilityLabel(Loc.string("No cover"))
             }
         }
-        .task(id: entry.id) {
+        // Keyed on the generation and on the refresh counter as well as on the
+        // book, so a replaced cover is redrawn rather than waited out. The
+        // counter existed for this since Sprint 6 and **nothing had ever read
+        // it**: a cover fetched from the net changed the folder and the
+        // inspector went on drawing what it had, until the selection moved.
+        .task(id: [entry.id.uuidString, "\(entry.book.coverGeneration)", "\(model.coverRefreshRequest)"]) {
             guard let loader = model.loader else { return }
             // The grid tier first, blown up, so something appears at once; then
             // the sharp one.

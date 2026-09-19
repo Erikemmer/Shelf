@@ -61,7 +61,13 @@ actor CoverLoader {
     /// in one place (`CoverDecoder.swift`). The loader was unwrapping it here
     /// only for every caller to use it as one thing anyway.
     func cover(for entry: LibraryEntry, size: CoverSize, priority: LoadPriority = .interactive) async -> DecodedCover? {
-        let key = CoverCacheKey(bookID: entry.id, pixelWidth: size.pixels)
+        // The generation is what makes a *replaced* cover miss the file the
+        // last one left in `.shelf/covers/` (ADR 0005, decision 4). It was
+        // always in the key and was always zero, because until Sprint 9 a
+        // cover could not be replaced; taking it off the book is the whole of
+        // what makes the grid show the new picture at once.
+        let key = CoverCacheKey(
+            bookID: entry.id, pixelWidth: size.pixels, generation: entry.book.coverGeneration)
         if let hit = cache(for: size).image(for: entry.id) { return hit }
 
         // Somebody is already decoding this exact cover – wait for them rather
@@ -115,8 +121,14 @@ actor CoverLoader {
     }
 
     /// Forgets one book's cover, in memory and on disk, so the next request
-    /// decodes the file that is there now. Used when a cover has been fetched
-    /// from the net and written into the book's folder.
+    /// decodes the file that is there now.
+    ///
+    /// The generation already makes the *next* read miss, so this is not what
+    /// keeps the window right — it is what keeps the folder from growing a
+    /// cached file per generation for a book somebody is still choosing a
+    /// cover for. What the window needs is the memory half: an `NSCache` is
+    /// keyed by the UUID alone, so the old picture would go on being drawn
+    /// until it happened to be evicted.
     func forget(_ bookID: UUID) async {
         await diskCache.forget(bookID)
         gridCovers.remove(bookID)

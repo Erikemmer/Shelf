@@ -100,9 +100,19 @@ final class OnlineMetadataModel {
 
     private(set) var coverPreview: NSImage?
     private(set) var isFetchingCover = false
-    /// Whether this book has no cover file beside it, which is the only case
-    /// the cover action applies to (CONCEPT §4, "Could").
+    /// Whether the cover from the service is still on offer — false once it
+    /// has been taken, so a second click is not a second write.
     private(set) var wantsCover = false
+    /// Whether there is already a picture beside the book.
+    ///
+    /// **Not a veto any more.** Until Sprint 9 this was the whole of the rule
+    /// — a cover could be fetched only into an empty folder, because there was
+    /// no way to undo one and no way to get the old one back. Both exist now
+    /// (`CoverReplacement`), so what is left is a question of wording: the
+    /// button says *Replace Cover* rather than *Use This Cover*, and the
+    /// preview beside it is what a person judges before pressing it. A silent
+    /// overwrite would still be a surprise; a labelled one is a decision.
+    private(set) var coverAlreadyThere = false
     private(set) var coverNote: String?
 
     /// The quiet line. Network trouble is a sentence in the status bar and
@@ -178,7 +188,8 @@ final class OnlineMetadataModel {
         coverNote = nil
         briefNote = nil
         result = nil
-        wantsCover = currentBook.map { OnlineCover.isWanted(in: folder(of: $0)) } ?? false
+        wantsCover = true
+        coverAlreadyThere = currentBook.map { CoverFile.url(in: folder(of: $0)) != nil } ?? false
 
         guard let query else {
             note = Loc.string("This book has no ISBN and no title to look it up by, so nothing was asked.")
@@ -262,29 +273,36 @@ final class OnlineMetadataModel {
         }
     }
 
-    /// Fetches the cover and writes it beside the book.
+    /// Downloads the cover and hands back the bytes. **Writes nothing.**
     ///
-    /// Only on this action, only when the folder has none, and the book file is
-    /// not opened at all — the cover is a new file next to it. Answers the
-    /// book's id when something was written, so the window can throw away the
-    /// cached thumbnail for exactly that book.
-    func fetchCover() async -> UUID? {
+    /// Until Sprint 9 this wrote the file itself, which made it the second
+    /// place in the program that decided what putting a cover beside a book
+    /// means — and the two had already drifted: this one refused to replace
+    /// anything, so a cover could be fetched exactly once per book and never
+    /// corrected. The write is `LibraryModel.applyCover`'s now, the same one
+    /// `Set Cover…` and the drop target go through, so the download gets the
+    /// Trash, the generation and undo for nothing.
+    ///
+    /// The book file is not opened at all; the cover is a new file next to it.
+    func fetchCoverData() async -> Data? {
         guard let entry = currentBook, let url = chosen?.coverURL, wantsCover else { return nil }
         isFetchingCover = true
         defer { isFetchingCover = false }
         do {
             let data = try await transport.image(at: url, userAgent: NetworkPolicy.standard.userAgent)
-            let written = try OnlineCover.write(data, into: folder(of: entry))
             wantsCover = false
-            coverNote = Loc.string("Saved as %@ next to the book.", written.lastPathComponent)
-            Self.logger.info("cover written for \(entry.id, privacy: .public)")
-            return entry.id
-        } catch let refusal as OnlineCover.Refusal {
-            coverNote = refusal.message
+            Self.logger.info("cover downloaded for \(entry.id, privacy: .public)")
+            return data
         } catch {
             coverNote = Loc.string("The cover could not be fetched: %@", error.localizedDescription)
         }
         return nil
+    }
+
+    /// What the sheet says after a cover has landed.
+    func coverWasWritten(as name: String) {
+        coverAlreadyThere = true
+        coverNote = Loc.string("Saved as %@ next to the book.", name)
     }
 
     private func folder(of entry: LibraryEntry) -> URL {

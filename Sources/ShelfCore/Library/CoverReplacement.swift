@@ -31,8 +31,9 @@ public enum CoverReplacement {
     /// What a replacement turned out to have done.
     public struct Result: Equatable, Sendable {
         /// Where the new picture went. Its extension comes from the bytes, so
-        /// it is not necessarily the name the old one had.
-        public var written: URL
+        /// it is not necessarily the name the old one had. Nil when the cover
+        /// was taken away rather than replaced.
+        public var written: URL?
         /// The file that was displaced, or nil when the book had no cover.
         /// A *name*, because by the time anybody reads this the file is in the
         /// Trash and its URL is no longer where it was.
@@ -77,6 +78,32 @@ public enum CoverReplacement {
             case .cannotDisplace(let why), .cannotWrite(let why): return why
             }
         }
+    }
+
+    /// Takes the cover away, leaving the folder with none.
+    ///
+    /// **Not a menu item — this is what undo needs.** Setting the first cover
+    /// on a book that had none has to be undoable, and the only honest undo of
+    /// that is a folder with no cover in it again.
+    ///
+    /// A book that had no cover to begin with is left entirely alone, and the
+    /// generation does not move: nothing was written, so no cached thumbnail
+    /// has gone stale, and bumping it would throw away a perfectly good
+    /// placeholder for nothing.
+    @discardableResult
+    public static func remove(
+        in folder: URL, previousGeneration: Int, disposal: FolderDisposal = .trash
+    ) throws -> Result {
+        guard let existing = CoverFile.url(in: folder) else {
+            return Result(written: nil, displaced: nil, generation: previousGeneration)
+        }
+        do {
+            try disposal.dispose(existing)
+        } catch {
+            throw Refusal.cannotDisplace(error.localizedDescription)
+        }
+        return Result(
+            written: nil, displaced: existing.lastPathComponent, generation: previousGeneration + 1)
     }
 
     /// Writes these bytes as the book's cover, displacing whatever was there.

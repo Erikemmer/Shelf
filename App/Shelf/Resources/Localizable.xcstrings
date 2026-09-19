@@ -2965,6 +2965,23 @@
         }
       }
     },
+    "Change the cover of %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Cover von %@ ändern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change the cover of %@"
+          }
+        }
+      }
+    },
     "Changed": {
       "extractionState": "manual",
       "localizations": {
@@ -3784,6 +3801,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Done"
+          }
+        }
+      }
+    },
+    "Download Cover…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover herunterladen…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download Cover…"
           }
         }
       }
@@ -6699,6 +6733,23 @@
         }
       }
     },
+    "Puts this picture next to the book and the one that is there in the Trash. ⌘Z puts it back. The book file is not touched": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legt dieses Bild neben das Buch und das vorhandene in den Papierkorb. ⌘Z stellt es wieder her. Die Buchdatei wird nicht angefasst"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puts this picture next to the book and the one that is there in the Trash. ⌘Z puts it back. The book file is not touched"
+          }
+        }
+      }
+    },
     "Quick Look": {
       "extractionState": "manual",
       "localizations": {
@@ -7209,6 +7260,23 @@
         }
       }
     },
+    "Replace Cover": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover ersetzen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace Cover"
+          }
+        }
+      }
+    },
     "Reveals %@ (⇧⌘R)": {
       "extractionState": "manual",
       "localizations": {
@@ -7664,6 +7732,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Series — empty removes the book from its series"
+          }
+        }
+      }
+    },
+    "Set Cover…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover festlegen…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Cover…"
           }
         }
       }
@@ -8266,6 +8351,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tags"
+          }
+        }
+      }
+    },
+    "Take Cover from Book File": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover aus der Buchdatei holen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take Cover from Book File"
           }
         }
       }

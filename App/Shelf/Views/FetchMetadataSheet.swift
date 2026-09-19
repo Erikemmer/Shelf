@@ -298,18 +298,23 @@ struct FetchMetadataSheet: View {
             }
 
             if online.wantsCover, online.chosen?.coverURL != nil {
-                SlateSecondaryButton(online.isFetchingCover ? Loc.string("Saving…") : Loc.string("Use This Cover")) {
-                    Task { await model.fetchCoverFromTheNet() }
+                // The wording carries the warning, because the picture above it
+                // carries the evidence: a person replacing a cover has just
+                // looked at what they are replacing it with. A button that said
+                // "Use This Cover" over an existing one would be a silent
+                // overwrite with a friendly label.
+                SlateSecondaryButton(buttonLabel(online)) {
+                    Task { await model.fetchCoverFromTheNet(undoManager: undoManager) }
                 }
                 .disabled(online.isFetchingCover)
                 // The one thing here that writes a file without Apply, so it
                 // says exactly what it writes and where.
-                .help(Loc.string("Writes cover.jpg next to the book. The book file is not touched"))
-            } else if !online.wantsCover {
-                Text(Loc.string("This book already has a cover file."))
-                    .font(.caption2)
-                    .foregroundStyle(Slate.textSecondary)
-                    .frame(width: 140)
+                .help(
+                    online.coverAlreadyThere
+                        ? Loc.string(
+                            "Puts this picture next to the book and the one that is there in the Trash. "
+                                + "⌘Z puts it back. The book file is not touched")
+                        : Loc.string("Writes cover.jpg next to the book. The book file is not touched"))
             }
             if let note = online.coverNote {
                 Text(note)
@@ -319,6 +324,13 @@ struct FetchMetadataSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// Three states, because two would hide the one that matters: saving,
+    /// replacing something, and putting the first one there.
+    private func buttonLabel(_ online: OnlineMetadataModel) -> String {
+        if online.isFetchingCover { return Loc.string("Saving…") }
+        return online.coverAlreadyThere ? Loc.string("Replace Cover") : Loc.string("Use This Cover")
     }
 
     // MARK: Buttons

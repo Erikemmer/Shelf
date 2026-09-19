@@ -879,25 +879,170 @@ final class LibraryModel {
         return Loc.count("%lld fields", count)
     }
 
-    /// Fetches the cover and forgets the cached thumbnail for that book, so the
-    /// grid and the inspector draw the new one instead of the placeholder they
-    /// have been holding.
-    func fetchCoverFromTheNet() async {
-        guard let online = onlineMetadata, let id = await online.fetchCover() else { return }
-        // The file is on disk now, so the book has a cover whatever the walk
-        // last said.
-        coversOnDisk.insert(id)
-        // The disk cache is keyed by the book's UUID, so the stale thumbnail is
-        // in there under the same key: it is thrown away rather than waited out.
-        await loader?.forget(id)
-        totals = (try? await index?.totals(coversOnDisk: coversOnDisk)) ?? totals
-        coverRefreshRequest += 1
+    /// Downloads the cover the sheet is showing and puts it beside the book.
+    ///
+    /// Down the same path as `Set Cover…` and the drop target since Sprint 9:
+    /// the online model downloads and this writes, so a cover from the net
+    /// goes to the Trash-and-generation chain like any other and is undone
+    /// with ⌘Z like any other. Before that it wrote the file itself and could
+    /// only ever write into an empty folder, which meant a cover fetched once
+    /// could never be corrected.
+    func fetchCoverFromTheNet(undoManager: UndoManager?) async {
+        guard let online = onlineMetadata, let entry = online.currentBook,
+            let data = await online.fetchCoverData()
+        else { return }
+        switch CoverImage.prepare(data) {
+        case .success(let prepared):
+            let current = entries.first { $0.id == entry.id } ?? entry
+            applyCover(prepared, to: current, undoManager: undoManager)
+            online.coverWasWritten(as: CoverFile.name(for: prepared))
+        case .failure(let refusal):
+            coverRefusal = refusal
+        }
     }
 
     /// Bumped when a cover has changed under a book, so the views that hold a
     /// decoded image redraw. A counter for the same reason `focusRequest` is
     /// one: two fetches in a row are two events.
     private(set) var coverRefreshRequest = 0
+
+    // MARK: Changing a cover
+
+    /// What went wrong the last time somebody tried to set a cover, shown
+    /// under the picture in the inspector. Cleared by the next attempt.
+    private(set) var coverRefusal: CoverReplacement.Refusal?
+
+    func clearCoverRefusal() { coverRefusal = nil }
+
+    /// A picture that arrived as bytes rather than as a file: dragged out of a
+    /// web page, or out of Preview.
+    func setCover(of entry: LibraryEntry, fromImageData data: Data, undoManager: UndoManager?) {
+        switch CoverImage.prepare(data) {
+        case .success(let prepared): applyCover(prepared, to: entry, undoManager: undoManager)
+        case .failure(let refusal): coverRefusal = refusal
+        }
+    }
+
+    /// `Set Cover…`, and an image dropped on the inspector.
+    ///
+    /// The picture is prepared before anything on disk moves: a 6 000 px
+    /// photograph is brought down to `CoverImageRule.maxEdgePixels`, a HEIC or
+    /// a TIFF is written again as JPEG because a book folder cannot name
+    /// either, and a cover that is already the right size and the right format
+    /// comes through byte for byte.
+    func setCover(of entry: LibraryEntry, fromFileAt url: URL, undoManager: UndoManager?) {
+        // The open panel hands back a URL the sandbox has opened for us; a URL
+        // dropped on the window has to be asked for. Harmless for the first
+        // case, which simply answers false.
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        switch CoverImage.prepare(contentsOf: url) {
+        case .success(let data): applyCover(data, to: entry, undoManager: undoManager)
+        case .failure(let refusal): coverRefusal = refusal
+        }
+    }
+
+    /// `Take Cover from Book File` — pull the picture out of the book again.
+    ///
+    /// Useful twice: when an earlier import took the cover from the wrong one
+    /// of a book's formats, and when somebody wants back what the file itself
+    /// carries after trying something else.
+    ///
+    /// The format is chosen, not guessed: a book with an EPUB and a PDF has two
+    /// different pictures inside it, so the caller says which. Reading goes
+    /// through `FileReader`, the same dispatch the importer uses, so a PDF is
+    /// page 1 rendered and a CBZ is its first image without a second code path
+    /// that could disagree with the first.
+    func takeCoverFromBookFile(
+        of entry: LibraryEntry, format: BookFormat, undoManager: UndoManager?
+    ) async {
+        guard let library else { return }
+        let url = library.root
+            .appendingPathComponent(entry.folder, isDirectory: true)
+            .appendingPathComponent(format.fileName)
+        let bookFormat = format.format
+        // Off the main actor: a 400 MB PDF rendered on the window's thread is a
+        // beach ball, and reading a book file is exactly what `ImportModel`
+        // does in a detached task for the same reason.
+        let read = await Task.detached(priority: .userInitiated) {
+            FileReader.read(url: url, format: bookFormat)
+        }.value
+        guard let cover = read.cover, !cover.isEmpty else {
+            coverRefusal = .notAnImage
+            return
+        }
+        switch CoverImage.prepare(cover) {
+        case .success(let data): applyCover(data, to: entry, undoManager: undoManager)
+        case .failure(let refusal): coverRefusal = refusal
+        }
+    }
+
+    /// The one path every cover change goes down, forwards and backwards.
+    ///
+    /// The shape is `apply(_ change:)`'s and for the same reason: the *previous
+    /// value* is captured and registered with the window's `UndoManager`
+    /// **before** anything is written, because once the file is written nobody
+    /// can ask the folder what it used to hold. Registering the inverse from
+    /// inside the undo block is what gives redo for nothing.
+    ///
+    /// The previous value here is the picture itself, held in memory on the
+    /// undo stack. That is a few hundred kilobytes per step — a cover is capped
+    /// at `CoverImageRule.maxEdgePixels` before it ever gets here — and it is
+    /// the only way an undo can restore a file that has gone to the Trash
+    /// without going and digging in the Trash for it.
+    ///
+    /// `nil` means "no cover", which is what undoing the *first* cover on a
+    /// book has to restore. Anything else would leave the folder saying one
+    /// thing and the book saying another.
+    func applyCover(_ bytes: Data?, to entry: LibraryEntry, undoManager: UndoManager?) {
+        guard let library else { return }
+        coverRefusal = nil
+        let folder = library.root.appendingPathComponent(entry.folder, isDirectory: true)
+        let previous = CoverFile.url(in: folder).flatMap { try? Data(contentsOf: $0) }
+        // Nothing to do, and nothing to put on the undo stack: choosing the
+        // picture that is already there is not a change.
+        guard previous != bytes else { return }
+
+        do {
+            let result =
+                try bytes.map {
+                    try CoverReplacement.replace(
+                        with: $0, in: folder, previousGeneration: entry.book.coverGeneration)
+                } ?? CoverReplacement.remove(in: folder, previousGeneration: entry.book.coverGeneration)
+
+            undoManager?.registerUndo(withTarget: self) { model in
+                MainActor.assumeIsolated {
+                    // The entry as it is *now*, not as it was captured: its
+                    // generation has moved, and handing back the stale one
+                    // would write the same number twice and leave the grid on
+                    // a thumbnail of the picture being undone.
+                    let current = model.entries.first { $0.id == entry.id } ?? entry
+                    model.applyCover(previous, to: current, undoManager: undoManager)
+                }
+            }
+            undoManager?.setActionName(Loc.core(MetadataChange.Field.cover.label))
+
+            // Now the number, through the same editor every other field goes
+            // through: `metadata.opf` first, then the index (ADR 0001).
+            let change = MetadataChange.make(from: entry.book) { $0.coverGeneration = result.generation }
+            Task { await write(change, to: entry, startedAt: ContinuousClock.now) }
+
+            if bytes == nil {
+                coversOnDisk.remove(entry.id)
+            } else {
+                coversOnDisk.insert(entry.id)
+            }
+            Task {
+                await loader?.forget(entry.id)
+                coverRefreshRequest += 1
+                totals = (try? await index?.totals(coversOnDisk: coversOnDisk)) ?? totals
+            }
+        } catch let refusal as CoverReplacement.Refusal {
+            coverRefusal = refusal
+        } catch {
+            coverRefusal = .cannotWrite(error.localizedDescription)
+        }
+    }
 
     /// What the stored answers take up, for the menu item that names it.
     private(set) var onlineCacheBytes: Int64 = 0

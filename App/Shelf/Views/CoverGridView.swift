@@ -238,15 +238,22 @@ struct BookCell: View {
         }
         .contextMenu { BookMenu(entry: entry) }
         .help(help)
-        .task(id: TaskKey(book: entry.id, size: size)) {
+        .task(id: TaskKey(book: entry.id, size: size, generation: entry.book.coverGeneration)) {
             await loadCover()
         }
     }
 
-    /// Both halves of the key matter: the book, and the size asked for.
+    /// Every part of the key matters: the book, the size asked for, and —
+    /// since Sprint 9 — which picture the book has.
+    ///
+    /// Without the generation a replaced cover is on disk, the cache misses,
+    /// and the cell never asks, because from SwiftUI's side nothing about this
+    /// cell has changed. That is the grid half of the failure this whole
+    /// feature is built around: right on the disk, wrong in the window.
     private struct TaskKey: Equatable {
         let book: UUID
         let size: CoverSize
+        let generation: Int
     }
 
     private var size: CoverSize {
