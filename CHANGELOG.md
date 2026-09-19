@@ -229,13 +229,15 @@ and no server entitlement — Shelf listens for nothing (CONCEPT §12). Steps 6 
 7 have still never run: there is no Developer ID on this Mac, and that is Erik's
 to make.
 
-**CI: still not running.** Checked again on 19 September on three pushes
-(35426960588, 35427877179, 35429435673); every job ends after seven seconds with
-"The job was not started because recent account payments have failed or your
-spending limit needs to be increased". Five sprints now. The substitute is the
-Swift container on this Mac, run against a `git archive` of HEAD: **build 35.5 s,
-613 tests green on Linux** — which is what the Linux job exists to check, and it
-covers the new `ShortcutKey`, the four new sort orders and `ShelfFixtures`.
+**CI: still not running.** Checked again on 19 September on four pushes
+(35426960588, 35427877179, 35429435673, 35432815462); every job ends after seven
+seconds with "The job was not started because recent account payments have
+failed or your spending limit needs to be increased". Five sprints now.
+
+The substitute is the Swift container on this Mac, run against a `git archive`
+of the commit itself: on `4e53102`, **build 36.0 s, 631 tests green on Linux** —
+which is what the Linux job exists to check, and it covers the new
+`ShortcutKey`, the four new sort orders and the whole `ShelfFixtures` split.
 
 ### Added — the window can be used without a mouse and read without perfect eyes
 

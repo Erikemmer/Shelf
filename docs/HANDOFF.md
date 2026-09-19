@@ -48,8 +48,8 @@ docker run --rm -v "$CHECK:/src" -w /src swift:6.1 bash -c \
 
 A `git archive` rather than the repository itself, because `Package.resolved`
 lives beside the repo and the container cannot read it — and because it then
-checks exactly what is committed. Measured 19 September 2026: build 35.5 s,
-**613 tests green on Linux**.
+checks exactly what is committed. Measured 19 September 2026 on `4e53102`:
+build 36.0 s, **631 tests green on Linux**.
 
 ### 3. SlateKit is private, and the CI cannot see it
 
