@@ -3,6 +3,165 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## The closing run before v1.0 · 19 September 2026
+
+Everything below was asked for *after* Sprint 8 was pushed, and every number in
+it was measured on the commit it is quoted for.
+
+### Measured — Linux, and CI, both for the first time in five sprints
+
+**Sprint 8's tests on Linux.** Docker started for this run and stopped again at
+the end of it. `swift:6.1`, against a `git archive` of the commit itself:
+
+| | |
+|---|---|
+| build | **58.4 s** |
+| `ShelfCore` tests | **679 green**, 3.8 s |
+| red | none |
+
+**CI runs again, and the app build ran for the first time ever.** Both
+repositories are public now (`Erikemmer/Shelf`, `Erikemmer/SlateKit`), so the
+two reasons the workflow was a no-op are gone: there are no Actions minutes to
+pay for, and a public package resolves without credentials. Out went the
+`SLATEKIT_TOKEN` gate, its four `if:` conditions and the `git config … insteadOf`
+line.
+
+| job | |
+|---|---|
+| App build (macOS) | **1 m 31 s** |
+| ShelfCore tests (Linux) | 1 m 55 s |
+| ShelfCore tests (macOS) | 1 m 20 s |
+| the whole run | **1 m 59 s**, all three green |
+
+**It found two real defects on its first day**, and both are the same kind:
+code that compiles on the Mac it is written on and not on the one CI runs.
+Xcode 27's SDK annotates `NSImage` as `Sendable`; Xcode 16.4's does not.
+
+1. `DecodedCover` was a plain `Sendable` struct holding an `NSImage`. It is
+   `@unchecked Sendable` now, with the promise it can actually keep written
+   down: the image is made once from an immutable `CGImage` and nothing ever
+   mutates it.
+2. `CoverLoader` is an `actor` and returned `NSImage?`, so the result crossed an
+   isolation boundary. It hands back the `DecodedCover` it already held
+   internally — one `?.image` at four call sites, and no change to the cover
+   pipeline (ADR 0005).
+
+Nine sprints of building the window on one Mac hid both. That is the whole
+argument for the job.
+
+### Fixed — an emptied author folder goes to the Trash, not to `removeItem`
+
+Asked whether `Organize Library…` really only removes folders it emptied itself
+and whether they go to the Trash. Two of the three answers were yes by
+construction; the third was plainly no.
+
+**It was `removeItem`.** "Nothing is deleted outright" has to be a rule about
+the mechanism and not only about the intent, so the act is behind
+`FolderDisposal` — `FileManager.trashItem` on a Mac — and the runner has no
+`removeItem` on that path at all. A test proves it by handing the runner a
+disposal that moves nothing and then finding the folder still on the disk. A
+disposal that *fails* leaves the folder where it is **and** keeps it out of the
+report: a folder reported as gone that is still there is worse than one that
+was never touched.
+
+The seam also answers a question the core could not: `trashItem` is Darwin's
+and is not in swift-corelibs-foundation, so a core calling it directly would not
+build on Linux.
+
+**And `contents.isEmpty` was too strict in a way that mattered.** The Finder
+writes a `.DS_Store` the moment somebody opens a folder to look at it, so
+"looked at once" meant "never tidied". `EmptiedFolder` is a pure rule, tested on
+Linux, over an **allow-list** of names the file system writes for itself —
+never "anything beginning with a dot", because a dot file is how a great many
+programs keep something that matters. `.gitignore` beside `.DS_Store` keeps the
+folder; `.DS_Store` alone does not.
+
+**Verified against the real Trash**, and the check is worth recording because
+the first one lied:
+
+```
+$ ls ~/.Trash | wc -l
+0                     ← not "the Trash is empty". `ls` could not read it
+                        at all (TCC), and `wc -l` swallowed the error.
+$ osascript -e 'tell application "Finder" to return count of items of trash'
+75                    ← including "Atwood, José", "Austen, Becky", … each with
+                        a de-duplicating suffix from a repeated run
+```
+
+The same family as `grep -c` versus `grep -q` and `ps` in the user's locale: a
+check that answers "0" when it means "I could not look". The Trash path works
+from the sandboxed app, which is the case that mattered.
+
+### Fixed — every count line in the window is German in a German window
+
+The five Sprint 8 sheets photographed in German and looked at, one by one
+(`docs/screenshots/sprint-8/de/README.md`). Two defects, and the first is eight
+lines wide.
+
+**The count lines were English.** "8 to move · 7 already right · 1 cannot be"
+above a sheet whose every other word was German; the organise report's
+headline; the export summary; and loudest of all, the import's
+"FAILED: 3 files not verified". Eight lines in five sheets, each the most-read
+line of its sheet, because the window drew the core's own `summary()` and
+`headline` straight.
+
+Those stay as they are — they go into the plain-text reports, which have to be
+readable in ten years by whoever opens them rather than half-German.
+`App/Shelf/Views/Summaries.swift` builds the *window's* line from translated
+pieces, one `Loc.count` each, so the catalogue pluralises: "1 Buch", "2 Bücher",
+no `== 1` anywhere. That is ADR 0016's rule. It reaches four sheets that were
+not part of this task (Add Books, Send to Device) and they were done anyway,
+rather than ship a release counting in two languages.
+
+**And a mistake this project had already made once.** The merge sheet read
+"Diese autoren durchsuchen" and "die derselbe autor ist", from `.lowercased()`
+on a label: right in English, a spelling mistake in German, which capitalises
+its nouns. `SidebarView` carries a comment about the identical slip from
+Sprint 7, where "Alle Bücher" came out as "alle bücher zeigen".
+
+**Nothing German is truncated or clipped anywhere.** German runs two or three
+lines where English runs one or two, and every sheet grows to fit. Twelve
+pictures and twelve accessibility trees, six per language.
+
+### Measured — the closing run
+
+`make proof` end to end, release build, against `~/Library/Caches/Shelf/synthetic`
+— **every section green**, forty-six of them, including all of section 12:
+
+| | |
+|---|---|
+| one author under three spellings, merged | 26 books rewritten, **40 under one spelling** |
+| the index erased and rebuilt from the folders | 40, one spelling, nothing lost |
+| two obstacles built on purpose | **both named** by the preview, neither moved |
+| the organise killed mid-run, then resumed | 25 recognised as already moved · 173 moved · **0 failed** |
+| EPUBs before / after · checksums | 4 996 / 4 996 · **every one identical** |
+| orphaned folders · empty folders left | 0 · 0 |
+| `Undo Organize` | **198 folders back**, checksums still identical |
+| the archive imported into an empty library | **4 996 compared by UUID — the two agree on titles, authors, ratings, read status, series, shelves and tags** |
+| a second export into the same folder | 14 892 unchanged, **0 written** |
+| hard links: library / export / distinct inodes | 4 996 / 4 996 / **4 996** |
+
+`make release-dry` at version 1.0.0: archived, signed ad hoc with the hardened
+runtime on, verified, zipped to **Shelf-1.0.0.zip, 5 624 KB**. Steps 6 and 7 —
+notarise and staple — are still skipped, and still for the one reason nothing in
+this repository can fix: there is no Developer ID on this Mac.
+
+### Not measured, and named
+
+- **No real Calibre has read one of Shelf's exports**, unchanged from Sprint 8:
+  running Calibre's importer over one would mean writing into Erik's own
+  Calibre library.
+- **The five sheets Sprint 7 left unphotographed in German** are still
+  unphotographed — Send to Device, Delete from Device, the Calibre protocol,
+  Fetch Metadata, orphaned folders. Their count lines are fixed with the rest;
+  what no test can answer is their *layout*.
+- **The app build is `Debug` and unsigned on CI.** It answers "does it compile
+  and link", not "is it shippable"; `Scripts/release.sh` asks the second
+  question and needs Apple's two credentials.
+- **This session's own Trash.** Roughly forty empty author folders from the
+  throw-away shot libraries are in it, left there on purpose as the evidence
+  that the Trash path works.
+
 ## Sprint 8 – ordering the library, and the way out of it · 19 September 2026
 
 Measured on Erik's Mac (M-series, macOS 15.6) against
