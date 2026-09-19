@@ -2,10 +2,22 @@
 
 **Next step: release v1.0.** What is open is what Erik has to contribute.
 
-Sprints 1–**9** are done. `main` is green, **699 core tests** on macOS *and* on
+Sprints 1–**9** are done. `main` is green, **701 core tests** on macOS *and* on
 Linux, **CI is green on all three jobs** including the app build, the version in
-`project.yml` is `1.0.0`, and `make release-dry` builds, signs and zips it. The
-tag `v1.0.0` is **not** set and will not be set without Erik's word.
+`project.yml` is `1.0.0`, and `make release-dry` builds, signs and zips it —
+run in full on 19 September 2026: ad-hoc, universal (x86_64 and arm64),
+hardened runtime on, 13 MB app / 5.7 MB zip, notarise and staple skipped and
+saying so. `make proof` ran the same day against the schema Sprint 9 changed:
+4 996 books, 0 failures anywhere, and the `v3-cover-generation` migration's
+cost against an already-populated index measured at ≈180 ms — the same range
+as opening one that never needed it, because a constant-default `ADD COLUMN`
+is metadata-only in SQLite. Numbers for both in `CHANGELOG.md`, including one
+this session could not cleanly settle: opening now reads 907–1 028 ms against
+Sprint 8's 738 ms, measured on a disk that was at 98–100 % capacity from the
+proof run itself, which is reason enough on its own without Sprint 9's one
+extra column — worth a re-measurement on a quiet disk before it is trusted
+either way. The tag `v1.0.0` is **not** set and will not be set without
+Erik's word.
 
 **Sprint 9 is why this file says 9 and not 8.** Trying the program found the
 most visible hole in the grid: a book's cover could not be changed. It can now,
@@ -158,11 +170,12 @@ Du arbeitest mit mir (Erik Emmer) an **Shelf**, einem Mac-only eBook-Manager im
 Look & Feel von Selector. Repo: https://github.com/Erikemmer/Shelf (lokal
 `~/Documents/Shelf`). Shelf ist ein modern aussehendes Calibre: Bibliothek,
 Metadaten, Calibre-Import, Geräte – kein Reader, keine Konvertierung in v1.0.
-**Stand: v1.0 ist freigabebereit**, `main` grün, 679 Kern-Tests (macOS und
+**Stand: v1.0 ist freigabebereit**, `main` grün, 701 Kern-Tests (macOS und
 Linux), CI grün auf allen drei Jobs, SlateKit-Pin
 `0.4.1`, Version `1.0.0` in `project.yml`, Tag `v1.0.0` **nicht** gesetzt.
-Sprint 8 (Umbenennen/Zusammenführen, „Organize Library…", Export) ist fertig;
-oben in `CHANGELOG.md` stehen die Zahlen.
+Sprint 9 (Cover ändern — vier Wege, Papierkorb statt Löschen, ⇧⌘Z repariert)
+ist fertig, ebenso ein `make proof`-Lauf gegen das geänderte Schema und ein
+`make release-dry`; oben in `CHANGELOG.md` stehen die Zahlen.
 
 **Lies zuerst, in dieser Reihenfolge:** `Programmier-Leitlinie.md` (bindend),
 `CLAUDE.md`, diese Datei ganz oben („Was Erik tun muss“), `CHANGELOG.md` (oben

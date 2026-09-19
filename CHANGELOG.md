@@ -3,6 +3,84 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## The 5 000-book proof, after the schema change · 19 September 2026
+
+Sprint 9 changed the database schema (`v3-cover-generation`) and the OPF
+format (`shelf:cover_generation`) for the first time since the closing run.
+Both are exactly what `make proof` and `make release-dry` exist to catch, and
+neither had been run against this sprint's changes until now. Both are green.
+
+### Measured — `make proof`, 4 996 synthetic books
+
+Every section passed with **0 failures** — import, digest verification,
+index rebuild, 200 metadata edits, search, 1 000 shelvings, an organise
+killed and resumed, every format Shelf reads, four e-reader disk images, a
+transfer killed and resumed, a card with no room, and the archive/books/
+Calibre exports each re-imported and compared book by book.
+
+| | |
+|---|---|
+| import, 4 996 books | 651 MB · 77.9 s |
+| index rebuild from the folders | 4 996 books · 14 s |
+| one metadata edit, 200 books | median 2.9 ms · 95th 8.0 ms · worst 16.7 ms · over the 50 ms target 0 of 200 |
+| search 4 996 books for a tag five seconds old | median 0.7 ms |
+| a library of every format (EPUB, MOBI, AZW3, PDF, CBZ, damaged files) | import 21.7 s · rebuild 2.9 s |
+| the archive export re-imported into an empty library, compared | 4 996 of 4 996 agree on title, authors, rating, read status, series, shelves, tags |
+| hard-link export | 5.3 MB actually copied · 9 896 hard links · 0 second copies |
+
+**What Sprint 9 specifically was asked about:**
+
+- **The `v3-cover-generation` migration's cost against an already-populated
+  index.** Simulated rather than waited for — a copy of the finished 4 996-row
+  index had the column dropped and the migration's own record removed, so
+  reopening it made GRDB re-apply `v3-cover-generation` for real, against a
+  populated table this time, instead of the empty one every fresh library's
+  first open already migrates against. Three runs each: **≈180 ms with the
+  migration to run, ≈120–200 ms without** — the same range, not a
+  measurable difference. Expected: `ALTER TABLE … ADD COLUMN … DEFAULT 0`
+  is metadata-only in SQLite for a constant default, so it does not scale
+  with row count. Verified the migration actually ran each time (the
+  recorded migrations and the column both confirmed after) rather than
+  trusting that it should have.
+- **Whether opening still has Sprint 8's times.** `SHELF_TIMING=1` against
+  this run's own 4 996-book library: **index read 1 028 ms cold, 907 ms on a
+  second launch**, against Sprint 8's 738 ms. Slower, by 23–39 %, and **I
+  cannot honestly attribute that to Sprint 9's one extra integer column** —
+  this Mac's disk was at 98–100 % capacity throughout both readings,
+  immediately after `make proof` itself had written and deleted several
+  gigabytes, which is exactly the condition APFS is known to slow down
+  under. I did not re-measure on a quiet, non-full disk, which is what a
+  clean comparison needs. Assumed, not verified: the extra column is one
+  `INTEGER` among the dozen-plus `books` already carries per row and is not
+  a plausible source of 170–290 ms across 4 996 rows on its own.
+
+**What this session created and removed, under `~/Library/Caches/Shelf/`:**
+`synthetic/` (the 5 000-book library and its exports, ADR-conventional path
+`make proof` always uses) and `migration-v3-measure/` (the rollback copies
+above), both removed with `make synthetic-clean` and `rm -rf` respectively
+once their numbers were recorded — disk space ran to within 3 GiB free
+during the export section's peak (a 4 996-book library copied three ways at
+once) before recovering as the script's own cleanup ran. `release/`
+(154 MB) is `release.sh`'s own standing output path, already holding a
+build from before this session; this session's `make release-dry` rebuilt
+it in place, as the tool always does, and it was left rather than removed.
+
+### Measured — `make release-dry`
+
+Green through everything a Developer ID does not gate: test and lint,
+ad-hoc archive, **universal binary (x86_64 and arm64)**, valid signature,
+**hardened runtime on**, entitlements written, zipped. Notarise and staple
+skipped and said so, exactly as `docs/HANDOFF.md` describes.
+
+| | |
+|---|---|
+| app bundle | 13 MB |
+| zipped | 5.7 MB |
+| code signature | `adhoc, runtime` — valid on disk, satisfies its Designated Requirement |
+
+Not measured: notarisation and stapling themselves, which need the
+Developer ID certificate only Erik can make (`docs/HANDOFF.md` §1).
+
 ## Sprint 9 – a cover can be changed · 19 September 2026
 
 Not in the plan. It came out of using the program: everything about a book
