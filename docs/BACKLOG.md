@@ -301,6 +301,23 @@ is currently assumed.
       should fail its digest check, the `.part` should be swept up — and the
       sweep itself runs on a volume that is no longer there, which is the part
       no test has exercised.
+- [ ] **A resumed transfer reports as failures the files it wrote itself.**
+      Measured on 19 September 2026 by `Scripts/runbook-proof.sh`, which is
+      where the numbers in [docs/RUNBOOK.md](RUNBOOK.md) §9 come from: a
+      transfer of 20 books killed after one second left **9 files on the card
+      and 0 of them in the manifest**, and the same transfer run again reported
+      `Verified · 11 books · Skipped: 0 · Failed: 9`, one line each saying "a
+      file of that name is already on the device".
+
+      Nothing is lost — all 20 are on the card afterwards, the `.part` was swept
+      up, and `Device ▸ Show What Is on the Device…` finds the nine by name. But
+      "Failed: 9" is the wrong word for "I had already done that", and the
+      manifest stays behind by nine for the life of the card. The planner skips
+      a book whose digest is in the manifest; it should also recognise a file it
+      would have written, by name **and** digest, and skip it as
+      `alreadyOnDevice` rather than letting the copy fail on
+      `destinationExists`. That is a change to `TransferPlanner`, not to the
+      runner, and it wants a test that kills a transfer and resumes it.
 - [ ] **A real `KoboReader.sqlite`.** `SyntheticKoboDatabase` writes the tables
       and columns Shelf reads; a real one has about a hundred more columns, a
       real WAL, and firmware differences in `___PercentRead` and `ReadStatus`.
@@ -401,7 +418,9 @@ is currently assumed.
       ⌘A and ⇧⌘W were written down nowhere; a menu item reads its words and its
       key out of `ShortcutReference` now, with a test that refuses a key
       equivalent written by hand anywhere else
-- [ ] Signing, notarisation, direct download, runbook → **v1.0**
+- [x] **`docs/RUNBOOK.md`**, twelve paths, every one of them run once by
+      `make runbook` with its output quoted rather than described
+- [ ] Signing, notarisation, direct download → **v1.0**
 
 ### What the localisation did not cover
 

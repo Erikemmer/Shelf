@@ -15,7 +15,7 @@ CACHE ?= $(HOME)/Library/Caches/Shelf
 SYNTHETIC ?= $(CACHE)/synthetic
 
 .PHONY: help bootstrap test build lint format project app app-debug smoke synthetic synthetic-clean proof \
-	online-proof online-library online-shots german-shots contrast accessibility release release-dry clean
+	online-proof online-library online-shots german-shots contrast accessibility runbook release release-dry clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -82,6 +82,9 @@ contrast: ## Check every colour Shelf decides against WCAG AA (needs python3)
 
 accessibility: ## Dump and judge the accessibility tree of every view (needs an unlocked screen)
 	@Scripts/ax-proof.sh
+
+runbook: ## Run every path in docs/RUNBOOK.md once and print what it did
+	@Scripts/runbook-proof.sh
 
 release: ## Build, sign, notarise and staple a downloadable Shelf (needs a Developer ID)
 	@Scripts/release.sh

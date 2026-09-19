@@ -2331,7 +2331,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Konnte %1$@: %2$@"
+            "value": "Es war nicht möglich, %1$@: %2$@"
           }
         },
         "en": {
@@ -7023,7 +7023,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "eine Bibliothek in %@ anzulegen"
+            "value": "eine Bibliothek in „%@“ anzulegen"
           }
         },
         "en": {
@@ -7227,7 +7227,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ zu öffnen"
+            "value": "„%@“ zu öffnen"
           }
         },
         "en": {

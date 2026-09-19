@@ -10,6 +10,45 @@ Measured on Erik's Mac (M-series, macOS 15.6) against
 release path) and `~/Library/Caches/Shelf/measure-library-7b/` (everything from
 19 September: accessibility, contrast, the arrow keys).
 
+### Added — `docs/RUNBOOK.md`, with every path run once and its output quoted
+
+Twelve of them: what is truth and what is cache, back up, restore, rebuild the
+index, move to another drive, the way back to Calibre, a crash in the middle of
+an import, folders no book points at, a crash in the middle of a transfer, where
+the reports and the logs are, the three refusals to open a library, and the one
+thing Shelf never does.
+
+`make runbook` (`Scripts/runbook-proof.sh`) **runs all of it** — against a
+generated library of 20 books, a 400-book import it kills after six seconds, a
+disk image for the other drive, a Kobo image for the transfer — and prints what
+happened, so the quotes in the document can be checked rather than believed. It
+works inside its own folder and detaches its own images.
+
+Running it found three things a document written from the source would have got
+wrong:
+
+- **A resumed transfer reports as failures the files it wrote itself.** A
+  transfer of 20 books killed after one second left 9 on the card and **0 of
+  them in the manifest**; run again it said `Verified · 11 books · Skipped: 0 ·
+  Failed: 9`, one line each for "a file of that name is already on the device".
+  Nothing is lost — all 20 end up on the card, the `.part` is swept up, and
+  `Device ▸ Show What Is on the Device…` finds the nine by name — but "Failed"
+  is the wrong word for "I had already done that". In `docs/BACKLOG.md` under
+  Sprint 5, with the fix named: the planner should recognise a file it would
+  have written and skip it, rather than letting the copy fail.
+- **The read status and the shelves do not travel to Calibre.** They are written
+  as `shelf:read` and `shelf:shelves`, and Calibre ignores a meta it does not
+  know. Everything else does travel, because Shelf writes Calibre's own schema.
+  The runbook says which is which in a table rather than claiming a clean round
+  trip.
+- **A German sentence that had never been read aloud.** "Konnte from-the-future
+  zu öffnen: …" — the frame `Could not %1$@: %2$@` was translated word for word,
+  and German does not take a zu-infinitive that way. It is "Es war nicht
+  möglich, „from-the-future“ zu öffnen: …" now. It is the app's *error* path, so
+  no screenshot run had ever shown it; the runbook provokes one by opening a
+  library whose `schemaVersion` is 99, which is also how §10 demonstrates where
+  the log is.
+
 ### Added — the window can be used without a mouse and read without perfect eyes
 
 Accessibility was the largest thing Sprint 7 owed and nothing of it had been
