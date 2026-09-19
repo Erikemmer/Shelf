@@ -80,7 +80,7 @@ struct SendToDeviceSheet: View {
 
     @ViewBuilder
     private func plannedView(_ plan: TransferPlan, device: ConnectedDevice) -> some View {
-        Text(plan.summary())
+        Text(Summaries.line(for: plan))
             .font(.callout)
             .foregroundStyle(Slate.textPrimary)
 
@@ -147,7 +147,7 @@ struct SendToDeviceSheet: View {
     private func finishedView(_ report: TransferReport) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // The line CONCEPT §8.2 asks for, word for word.
-            Text(report.headline).font(.callout).foregroundStyle(Slate.textPrimary)
+            Text(Summaries.line(for: report)).font(.callout).foregroundStyle(Slate.textPrimary)
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(report.sent, id: \.path) { sent in

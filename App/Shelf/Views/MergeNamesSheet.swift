@@ -64,12 +64,23 @@ struct MergeNamesSheet: View {
             : Loc.string("Rename %@", Loc.core(kind.label))
     }
 
+    /// It does **not** name the kind inside the sentence, and that is the
+    /// second time this project has learned the same thing. It did —
+    /// "…that is the same \(kind)…" with the label lower-cased, which reads
+    /// properly in English and came out in German as "die derselbe autor
+    /// ist", because German capitalises its nouns and a label forced to lower
+    /// case is simply misspelt there. `SidebarView` has the same lesson
+    /// written next to it from Sprint 7.
+    ///
+    /// Leaving the kind out is better than interpolating it capitalised: the
+    /// sheet's own title one line above already says "Rename Author", so the
+    /// sentence repeating it bought nothing.
     private var explanation: String {
         Loc.string(
-            "Tick every spelling that is the same %1$@ and type the one they should all have. "
+            "Tick every spelling that means the same thing and type the one they should all have. "
                 + "Shelf changes the metadata of every book concerned, as one step you can undo. "
-                + "It does not move any folder — “%2$@” does that, and it asks first.",
-            Loc.core(kind.label).lowercased(), Loc.string("Organize Library…"))
+                + "It does not move any folder — “%@” does that, and it asks first.",
+            Loc.string("Organize Library…"))
     }
 
     // MARK: The list
@@ -85,9 +96,11 @@ struct MergeNamesSheet: View {
 
     private var spellings: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField(Loc.string("Search these %@", Loc.core(kind.pluralLabel).lowercased()), text: $search)
+            // Capitalised, for the same reason: "Diese Autoren durchsuchen"
+            // is right and "Diese autoren durchsuchen" is a spelling mistake.
+            TextField(Loc.string("Search these %@", Loc.core(kind.pluralLabel)), text: $search)
                 .textFieldStyle(.roundedBorder)
-                .accessibilityLabel(Loc.string("Search these %@", Loc.core(kind.pluralLabel).lowercased()))
+                .accessibilityLabel(Loc.string("Search these %@", Loc.core(kind.pluralLabel)))
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
@@ -159,7 +172,7 @@ struct MergeNamesSheet: View {
         } else {
             // The count is computed from the very value the button executes,
             // so what is promised and what happens cannot differ.
-            Text(model.plan(for: merge).summary())
+            Text(Summaries.line(for: model.plan(for: merge)))
                 .font(.caption)
                 .foregroundStyle(Slate.textSecondary)
         }

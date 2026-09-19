@@ -2,7 +2,7 @@
     AXGroup [AXHostingView]
       AXStaticText value="Organize Library…"
       AXStaticText value="Moved · 8 folders · Already right: 7 · Could not: 1 · Failed: 0"
-      AXStaticText value="8 author folders were left empty by the moves and removed"
+      AXStaticText value="8 author folders were left empty by the moves and put in the Trash"
       AXStaticText value="The full report is in .shelf/Organize-Report.txt inside the library."
       AXButton desc="Undo Organize"
       AXButton desc="Done"

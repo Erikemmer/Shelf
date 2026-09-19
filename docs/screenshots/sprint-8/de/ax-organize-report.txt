@@ -1,0 +1,8 @@
+  AXSheet
+    AXGroup [AXHostingView]
+      AXStaticText value="Bibliothek aufräumen…"
+      AXStaticText value="Bewegt · 8 Ordner · Schon richtig: 7 · Nicht möglich: 1 · Fehlgeschlagen: 0"
+      AXStaticText value="8 Autorenordner blieben durch die Züge leer und wanderten in den Papierkorb"
+      AXStaticText value="Der vollständige Bericht steht in „.shelf/Organize-Report.txt“ in der Bibliothek."
+      AXButton desc="Aufräumen widerrufen"
+      AXButton desc="Fertig"

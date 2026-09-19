@@ -127,7 +127,7 @@ struct ImportSheet: View {
     private func plan(_ importModel: ImportModel) -> some View {
         let plan = importModel.plan
         return VStack(alignment: .leading, spacing: 10) {
-            Text(plan.summary())
+            Text(Summaries.line(for: plan))
                 .font(.headline)
                 .foregroundStyle(Slate.textPrimary)
 
@@ -201,7 +201,7 @@ struct ImportSheet: View {
 
     private func finished(_ report: ImportReport) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(report.headline)
+            Text(Summaries.line(for: report))
                 .font(.headline)
                 .foregroundStyle(report.everythingVerified ? Slate.affirm : Slate.deny)
             SlateValueRow(name: Loc.string("Copied"), value: ByteCount.format(report.copiedBytes))

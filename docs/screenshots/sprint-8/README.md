@@ -2,7 +2,10 @@
 
 Taken by `make organize-shots` (`Scripts/organize-shot.sh`) against the 16-book
 library `Scripts/organize-library.sh` builds, on 19 September 2026, window at
-1440 × 950, English. Each picture has an accessibility tree beside it
+1440 × 950. **English here and German in `de/`** — the same script, run twice:
+`SHELF_SHOT_LANGUAGE=de` pins the language and picks the German menu names out
+of one table, so a script that drives menus says which language it is written
+for rather than finding out at run time (`Scripts/app-language.sh`). Each picture has an accessibility tree beside it
 (`ax-*.txt`), which is what the run checks its claims against — a picture
 proves a layout and a tree proves a name.
 
@@ -64,7 +67,7 @@ spellings. Correct — this run moved *folders*, and the three spellings are
 three authors until somebody merges them. The two commands are deliberately
 separate.
 
-## `export-dialog.jpg` — Archive
+## `export-archive.jpg` — Archive
 
 The three presets are named for the question they answer, not for their
 settings, and the lit one explains itself: "Everything: the book files, the
@@ -77,6 +80,14 @@ nothing lost."
 > on a dark background reads as eight controls that will not respond. "All" now
 > stands alone with "every format of every book" beside it, and the individual
 > boxes appear only when it is off — wrapped five to a row.
+
+## `export-for-calibre.jpg` — For Calibre
+
+The third preset, and the one that closes what `docs/RUNBOOK.md` §6 had to
+admit in Sprint 7. Its explanation is the longest text in any of these sheets —
+three lines in German — and it earns them: it says what is written, that it is
+a *mapping* and not the real field, and that Shelf's own fields are still
+written beside it.
 
 ## `export-books-only.jpg` — the honest sentence
 
@@ -99,8 +110,8 @@ folder in five years is the person who most needs it.
 - **The export running, and its report.** It would mean writing a second copy
   of a library to take a photograph of a progress bar. The numbers are in
   `CHANGELOG.md` and every one of them comes from `make proof` section 12.
-- **The German window.** These are English (`Scripts/app-language.sh` pins it,
-  and says so in the run). The strings are all in the catalogue and the
-  localisation tests cover them; what a picture could add is whether the
-  *layout* survives longer German words, and that is a run of its own —
-  `docs/BACKLOG.md` carries it with the five sheets Sprint 7 left unphotographed.
+- **The five sheets Sprint 7 left unphotographed in German** — Send to Device,
+  Delete from Device, the Calibre import protocol, Fetch Metadata and the
+  orphaned-folders sheet. Sprint 8's own five are in `de/`; those five are
+  still only covered by the catalogue and the tests. `docs/BACKLOG.md` carries
+  them.

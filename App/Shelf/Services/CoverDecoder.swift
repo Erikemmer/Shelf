@@ -4,7 +4,23 @@ import ShelfCore
 import UniformTypeIdentifiers
 
 /// A decoded cover and what it costs in memory.
-struct DecodedCover: Sendable {
+///
+/// `@unchecked` because `NSImage` is not `Sendable` on every toolchain this
+/// has to build with, and the promise is one this type can actually keep: the
+/// image is made **once**, here, from an immutable `CGImage`, and nothing ever
+/// mutates it afterwards — `CoverLoader` puts it in an `NSCache` and the grid
+/// draws it. It is effectively immutable, which is exactly the case
+/// `@unchecked Sendable` exists for.
+///
+/// It compiled without this on the Mac it is written on and not on the one CI
+/// runs, and **the first run of the app-build job is what found that**: Xcode
+/// 27's SDK annotates `NSImage` as `Sendable` and Xcode 16.4's does not. Plain
+/// `Sendable` therefore made the build depend on which Xcode was in front of
+/// it, which is the sort of thing a CI job exists to notice. Carrying the
+/// `CGImage` instead and building the `NSImage` at the point of drawing would
+/// also work, and was not done a day before a release: the cover pipeline is
+/// the most carefully measured part of this program (ADR 0005).
+struct DecodedCover: @unchecked Sendable {
     let image: NSImage
     let byteSize: Int
 }

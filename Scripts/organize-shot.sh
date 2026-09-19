@@ -17,13 +17,23 @@
 # Needs Screen Recording and Accessibility, and an unlocked screen. It never
 # ends a Shelf it did not start.
 #
+# It runs in **either language**. `SHELF_SHOT_LANGUAGE=de` pins German and uses
+# the German menu names; anything else is English. Every name this script types
+# is in one table below, `menu_name`, so a script that drives menus says which
+# language it is written for rather than discovering it at run time — the
+# Sprint 7 lesson, which cost two runs of `online-shot.sh`.
+#
 # Usage: Scripts/organize-shot.sh [library] [output folder]
+#        SHELF_SHOT_LANGUAGE=de Scripts/organize-shot.sh
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
+LANGUAGE="${SHELF_SHOT_LANGUAGE:-en}"
 LIB="${1:-$HOME/Library/Caches/Shelf/measure-library-8/shots/library}"
-OUT="${2:-$ROOT/docs/screenshots/sprint-8}"
+DEFAULT_OUT="$ROOT/docs/screenshots/sprint-8"
+[ "$LANGUAGE" = "en" ] || DEFAULT_OUT="$DEFAULT_OUT/de"
+OUT="${2:-$DEFAULT_OUT}"
 
 fail() {
     command -v fail_if_locked_now >/dev/null 2>&1 && fail_if_locked_now
@@ -35,7 +45,51 @@ say() { echo "organize-shot: $1"; }
 # Shelf follows the Mac's language; every menu name below is English, so the
 # run says which language it is written for (the Sprint 7 lesson).
 . "$HERE/app-language.sh"
-pin_app_language en
+pin_app_language "$LANGUAGE"
+
+# Every word this script types at a menu or waits for in a window, in one
+# place. A missing row is a loud failure rather than a silent miss, because a
+# menu item asked for by the wrong name reads exactly like a menu item that is
+# not there (Scripts/app-language.sh).
+menu_name() {
+    if [ "$LANGUAGE" = "de" ]; then
+        case "$1" in
+            file) echo "Ablage" ;;
+            library) echo "Bibliothek" ;;
+            organize) echo "Bibliothek aufräumen…" ;;
+            export) echo "Bibliothek exportieren…" ;;
+            spellings) echo "Schreibweisen" ;;
+            target) echo "Alle werden zu" ;;
+            obstacle) echo "dort liegt schon etwas" ;;
+            moved) echo "Bewegt ·" ;;
+            calibre) echo "Für Calibre" ;;
+            booksonly) echo "Nur die Bücher" ;;
+            archive) echo "Archiv" ;;
+            honest) echo "Nur die Buchdateien" ;;
+            move_button) echo "Ordner bewegen" ;;
+            emptied) echo "Autorenordner" ;;
+            *) fail "no German word for '$1' — add it to menu_name" ;;
+        esac
+    else
+        case "$1" in
+            file) echo "File" ;;
+            library) echo "Library" ;;
+            organize) echo "Organize Library…" ;;
+            export) echo "Export Library…" ;;
+            spellings) echo "Spellings" ;;
+            target) echo "They all become" ;;
+            obstacle) echo "already there, and it is not empty" ;;
+            moved) echo "Moved ·" ;;
+            calibre) echo "For Calibre" ;;
+            booksonly) echo "Just the books" ;;
+            archive) echo "Archive" ;;
+            honest) echo "The book files alone" ;;
+            move_button) echo "Move" ;;
+            emptied) echo "author folders" ;;
+            *) fail "no English word for '$1' — add it to menu_name" ;;
+        esac
+    fi
+}
 
 . "$HERE/screen-awake.sh"
 require_awake_screen "$@"
@@ -169,8 +223,10 @@ bring_into_view() {
     done
 }
 
-P=$(bring_into_view "Show only Sebastian Fitzek") \
-    || P=$(bring_into_view "Show only Fitzek, Sebastian") \
+# The sidebar's help string is a sentence and is therefore translated, so the
+# row is found by the author's *name*, which is data and is not.
+P=$(bring_into_view "Sebastian Fitzek, 3") \
+    || P=$(bring_into_view "Fitzek, Sebastian, 3") \
     || fail "no Fitzek row could be brought into view — is this the library Scripts/organize-library.sh built?"
 say "  the author row is at ${P}"
 swift "$HERE/click-at.swift" ${P% *} ${P#* } right 2>/dev/null \
@@ -191,9 +247,9 @@ tell application "System Events"
     key code 36
 end tell
 EOF
-wait_for "Spellings" "the merge sheet never appeared — did the context menu open?"
+wait_for "$(menu_name spellings)" "the merge sheet never appeared — did the context menu open?"
 sleep 1.5
-tree_has "They all become" || fail "the merge sheet has no target field"
+tree_has "$(menu_name target)" || fail "the merge sheet has no target field"
 tree_has "Fitzek" || fail "the merge sheet does not list the spellings it was opened on"
 shoot merge-dialog
 escape
@@ -201,52 +257,54 @@ escape
 # ── 2. The organise preview, with its collisions ─────────────────────────────
 say "the organise preview"
 front
-osascript -e "tell application \"System Events\" to tell (first application process whose unix id is $PID) to click menu item \"Organize Library…\" of menu 1 of menu bar item \"Library\" of menu bar 1" >/dev/null 2>&1 \
-    || fail "there is no Library ▸ Organize Library… item"
-wait_for "to move" "the organise preview never appeared"
-sleep 2
+osascript -e "tell application \"System Events\" to tell (first application process whose unix id is $PID) to click menu item \"$(menu_name organize)\" of menu 1 of menu bar item \"$(menu_name library)\" of menu bar 1" >/dev/null 2>&1 \
+    || fail "there is no $(menu_name library) ▸ $(menu_name organize) item"
 # The obstacle's own words. Not "collision": two indexed books cannot want one
 # folder — the running number is unique — so what a real library has in its way
 # is a folder that is already there (docs/DATA-MODEL.md §10).
-tree_has "already there, and it is not empty" \
-    || fail "the preview names no obstacle — run Scripts/organize-library.sh, which builds one"
+wait_for "$(menu_name obstacle)" "the preview never appeared, or it names no obstacle — run Scripts/organize-library.sh, which builds one"
+sleep 2
 shoot organize-preview
 
 # ── 2b. And the report, which is the picture that says what happened ─────────
 # The one button this script presses. See the note at the top: the library is
 # this project's own throw-away one.
 say "carrying the organise out, for the report"
-click_named "Move 8 Folders" || click_named "Move 7 Folders" || {
-    P=$(swift "$HERE/cell-point.swift" "$PID" "role=AXButton" 2>/dev/null)
-    fail "no “Move … Folders” button in the preview"
-}
-wait_for "Moved ·" "the report never appeared"
+MOVE_BUTTON=$(tree | sed -n "s/.*AXButton desc=\"\([^\"]*$(menu_name move_button)[^\"]*\)\".*/\1/p" | head -1)
+[ -n "$MOVE_BUTTON" ] || fail "no button naming “$(menu_name move_button)” in the preview"
+say "  pressing “${MOVE_BUTTON}”"
+click_named "$MOVE_BUTTON" || fail "could not press “${MOVE_BUTTON}”"
+wait_for "$(menu_name moved)" "the report never appeared"
 sleep 1.5
-tree_has "author folders were left empty" || say "note: no folder was left empty by these moves"
+tree_has "$(menu_name emptied)" || say "note: no folder was left empty by these moves"
 shoot organize-report
 escape
 
 # ── 3. The export dialogue ───────────────────────────────────────────────────
 say "the export dialogue"
 front
-osascript -e "tell application \"System Events\" to tell (first application process whose unix id is $PID) to click menu item \"Export Library…\" of menu 1 of menu bar item \"File\" of menu bar 1" >/dev/null 2>&1 \
-    || fail "there is no File ▸ Export Library… item"
-wait_for "For Calibre" "the export sheet never appeared"
+osascript -e "tell application \"System Events\" to tell (first application process whose unix id is $PID) to click menu item \"$(menu_name export)\" of menu 1 of menu bar item \"$(menu_name file)\" of menu bar 1" >/dev/null 2>&1 \
+    || fail "there is no $(menu_name file) ▸ $(menu_name export) item"
+wait_for "$(menu_name calibre)" "the export sheet never appeared"
 sleep 1.5
 tree_has "metadata.opf" || fail "the export sheet has no metadata.opf switch"
-shoot export-dialog
+shoot export-archive
 
-# The honest sentence is the reason this sheet is worth a picture: press
-# "Just the books" and the dialogue has to say what stays behind.
-if click_named "Just the books"; then
-    sleep 1
-    # The start of the sentence, not the middle of it: an accessibility value
-    # is cut at 90 characters, so a phrase further in can never be matched.
-    tree_has "The book files alone" \
-        || fail "“Just the books” does not say that the ratings and shelves stay behind"
-    shoot export-books-only
-    say "the honest sentence is on screen ✓"
-fi
+# All three presets, because each says something different about what it
+# costs, and the sentence under "just the books" is the reason this sheet is
+# worth photographing at all.
+click_named "$(menu_name booksonly)" || fail "no “$(menu_name booksonly)” button"
+sleep 1
+# The start of the sentence, not the middle of it: an accessibility value is
+# cut at 90 characters, so a phrase further in can never be matched.
+tree_has "$(menu_name honest)" \
+    || fail "“$(menu_name booksonly)” does not say that the ratings and shelves stay behind"
+shoot export-books-only
+say "the honest sentence is on screen ✓"
+
+click_named "$(menu_name calibre)" || fail "no “$(menu_name calibre)” button"
+sleep 1
+shoot export-for-calibre
 escape
 
 say "ok – $OUT (nothing was moved, written or exported)"

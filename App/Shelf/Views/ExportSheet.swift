@@ -250,7 +250,7 @@ struct ExportSheet: View {
                 .foregroundStyle(Slate.accent)
         } else if case .ready(let plan) = model.exportPhase {
             VStack(alignment: .leading, spacing: 2) {
-                Text(plan.summary())
+                Text(Summaries.line(for: plan))
                     .font(.caption)
                     .foregroundStyle(Slate.textPrimary)
                 if plan.optionsChanged {
@@ -295,7 +295,7 @@ struct ExportSheet: View {
 
     private func finished(_ report: ExportReport) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(report.headline)
+            Text(Summaries.line(for: report))
                 .foregroundStyle(Slate.textPrimary)
             Text(
                 Loc.string(
