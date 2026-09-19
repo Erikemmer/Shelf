@@ -196,3 +196,75 @@ public enum CoverReplacement {
         return Result(written: target, displaced: displaced, generation: previousGeneration + 1)
     }
 }
+
+extension CoverReplacement {
+    /// What a commit turned out to do: the entry as it now is, or the refusal
+    /// that stopped it.
+    public enum Commit {
+        case wrote(LibraryEntry)
+        case refused(Refusal)
+    }
+
+    /// The whole two-write protocol behind changing a cover: the generation
+    /// through `MetadataEditor`, then the picture through `replace`/`remove`
+    /// above — with the generation put back if the picture write fails.
+    ///
+    /// This is `LibraryModel.applyCover`'s core, pulled out here rather than
+    /// left in the app layer, for the reason every other rule in `ShelfCore`
+    /// is here: it is the only way this exact sequence — bump, write picture,
+    /// revert on failure — can be driven by a test. `LibraryModel` has no test
+    /// target of its own (`docs/BACKLOG.md`); this does, because it needs
+    /// nothing AppKit has.
+    ///
+    /// ## Why the generation is written before the picture
+    ///
+    /// A cover change is two writes and one of them can fail. The two orders
+    /// are not symmetrical:
+    ///
+    /// - **Picture first.** The new picture is on disk and the book still
+    ///   claims the old generation, so the cache *hits* on the thumbnail of
+    ///   the old one. The window draws a picture that is no longer there, and
+    ///   `Rebuild Index from Folders` brings it back rather than clearing it —
+    ///   precisely the failure `coverGeneration` exists to prevent.
+    /// - **Number first.** The book claims a generation for a picture that has
+    ///   not arrived, so the cache *misses*, decodes the file that is actually
+    ///   there and caches it under the new key. The window is correct. It
+    ///   costs one decode of an unchanged cover, and nothing else.
+    ///
+    /// ## Why a failed picture write undoes the generation
+    ///
+    /// If the picture write then fails, doing nothing further would leave the
+    /// book claiming a generation for a replacement that never happened — a
+    /// small, permanent lie in `metadata.opf`, whose whole reason for existing
+    /// is to be the truth (ADR 0001). So this writes the generation back down
+    /// with a second `MetadataEditor` call. That second write can fail too —
+    /// nothing makes it safer than the first — and if it does, its error is
+    /// what `commit` throws, not the refusal that caused it: at that point
+    /// there are two problems, and the caller has to know about the one nobody
+    /// can fix by trying again. The window is never at risk either way: a
+    /// generation that moved for nothing only costs the one decode above.
+    @discardableResult
+    public static func commit(
+        _ bytes: Data?, to entry: LibraryEntry, library: Library, index: LibraryIndex,
+        disposal: FolderDisposal = .trash
+    ) async throws -> Commit {
+        let folder = library.root.appendingPathComponent(entry.folder, isDirectory: true)
+        let editor = MetadataEditor(library: library)
+        let generation = entry.book.coverGeneration + 1
+        let bump = MetadataChange.make(from: entry.book) { $0.coverGeneration = generation }
+        let bumped = try await editor.apply(bump, to: entry, in: index)
+
+        do {
+            if let bytes {
+                try replace(with: bytes, in: folder, previousGeneration: entry.book.coverGeneration, disposal: disposal)
+            } else {
+                try remove(in: folder, previousGeneration: entry.book.coverGeneration, disposal: disposal)
+            }
+        } catch let refusal as Refusal {
+            let revert = MetadataChange.make(from: bumped.book) { $0.coverGeneration = entry.book.coverGeneration }
+            try await editor.apply(revert, to: bumped, in: index)
+            return .refused(refusal)
+        }
+        return .wrote(bumped)
+    }
+}

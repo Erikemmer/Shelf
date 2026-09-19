@@ -991,7 +991,7 @@ final class LibraryModel {
         let folder = library.root.appendingPathComponent(entry.folder, isDirectory: true)
         guard case .proceed(let previous) = prepareCoverChange(bytes, in: folder) else { return }
         registerCoverUndo(previous: previous, entry: entry, undoManager: undoManager)
-        await commitCoverChange(bytes, to: entry, in: folder)
+        await commitCoverChange(bytes, to: entry)
     }
 
     /// What a cover action has to decide before either write: whether there is
@@ -1047,7 +1047,7 @@ final class LibraryModel {
         let folder = library.root.appendingPathComponent(entry.folder, isDirectory: true)
         guard case .proceed(let previous) = prepareCoverChange(bytes, in: folder) else { return }
         registerCoverUndo(previous: previous, entry: entry, undoManager: undoManager)
-        Task { await self.commitCoverChange(bytes, to: entry, in: folder) }
+        Task { await self.commitCoverChange(bytes, to: entry) }
     }
 
     /// Puts the inverse on the window's undo stack and names it in the Edit
@@ -1078,50 +1078,33 @@ final class LibraryModel {
         undoManager?.setActionName(Loc.core(MetadataChange.Field.cover.label))
     }
 
-    /// The actual writes: the generation first, then the picture. Shared by
-    /// the awaited path (`applyCover`) and the fire-and-forget one
-    /// (`performCoverUndo`'s `Task`).
+    /// The actual writes, through `CoverReplacement.commit`: the generation
+    /// first, then the picture, with the generation put back if the picture
+    /// write fails. Shared by the awaited path (`applyCover`) and the
+    /// fire-and-forget one (`performCoverUndo`'s `Task`).
     ///
-    /// ## Why the number is written before the picture
-    ///
-    /// A cover change is two writes — `metadata.opf` and a file beside it —
-    /// and one of them can fail. Which order they go in decides what a
-    /// failure *costs*, and the two orders are not symmetrical:
-    ///
-    /// - **Picture first.** The new picture is on disk and the book still
-    ///   claims the old generation, so the cache *hits* on the thumbnail of
-    ///   the old one. The window draws a picture that is no longer there, and
-    ///   `Rebuild Index from Folders` brings it back rather than clearing it —
-    ///   which is precisely the failure `coverGeneration` exists to prevent.
-    /// - **Number first.** The book claims a generation for a picture that has
-    ///   not arrived, so the cache *misses*, decodes the file that is actually
-    ///   there and caches it under the new key. The window is correct. It
-    ///   costs one decode of an unchanged cover, and nothing else.
-    ///
-    /// So the number goes first. What happens when the *picture* write then
-    /// fails — the number moved and stays moved — is a separate question,
-    /// answered where it is decided rather than here.
-    private func commitCoverChange(_ bytes: Data?, to entry: LibraryEntry, in folder: URL) async {
-        let generation = entry.book.coverGeneration + 1
-        let change = MetadataChange.make(from: entry.book) { $0.coverGeneration = generation }
-        guard await write(change, to: entry, startedAt: ContinuousClock.now) else {
-            // `write` has already put the reason in the error line; the cover
-            // is untouched, which is the state this began in.
-            return
-        }
-
+    /// Was inline here until this had a name of its own in the core: the
+    /// generation moving and staying moved when the picture write failed was
+    /// a small, permanent lie in `metadata.opf` — a replacement the OPF
+    /// claimed had happened and the folder said had not. Moved to
+    /// `CoverReplacement.commit` both to fix that and because `LibraryModel`
+    /// has no test target of its own (`docs/BACKLOG.md`): the fix could not
+    /// otherwise be proven, only asserted.
+    private func commitCoverChange(_ bytes: Data?, to entry: LibraryEntry) async {
+        guard let library, let index else { return }
+        let startedAt = ContinuousClock.now
         do {
-            if let bytes {
-                try CoverReplacement.replace(
-                    with: bytes, in: folder, previousGeneration: entry.book.coverGeneration)
-            } else {
-                try CoverReplacement.remove(in: folder, previousGeneration: entry.book.coverGeneration)
+            switch try await CoverReplacement.commit(bytes, to: entry, library: library, index: index) {
+            case .wrote(let updated):
+                TimingLog.shared.metadataWritten(MetadataChange.Field.cover.label, since: startedAt)
+                replace(updated)
+                errorMessage = nil
+            case .refused(let refusal):
+                coverRefusal = refusal
+                return
             }
-        } catch let refusal as CoverReplacement.Refusal {
-            coverRefusal = refusal
-            return
         } catch {
-            coverRefusal = .cannotWrite(error.localizedDescription)
+            show(error, doing: Loc.string("save the change to “%@”", entry.book.title))
             return
         }
 
@@ -1132,7 +1115,7 @@ final class LibraryModel {
         }
         await loader?.forget(entry.id)
         coverRefreshRequest += 1
-        totals = (try? await index?.totals(coversOnDisk: coversOnDisk)) ?? totals
+        totals = (try? await index.totals(coversOnDisk: coversOnDisk)) ?? totals
     }
 
     /// What the stored answers take up, for the menu item that names it.
@@ -1181,17 +1164,18 @@ final class LibraryModel {
         Task { await write(change, to: entry, startedAt: startedAt) }
     }
 
-    /// Answers **whether it wrote**, which every caller but one may ignore.
+    /// Writes a metadata change: the file, then the index, then everything the
+    /// window shows that could depend on it.
     ///
-    /// The one that may not is `applyCover`: a cover change is the only edit
-    /// whose other half is a *file*, so "the number did not get written" is
-    /// not an inconvenience there but a folder and a book saying different
-    /// things (see `applyCover`).
-    @discardableResult
+    /// The cover no longer goes through here (Sprint 9). It writes a second
+    /// file besides `metadata.opf`, and a failure partway through that pair
+    /// needs its own unwinding — `CoverReplacement.commit` does that in the
+    /// core, where it can be tested, and `commitCoverChange` calls it
+    /// directly instead.
     private func write(
         _ change: MetadataChange, to entry: LibraryEntry, startedAt: ContinuousClock.Instant
-    ) async -> Bool {
-        guard let library, let index else { return false }
+    ) async {
+        guard let library, let index else { return }
         let editor = MetadataEditor(library: library)
         do {
             let updated = try await editor.apply(change, to: entry, in: index)
@@ -1207,10 +1191,8 @@ final class LibraryModel {
             // So a book that has just been marked read leaves "Unread" at once.
             refilter()
             errorMessage = nil
-            return true
         } catch {
             show(error, doing: Loc.string("save the change to “%@”", entry.book.title))
-            return false
         }
     }
 

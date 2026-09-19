@@ -467,3 +467,93 @@ struct CoverImageRuleTests {
                 == .reencode(longEdge: CoverImageRule.maxEdgePixels))
     }
 }
+
+/// The two-write protocol behind changing a cover, end to end: the generation
+/// through `MetadataEditor`, then the picture through `CoverReplacement`, with
+/// the generation put back if the picture write fails.
+///
+/// This is `LibraryModel.applyCover`'s core, pulled out here so it is
+/// testable at all — `LibraryModel` lives in `App/Shelf` and has no test
+/// target of its own (`docs/BACKLOG.md`).
+@Suite("Committing a cover change: the generation, then the picture")
+struct CoverChangeCommitTests {
+
+    private func png(_ seed: UInt8 = 1) -> Data {
+        MinimalPNG.cover(width: 10, height: 15, seed: seed)
+    }
+
+    /// A book on disk with an index entry to match, ready for `commit`.
+    private func book(
+        in temporary: TemporaryFolder, withCover: Bool
+    ) async throws -> (library: Library, entry: LibraryEntry, folder: URL, index: LibraryIndex) {
+        let (library, _) = try Library.create(at: try temporary.folder("Lib"))
+        let book = Book(title: "Emma", authors: ["Jane Austen"])
+        let folder = library.root.appendingPathComponent("Austen, Jane/Emma (1)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("PK\u{03}\u{04}".utf8).write(to: folder.appendingPathComponent("Emma.epub"))
+        if withCover {
+            try png(9).write(to: folder.appendingPathComponent("cover.png"))
+        }
+        try OPFDocument.write(book, to: folder)
+        let entry = LibraryEntry(book: book, number: 1, folder: "Austen, Jane/Emma (1)")
+        let index = try LibraryIndex(inMemory: "commit-\(UUID().uuidString)")
+        try await index.save(entry)
+        return (library, entry, folder, index)
+    }
+
+    @Test("a successful commit writes the picture and the generation together")
+    func successWritesBoth() async throws {
+        let temporary = try TemporaryFolder()
+        let (library, entry, folder, index) = try await book(in: temporary, withCover: false)
+
+        let outcome = try await CoverReplacement.commit(
+            png(), to: entry, library: library, index: index)
+
+        guard case .wrote(let updated) = outcome else {
+            Issue.record("expected .wrote, got \(outcome)")
+            return
+        }
+        #expect(updated.book.coverGeneration == 1)
+        #expect(CoverFile.url(in: folder) != nil)
+
+        // The OPF and the index agree with what `commit` returned.
+        let onDisk = try OPFDocument.read(
+            Data(contentsOf: folder.appendingPathComponent("metadata.opf")), fallbackTitle: "x")
+        #expect(onDisk.book.coverGeneration == 1)
+        let indexed = try await index.entry(id: entry.id)
+        #expect(indexed?.book.coverGeneration == 1)
+    }
+
+    /// **The test this whole fix hangs on.** A disposal that cannot move the
+    /// existing cover fails the picture half of the write; the generation was
+    /// already bumped in the first half. Left alone, `metadata.opf` would
+    /// claim the cover was replaced when the folder says otherwise — a small,
+    /// permanent lie in the one file that is supposed to be the truth.
+    @Test("a failed picture write reverts the generation, so the OPF does not lie about it")
+    func failedPictureWriteRevertsTheGeneration() async throws {
+        let temporary = try TemporaryFolder()
+        let (library, entry, folder, index) = try await book(in: temporary, withCover: true)
+
+        let outcome = try await CoverReplacement.commit(
+            png(2), to: entry, library: library, index: index, disposal: .none)
+
+        guard case .refused(let refusal) = outcome else {
+            Issue.record("expected .refused, got \(outcome)")
+            return
+        }
+        guard case .cannotDisplace = refusal else {
+            Issue.record("expected .cannotDisplace, got \(refusal)")
+            return
+        }
+        // The generation is back to what it was before `commit` touched it —
+        // not left at 1 for a replacement that never happened.
+        let onDisk = try OPFDocument.read(
+            Data(contentsOf: folder.appendingPathComponent("metadata.opf")), fallbackTitle: "x")
+        #expect(onDisk.book.coverGeneration == 0)
+        let indexed = try await index.entry(id: entry.id)
+        #expect(indexed?.book.coverGeneration == 0)
+        // And the picture that was there is exactly what it was: `.none`
+        // refuses to move anything, so the original file is untouched.
+        #expect(try Data(contentsOf: folder.appendingPathComponent("cover.png")) == png(9))
+    }
+}
