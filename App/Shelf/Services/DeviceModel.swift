@@ -209,7 +209,9 @@ final class DeviceModel {
                 entry: $0, folder: libraryRoot.appendingPathComponent($0.folder, isDirectory: true))
         }
         let plan = await Task.detached(priority: .userInitiated) {
-            TransferPlanner.plan(candidates: candidates, device: device, manifest: manifest)
+            TransferPlanner.plan(
+                candidates: candidates, device: device, manifest: manifest,
+                onDevice: .onVolume(device.volume.url, makeHasher: SHA256Hasher.factory))
         }.value
 
         manifests[device.id] = manifest

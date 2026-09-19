@@ -250,6 +250,79 @@ struct TransferTests {
         #expect(second.skipped.map(\.reason) == [.alreadyOnDevice])
     }
 
+    /// The defect `docs/RUNBOOK.md` §9 measured, pinned as a test: a transfer
+    /// killed between two manifest writes leaves files on the card that no
+    /// manifest names, and before this fix the next run reported every one of
+    /// them as `FAILED … a file of that name is already on the device`.
+    ///
+    /// Killed the way a crash kills, not the way Cancel does: the file is put
+    /// on the volume and the manifest is simply never told, which is exactly
+    /// the state `kill -9` between two batches leaves behind.
+    @Test("a resumed transfer recognises the files it wrote itself, and the manifest catches up")
+    func resumeAfterAnUntidyDeath() async throws {
+        let temporary = try TemporaryFolder()
+        let library = try temporary.folder("library")
+        let volume = try temporary.folder("volume")
+        let payload = Data("a synthetic book".utf8)
+        try payload.write(to: library.appendingPathComponent("Emma.epub"))
+        let digest = try FileDigest.sha256(
+            of: library.appendingPathComponent("Emma.epub"), makeHasher: PortableSHA256Hasher.factory)
+
+        let kobo = try device("kobo", at: volume)
+        let book = candidate(title: "Emma", byteSize: Int64(payload.count), digest: digest, folder: library)
+
+        // What the killed run left: the book on the card, and an empty manifest.
+        try payload.write(to: volume.appendingPathComponent("Jane Austen - Emma.epub"))
+        #expect(DeviceManifest.read(fromVolume: volume, deviceID: "kobo").entries.isEmpty)
+
+        let plan = TransferPlanner.plan(
+            candidates: [book], device: kobo,
+            onDevice: .onVolume(volume, makeHasher: PortableSHA256Hasher.factory))
+        #expect(plan.operations.isEmpty)
+        #expect(plan.skipped.map(\.reason) == [.alreadyOnDevice])
+        #expect(plan.adopted.map(\.path) == ["Jane Austen - Emma.epub"])
+
+        let outcome = try await TransferRunner(makeHasher: PortableSHA256Hasher.factory)
+            .run(.init(device: kobo, plan: plan, manifest: DeviceManifest(deviceID: "kobo")))
+
+        // Not one failure, where there used to be one per file.
+        #expect(outcome.report.failures.isEmpty)
+        // And the card describes itself again, which it never did before.
+        let written = DeviceManifest.read(fromVolume: volume, deviceID: "kobo")
+        #expect(written.entries.map(\.path) == ["Jane Austen - Emma.epub"])
+        #expect(written.entries.first?.sha256 == digest)
+    }
+
+    /// The other half of the same rule, and the more important one: a file
+    /// Shelf did **not** write is neither claimed nor written over.
+    @Test("a file of the same name but other bytes is left alone, not adopted")
+    func aStrangersFileIsNotClaimed() async throws {
+        let temporary = try TemporaryFolder()
+        let library = try temporary.folder("library")
+        let volume = try temporary.folder("volume")
+        try Data("a synthetic book".utf8).write(to: library.appendingPathComponent("Emma.epub"))
+        let digest = try FileDigest.sha256(
+            of: library.appendingPathComponent("Emma.epub"), makeHasher: PortableSHA256Hasher.factory)
+        let somebodyElses = Data("quite another Emma entirely".utf8)
+        try somebodyElses.write(to: volume.appendingPathComponent("Jane Austen - Emma.epub"))
+
+        let kobo = try device("kobo", at: volume)
+        let book = candidate(title: "Emma", byteSize: 16, digest: digest, folder: library)
+        let plan = TransferPlanner.plan(
+            candidates: [book], device: kobo,
+            onDevice: .onVolume(volume, makeHasher: PortableSHA256Hasher.factory))
+
+        #expect(plan.adopted.isEmpty)
+        #expect(plan.operations.count == 1)
+
+        let outcome = try await TransferRunner(makeHasher: PortableSHA256Hasher.factory)
+            .run(.init(device: kobo, plan: plan, manifest: DeviceManifest(deviceID: "kobo")))
+        #expect(outcome.report.failures.count == 1)
+        // The refusal is the point: the stranger's file is still theirs.
+        let onCard = try Data(contentsOf: volume.appendingPathComponent("Jane Austen - Emma.epub"))
+        #expect(onCard == somebodyElses)
+    }
+
     /// Nothing that is not a finished book is left behind, whatever happened.
     @Test("a run leaves no .part file on the device")
     func noLeftovers() async throws {

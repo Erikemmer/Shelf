@@ -97,10 +97,27 @@ public struct TransferPlan: Equatable, Sendable {
 
     public var operations: [TransferOperation]
     public var skipped: [SkippedTransfer]
+    /// Files found on the device that this plan would otherwise have written,
+    /// recognised by their bytes as ones Shelf put there itself.
+    ///
+    /// They are skipped as `alreadyOnDevice`, and the runner folds them into
+    /// the manifest before it copies anything. That is what closes the gap a
+    /// killed transfer leaves: the manifest is written every twenty files, so
+    /// a process that dies without warning can leave up to nineteen books on
+    /// the card that no manifest knows about, and before this the next run
+    /// reported each of them as a failure (`docs/RUNBOOK.md` §9).
+    ///
+    /// The digest in each entry was read **off the device**, which is the same
+    /// thing "verified" means everywhere else here (ADR 0002).
+    public var adopted: [DeviceManifest.Entry]
 
-    public init(operations: [TransferOperation] = [], skipped: [SkippedTransfer] = []) {
+    public init(
+        operations: [TransferOperation] = [], skipped: [SkippedTransfer] = [],
+        adopted: [DeviceManifest.Entry] = []
+    ) {
         self.operations = operations
         self.skipped = skipped
+        self.adopted = adopted
     }
 
     public static let empty = TransferPlan()
@@ -147,11 +164,12 @@ public struct TransferPlan: Equatable, Sendable {
 
 /// Turns a selection of books into a transfer plan.
 ///
-/// Pure — it never touches a file, and the only question it asks about the
-/// disk is one the caller answers (`fileExists`). That is what lets every rule
-/// in here be tested without a device: which format a Kindle gets, which book
-/// cannot be sent at all, what each file ends up called, and that nothing is
-/// sent twice.
+/// Pure — it never touches a file, and the only questions it asks about the
+/// disk are ones the caller answers (`fileExists`, `onDevice`). That is what
+/// lets every rule in here be tested without a device: which format a Kindle
+/// gets, which book cannot be sent at all, what each file ends up called, that
+/// nothing is sent twice, and that a file a killed run left behind is
+/// recognised rather than reported as a failure.
 public enum TransferPlanner {
 
     public static func plan(
@@ -160,10 +178,18 @@ public enum TransferPlanner {
         manifest: DeviceManifest = DeviceManifest(deviceID: ""),
         /// Whether a source file is really in the library folder. The app
         /// passes `FileManager.fileExists`; a test passes a set.
-        fileExists: (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path) }
+        fileExists: (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path) },
+        /// What is already at a path on the device. Asked only when a name
+        /// this plan produced turns out to be taken, so on a tidy card it is
+        /// never asked at all.
+        onDevice: DeviceFileProbe = .none,
+        /// Stamped into an adopted manifest entry. A parameter so a test can
+        /// compare whole entries.
+        now: Date = Date()
     ) -> TransferPlan {
         var operations: [TransferOperation] = []
         var skipped: [SkippedTransfer] = []
+        var adopted: [DeviceManifest.Entry] = []
         var takenPaths: Set<String> = []
         let profile = device.profile
         let limited = device.volume.hasFAT32FileSizeLimit
@@ -201,13 +227,36 @@ public enum TransferPlanner {
             let name = uniqueName(
                 DeviceFileName.of(book, format: chosen, pattern: profile.fileNamePattern),
                 format: chosen, avoiding: &takenPaths, in: profile.booksFolder)
+
+            // Something is already sitting where this book would go. If it is
+            // the very book — the same size, and the same digest read off the
+            // card — then this is a resume after an untidy death: Shelf wrote
+            // that file itself and was killed before the manifest caught up.
+            // Reporting it as a failure was the wrong word for "I had already
+            // done that" (docs/RUNBOOK.md §9), and leaving it out of the
+            // manifest left the card mis-describing itself for good.
+            //
+            // A file of that name whose bytes are *different* is not touched
+            // and not claimed: it may be somebody else's, and the runner still
+            // refuses to write over it.
+            if let size = onDevice.byteSize(name), size == format.byteSize,
+                onDevice.sha256(name) == format.sha256
+            {
+                skipped.append(.init(bookID: book.id, title: book.title, reason: .alreadyOnDevice))
+                adopted.append(
+                    .init(
+                        path: name, bookID: book.id, title: book.title, author: book.primaryAuthor,
+                        format: chosen, byteSize: format.byteSize, sha256: format.sha256, sentAt: now))
+                continue
+            }
+
             operations.append(
                 .init(
                     bookID: book.id, title: book.title, author: book.primaryAuthor, format: chosen,
                     source: source, destinationPath: name, byteSize: format.byteSize,
                     sourceDigest: format.sha256))
         }
-        return TransferPlan(operations: operations, skipped: skipped)
+        return TransferPlan(operations: operations, skipped: skipped, adopted: adopted)
     }
 
     /// The path on the volume, guaranteed not to collide inside this plan.

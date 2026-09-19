@@ -94,6 +94,14 @@ public struct TransferRunner: Sendable {
         try checkSpace(for: options)
 
         var manifest = options.manifest
+        // Files the planner recognised on the card as ones Shelf wrote itself
+        // and then lost track of. Recording them before the first copy means a
+        // run interrupted *again* still leaves the card describing itself.
+        for entry in options.plan.adopted { manifest.record(entry) }
+        if !options.plan.adopted.isEmpty {
+            try? manifest.write(toVolume: options.device.volume.url)
+            checkpoint(manifest)
+        }
         var verified: [TransferReport.Sent] = []
         var failures: [TransferReport.Failure] = []
         var copiedBytes: Int64 = 0

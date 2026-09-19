@@ -752,7 +752,9 @@ enum Commands {
                 entry: $0, folder: library.root.appendingPathComponent($0.folder, isDirectory: true))
         }
         let planStarted = Date()
-        let plan = TransferPlanner.plan(candidates: candidates, device: device, manifest: manifest)
+        let plan = TransferPlanner.plan(
+            candidates: candidates, device: device, manifest: manifest,
+            onDevice: .onVolume(device.volume.url, makeHasher: PortableSHA256Hasher.factory))
         print("\(device.profile.name) at \(device.volume.url.path)")
         print("plan: \(plan.summary()) · \(ImportReport.duration(Date().timeIntervalSince(planStarted)))")
         for reason in SkippedTransfer.Reason.allCases {
