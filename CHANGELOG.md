@@ -3,6 +3,28 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## The size that actually matters: a real 24 MB, 187-entry EPUB · 21 September 2026
+
+The synthetic 60 MB entry that measures the writer's memory cost is not what
+the window will actually hand this writer. A real illustrated EPUB mostly
+*stores* its images rather than deflating them (Pride and Prejudice: 187
+entries, 22 deflated) — the shape a book-sized round trip actually has.
+Measured directly, `/usr/bin/time -l shelf-tool epub-roundtrip` against one
+of the two 24 MB books alone, on Erik's Mac, three runs:
+
+| | |
+|---|---|
+| wall time | 2.02–2.06 s |
+| maximum resident set size | 135.4–135.5 MB |
+| peak memory footprint | 129.5–129.7 MB |
+
+For comparison, the file itself is 24.8 MB — peak memory is a little over
+five times the file's own size, in the same range the 60 MB synthetic
+entry showed (there, roughly seven times, at +420 MB over a much smaller
+115 MB baseline). No code changed for this measurement; the folder it ran
+against (`~/Library/Caches/Shelf/measure-24mb-10/`, a copy of one book) was
+created and removed again by the session that measured it.
+
 ## Sprint 10, part 1 — the strict round trip against six real EPUBs · 21 September 2026
 
 Every fixture `EPUBArchiveWriterTests` proves the writer against is built by
