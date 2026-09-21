@@ -1,23 +1,29 @@
 # Handoff – where Shelf stands, and what is left
 
-**v1.0 candidate: the last commit this session pushes to `main`, 21 September
-2026** (`git log -1` there names it — this file cannot cite its own commit's
-hash). The tag `v1.0.0` is Erik's to set; this session sets none. What this
-session did: made `make lint` refuse a script that can start a Shelf instance
-without the guard (`Scripts/check-shelf-guard.sh`, and it found and fixed one
-real gap — `runbook-proof.sh` had its own ad-hoc check instead of the shared
-one); tried to settle the 907 ms question and could not — free disk space was
-**≈23 GiB**, under the 25 GiB this session was told to require before
-measuring, so it was not re-measured and nothing was deleted to make room;
-wrote the README's paragraph on opening an unsigned build, a `1.0.0` section
-in `CHANGELOG.md`, and a fresh `make release-dry` run in `docs/RELEASE.md`.
+**`v1.0.0` is tagged, on commit `4b5856c`.** Erik set it himself on 21
+September 2026: `git tag -a v1.0.0 4b5856c -m "Shelf 1.0.0 — unsigned"`,
+pushed. That commit is the closing session's v1.0 candidate — 701 core
+tests, `main` green, the README's paragraph on opening an unsigned build,
+the `CHANGELOG.md` `1.0.0` summary. The signature is missing on purpose;
+it is planned as `v1.0.1`, once a Developer ID certificate exists (below).
 
-**Still open, unchanged by this session:**
+**`main` has kept moving since the tag, into Sprint 10 — none of it inside
+`v1.0.0`.** Opening the tag gets exactly what shipped; opening `main` gets
+that plus whatever Sprint 10 has done. So far: `docs/adr/0021-…` (Shelf may
+eventually write into an EPUB, on an explicit command that does not exist
+yet) and a ZIP archive writer (`ZipArchiveWriter` / `EPUBArchiveWriter`)
+proven by a strict round trip against archives this project builds itself —
+including fixing a real bug the same day it was found, where the writer
+decompressed every entry and stored it back, growing a real EPUB's text by
+roughly 2.7×. `CHANGELOG.md` has the numbers. `CLAUDE.md` and
+`docs/CONCEPT.md` are unchanged so far: the "never written" rule falls only
+once the command that replaces it exists.
 
-1. **The 907 ms question itself.** Sprint 9's own measurement — 907–1 028 ms
-   against Sprint 8's 738 ms, on a disk that was 98–100 % full at the time —
-   is still unexplained. It needs a re-measurement on a disk with more than
-   25 GiB free, which this Mac did not have today.
+**Still open:**
+
+1. **The 907 ms question.** Sprint 9's own measurement — 907–1 028 ms
+   against Sprint 8's 738 ms — is still unexplained. Every session since has
+   had too little free disk space to re-measure it cleanly.
 2. **A Developer ID certificate and a notarytool profile.** Nothing has ever
    been notarised. `docs/RELEASE.md` says how; both are Erik's to make.
 3. **The four judgement calls about covers**, listed below.
@@ -25,7 +31,9 @@ in `CHANGELOG.md`, and a fresh `make release-dry` run in `docs/RELEASE.md`.
 
 ---
 
-**Next step: release v1.0.** What is open is what Erik has to contribute.
+**Below is the closing v1.0 session's own report, kept as it was written —
+the tag it describes as not yet set is now `4b5856c`, see the top of this
+file.**
 
 Sprints 1–**9** are done. `main` is green, **701 core tests** on macOS *and* on
 Linux, **CI is green on all three jobs** including the app build, the version in

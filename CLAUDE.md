@@ -76,6 +76,11 @@ builds on Linux), UI in `App/Shelf` (SwiftUI + AppKit) on top of the shared
 9. `git status --short` before `git add -A`. `git push` after every finished step.
 10. Finish with a short plain-language summary: what changed, why, what to check,
     and explicitly what could not be verified.
+11. **A release tag is set only when Erik says so, by name, in a prompt** —
+    not "never", and not inferred from a version number being right or a
+    session calling itself a closing one. `v1.0.0` was set this way, on
+    `4b5856c`, with the exact commands given in the prompt that set it. The
+    same holds for every tag after it.
 
 ## Lessons carried over from Selector
 - **`make smoke` reads the CPU in the C locale.** `ps` formats numbers in the
