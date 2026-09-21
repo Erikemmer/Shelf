@@ -3,6 +3,56 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 10, part 1 — the strict round trip against six real EPUBs · 21 September 2026
+
+Every fixture `EPUBArchiveWriterTests` proves the writer against is built by
+the writer itself, which only ever writes stored or hand-crafted-deflate
+entries it was told to — nothing there was ever compressed by an actual EPUB
+tool. `Scripts/real-epubs.sh` fetches six public-domain books from Project
+Gutenberg into `~/Library/Caches/Shelf/real-epubs-10/` (never the
+repository), deliberately different: EPUB 2 and EPUB 3, illustrated and not,
+German and French for non-ASCII text, and one genuinely large book. A new
+`shelf-tool epub-roundtrip <folder> <output>` runs the same strict round trip
+against all six, and `Scripts/epub-crosscheck.py` checks the result with
+Python's own `zipfile` and `xml.etree` — a second, unrelated implementation
+of both formats.
+
+**Measured — size before and after, all six, byte-identical, not merely
+close:**
+
+| Book | Entries | Deflated | Bytes |
+|---|---|---|---|
+| Alice's Adventures in Wonderland (EPUB2, no images) | 21 | 19 | 136 519 → 136 519 |
+| Die Verwandlung (EPUB2, German) | 10 | 8 | 99 693 → 99 693 |
+| Grimms' Fairy Tales (EPUB2, illustrated) | 71 | 69 | 531 353 → 531 353 |
+| Les Misérables (EPUB3, French, large) | 429 | 387 | 10 123 259 → 10 123 259 |
+| Pride and Prejudice (EPUB2, illustrated) | 187 | 22 | 24 846 132 → 24 846 132 |
+| Pride and Prejudice (EPUB3, illustrated) | 182 | 17 | 24 835 578 → 24 835 578 |
+
+**The cross-check agrees on all six**: `zipfile.ZipFile(...).testzip()`
+returns `None` for every round-tripped file, the entry list matches the
+original's exactly, and `xml.etree` reads the same `dc:title` out of
+`content.opf` before and after — Python's own implementations of ZIP and
+XML, which have never seen this codebase, finding nothing this project's
+own readers would have missed either.
+
+**One thing worth naming rather than assuming:** the round-tripped archives
+are not just close in size to the originals, they are **byte-for-byte
+identical, the whole file** — not only every entry's payload, but the local
+headers, the central directory and the end record too. That was not
+guaranteed by anything this fix promises: it holds because every one of
+these six books' own tooling happens to write the same conventions this
+writer independently chose — general-purpose bit 11 set (UTF-8 names) and
+no others, version-needed `20`, no per-entry extra fields. A ZIP tool is
+free to write any of those differently and still produce a perfectly valid
+archive; this is six real books agreeing with this writer's choices, not a
+guarantee that a seventh would. Nothing else about any of the six was a
+surprise — no DRM, no unusual manifest, no entry this reader or the
+cross-check stumbled on.
+
+`epubcheck` is not installed on this Mac and was not installed to run this
+— skipped, per instruction, rather than added.
+
 ## Sprint 10, part 1, the double-decompression removed — the number did not move · 21 September 2026
 
 `entries(rewriting:)` decompressed a stored entry twice: once via

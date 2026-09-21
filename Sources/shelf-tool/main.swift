@@ -60,6 +60,15 @@ let usage = """
                                     (yes/no) – writes metadata.opf, never the book
       show <library> <title>        print what the index holds about one book
       digest <file>                 SHA-256 of one file, to compare with shasum
+      epub-roundtrip <folder> <output folder>
+                                    every .epub in <folder>, read with
+                                    ZipReader, every entry carried forward
+                                    through EPUBArchiveWriter unchanged,
+                                    written to <output folder>, and read
+                                    again: same entry names, same decompressed
+                                    bytes, same compression method, and the
+                                    size before and after. Never touches
+                                    <folder> itself (docs/adr/0021-…)
       online-read <file>…           read stored answers from Open Library or
                                     Google Books the way the app does, and print
                                     the candidates with their match scores.
@@ -179,6 +188,7 @@ case "shelve": try await Commands.shelve(Array(arguments.dropFirst()))
 case "edit": try await Commands.edit(Array(arguments.dropFirst()))
 case "show": try await Commands.show(Array(arguments.dropFirst()))
 case "digest": try Commands.digest(Array(arguments.dropFirst()))
+case "epub-roundtrip": try Commands.epubRoundtrip(Array(arguments.dropFirst()))
 case "online-read": try Commands.onlineRead(Array(arguments.dropFirst()))
 case "devices": Commands.devices()
 case "device-contents": try await Commands.deviceContents(Array(arguments.dropFirst()))
@@ -2030,6 +2040,80 @@ enum Commands {
         }
         let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
         print(try FileDigest.sha256(of: url, makeHasher: PortableSHA256Hasher.factory))
+    }
+
+    // MARK: epub-roundtrip
+
+    /// The strict round trip (`docs/adr/0021-…`) against EPUBs nobody here
+    /// wrote: read with `ZipReader`, every entry carried forward through
+    /// `EPUBArchiveWriter` unchanged, written out, read again. `<folder>` is
+    /// only ever read; the round-tripped copy is the only thing written, and
+    /// it goes to `<output folder>`, never back over the original.
+    static func epubRoundtrip(_ arguments: [String]) throws {
+        guard arguments.count >= 2 else {
+            print("usage: shelf-tool epub-roundtrip <folder> <output folder>")
+            exit(2)
+        }
+        let folder = URL(fileURLWithPath: (arguments[0] as NSString).expandingTildeInPath, isDirectory: true)
+        let output = URL(fileURLWithPath: (arguments[1] as NSString).expandingTildeInPath, isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+
+        let names =
+            (try? FileManager.default.contentsOfDirectory(atPath: folder.path))?
+            .filter { $0.lowercased().hasSuffix(".epub") }.sorted() ?? []
+        guard !names.isEmpty else {
+            print("no .epub files in \(folder.path)")
+            exit(2)
+        }
+
+        var allOK = true
+        for name in names {
+            let source = folder.appendingPathComponent(name)
+            do {
+                let before = try Data(contentsOf: source)
+                let originalArchive = try ZipReader(data: before)
+                let rewritten = try EPUBArchiveWriter.entries(rewriting: originalArchive)
+                let after = try EPUBArchiveWriter.archive(rewritten)
+                try after.write(to: output.appendingPathComponent(name))
+                let roundTripped = try ZipReader(data: after)
+
+                let ok = try Self.verifyRoundtrip(original: originalArchive, roundTripped: roundTripped, name: name)
+                let deflated = originalArchive.files.filter { $0.method == .deflate }.count
+                print(
+                    "\(name): \(before.count) bytes before, \(after.count) bytes after, "
+                        + "\(originalArchive.entries.count) entries, \(deflated) deflated, "
+                        + "\(ok ? "identical ✓" : "MISMATCH")")
+                allOK = allOK && ok
+            } catch {
+                print("\(name): FAILED – \(error)")
+                allOK = false
+            }
+        }
+        if !allOK { exit(1) }
+    }
+
+    /// Every entry the same path, the same decompressed bytes, and the same
+    /// method – a DEFLATEd entry that came back stored would round-trip
+    /// "successfully" by every other measure and still be the bug this
+    /// writer exists to not have.
+    private static func verifyRoundtrip(original: ZipReader, roundTripped: ZipReader, name: String) throws -> Bool {
+        guard original.entries.map(\.path) == roundTripped.entries.map(\.path) else {
+            print("  \(name): entry names differ")
+            return false
+        }
+        var ok = true
+        for entry in original.files {
+            guard let rewrittenEntry = roundTripped.entry(at: entry.path) else { continue }
+            if rewrittenEntry.method != entry.method {
+                print("  \(name): \(entry.path) changed method (\(entry.method) → \(rewrittenEntry.method))")
+                ok = false
+            }
+            if try original.data(for: entry) != (try roundTripped.data(for: rewrittenEntry)) {
+                print("  \(name): \(entry.path) payload differs")
+                ok = false
+            }
+        }
+        return ok
     }
 
     // MARK: Helpers
