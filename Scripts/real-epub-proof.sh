@@ -13,10 +13,16 @@
 # exactly one entry, the OPF, and every other entry stays bit-identical.
 # Both are checked a second way entirely outside Shelf's own code
 # (`Scripts/epub-crosscheck.py`, stdlib `zipfile` and `xml.etree`).
+# Then a real book *file* replaced, copies only (`shelf-tool
+# epub-file-replace-proof`): the whole `EPUBFileReplacement` path — written,
+# read back, rehashed, the original to the Trash — against every one of the
+# six, one at a time, plus each of its five refusals proven to leave exactly
+# the original file behind.
 #
 # Reads-only against the books: nothing here is written back over an
 # original, and nothing under ~/Library/Caches/Shelf/real-epubs-10/ is ever
-# touched except by Scripts/real-epubs.sh fetching it in the first place.
+# touched except by Scripts/real-epubs.sh fetching it in the first place —
+# section 7 above works against its own copies, in file-replace-proof/.
 #
 # Usage: Scripts/real-epub-proof.sh [books folder]
 set -uo pipefail
@@ -97,10 +103,18 @@ for original in "$BOOKS"/*.epub; do
     python3 "$HERE/epub-crosscheck.py" "$original" "$patched" "$expected" || PATCH_CROSSCHECK_FAILED=1
 done
 
+say "7. A real book file replaced — EPUBFileReplacement, the whole path and the five refusals (docs/adr/0021-…)"
+REPLACE_PROOF="$BOOKS/file-replace-proof"
+rm -rf "$REPLACE_PROOF"
+/usr/bin/time -l "$TOOL" epub-file-replace-proof "$BOOKS" "$REPLACE_PROOF"
+REPLACE_STATUS=$?
+
 say "Summary"
 if [ "$ROUNDTRIP_STATUS" -ne 0 ] || [ "$CROSSCHECK_FAILED" -ne 0 ] || [ "$EPUBCHECK_FAILED" -ne 0 ] \
-    || [ "$PATCH_STATUS" -ne 0 ] || [ "$PATCH_CROSSCHECK_FAILED" -ne 0 ]; then
+    || [ "$PATCH_STATUS" -ne 0 ] || [ "$PATCH_CROSSCHECK_FAILED" -ne 0 ] || [ "$REPLACE_STATUS" -ne 0 ]; then
     fail "at least one check above did not pass – see the sections it named"
 fi
 echo "real-epub-proof: every book round-tripped byte-identical per entry, a real metadata change touches" \
-    "exactly the OPF in every one of them, and the cross-check agrees both times."
+    "exactly the OPF in every one of them, the cross-check agrees both times, and a real book file gets" \
+    "replaced end to end – written, read back, rehashed, the original in the Trash – with each of the" \
+    "five refusals leaving exactly the original file behind."

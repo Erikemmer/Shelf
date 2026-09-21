@@ -79,6 +79,17 @@ let usage = """
                                     original (must be exactly one — the OPF)
                                     and the size of that one entry, before
                                     and after. Never touches <folder> itself
+      epub-file-replace-proof <folder> <working folder>
+                                    the whole EPUBFileReplacement path
+                                    (docs/adr/0021-…) against copies of
+                                    every .epub in <folder>, made in
+                                    <working folder>: patched, written in
+                                    place, read back, rehashed, the original
+                                    to the Trash — one book at a time, never
+                                    concurrently — and then the five
+                                    refusals, each proven to leave exactly
+                                    the original file and nothing else.
+                                    <folder> itself is only ever read
       online-read <file>…           read stored answers from Open Library or
                                     Google Books the way the app does, and print
                                     the candidates with their match scores.
@@ -200,6 +211,7 @@ case "show": try await Commands.show(Array(arguments.dropFirst()))
 case "digest": try Commands.digest(Array(arguments.dropFirst()))
 case "epub-roundtrip": try Commands.epubRoundtrip(Array(arguments.dropFirst()))
 case "epub-metadata-patch": try Commands.epubMetadataPatch(Array(arguments.dropFirst()))
+case "epub-file-replace-proof": try Commands.epubFileReplaceProof(Array(arguments.dropFirst()))
 case "online-read": try Commands.onlineRead(Array(arguments.dropFirst()))
 case "devices": Commands.devices()
 case "device-contents": try await Commands.deviceContents(Array(arguments.dropFirst()))
@@ -2193,6 +2205,300 @@ enum Commands {
             }
         }
         if !allOK { exit(1) }
+    }
+
+    // MARK: epub-file-replace-proof
+
+    /// `EPUBFileReplacement`'s whole path, against copies of every real
+    /// `.epub` in `<folder>` — never `<folder>` itself (`CLAUDE.md`: a
+    /// Calibre-style source folder is only ever read). Two parts:
+    ///
+    /// 1. The whole path, once per book, **sequentially** — the same
+    ///    requirement `EPUBFileReplacement`'s own doc comment states: a
+    ///    caller replacing several books' files does them one at a time,
+    ///    so the peak memory this run costs is one book's, not all six's.
+    /// 2. Each of the five refusals, once, against a fresh copy of a real
+    ///    book — and a check, after each, that exactly the original file
+    ///    is what that refusal's own folder still holds.
+    ///
+    /// Uses the real `.trash` disposal throughout: this is the CLI process,
+    /// not the `swift test` runner, and `FolderDisposal.trash` is reliable
+    /// here (the runner-only `trashItem` failure this sprint found is
+    /// documented in `CHANGELOG.md` and worked around in
+    /// `EPUBFileReplacementTests` with a `Bin`, never here).
+    static func epubFileReplaceProof(_ arguments: [String]) throws {
+        guard arguments.count >= 2 else {
+            print("usage: shelf-tool epub-file-replace-proof <folder> <working folder>")
+            exit(2)
+        }
+        let folder = URL(fileURLWithPath: (arguments[0] as NSString).expandingTildeInPath, isDirectory: true)
+        let working = URL(fileURLWithPath: (arguments[1] as NSString).expandingTildeInPath, isDirectory: true)
+
+        let names =
+            (try? FileManager.default.contentsOfDirectory(atPath: folder.path))?
+            .filter { $0.lowercased().hasSuffix(".epub") }.sorted() ?? []
+        guard !names.isEmpty else {
+            print("no .epub files in \(folder.path)")
+            exit(2)
+        }
+
+        var allOK = true
+        print("— the whole path, \(names.count) real books, one at a time —")
+        allOK = Self.wholeReplacePathProof(names: names, source: folder, working: working) && allOK
+        print("")
+        print("— the five refusals, each against a fresh copy —")
+        allOK = Self.refusalProofs(sample: names[0], source: folder, working: working) && allOK
+        if !allOK { exit(1) }
+    }
+
+    /// Section 1: `EPUBFileReplacement.replace` against a copy of each real
+    /// book, one after another — never a `TaskGroup`, never `async let`,
+    /// so nothing about this loop lets two books' archives be in memory
+    /// at once.
+    private static func wholeReplacePathProof(names: [String], source: URL, working: URL) -> Bool {
+        let runFolder = working.appendingPathComponent("whole-path", isDirectory: true)
+        try? FileManager.default.removeItem(at: runFolder)
+        guard (try? FileManager.default.createDirectory(at: runFolder, withIntermediateDirectories: true)) != nil
+        else {
+            print("could not create \(runFolder.path)")
+            return false
+        }
+
+        var allOK = true
+        for name in names {
+            let copy = runFolder.appendingPathComponent(name)
+            do {
+                try FileManager.default.copyItem(at: source.appendingPathComponent(name), to: copy)
+                let before = try Data(contentsOf: copy)
+                let beforeDigest = FileDigest.sha256(of: before, makeHasher: PortableSHA256Hasher.factory)
+                let originalArchive = try ZipReader(data: before)
+                let read = EPUBMetadata.read(originalArchive, fallbackTitle: name)
+
+                let fields = EPUBOPFPatch.Fields(
+                    title: "[Shelf] " + read.book.title,
+                    authors: read.book.authors.map { "[Shelf] " + $0 },
+                    publisher: "[Shelf] " + (read.book.publisher ?? "Publisher"),
+                    description: "[Shelf] written into the book by epub-file-replace-proof")
+                let patched = try EPUBOPFPatch.entries(patching: fields, in: originalArchive, now: Date())
+                let newContent = try EPUBArchiveWriter.archive(patched.entries)
+
+                let result = try EPUBFileReplacement.replace(with: newContent, at: copy, bookID: UUID())
+                let readBack = try EPUBMetadata.read(url: copy)
+                let titleOK = readBack.book.title == fields.title
+
+                print(
+                    "\(name): \(before.count) → \(newContent.count) bytes, "
+                        + "hash \(String(beforeDigest.prefix(10)))… → \(String(result.format.sha256.prefix(10)))…, "
+                        + "read back \(titleOK ? "✓" : "✗ (\(readBack.book.title))"), original in the Trash "
+                        + "(the Trash accepted it — `replace` would have refused otherwise)")
+                allOK = allOK && titleOK
+            } catch {
+                print("\(name): FAILED – \(error)")
+                allOK = false
+            }
+        }
+        return allOK
+    }
+
+    /// Section 2: the five refusals, each demonstrated once against a
+    /// fresh copy of `sample` — a real book, not a synthetic fixture — and
+    /// each followed by a check that the refusal's own folder holds
+    /// exactly the original file afterwards: no `.part`, no half-result.
+    private static func refusalProofs(sample: String, source: URL, working: URL) -> Bool {
+        let runFolder = working.appendingPathComponent("refusals", isDirectory: true)
+        try? FileManager.default.removeItem(at: runFolder)
+        guard (try? FileManager.default.createDirectory(at: runFolder, withIntermediateDirectories: true)) != nil
+        else {
+            print("could not create \(runFolder.path)")
+            return false
+        }
+        let original = source.appendingPathComponent(sample)
+
+        var allOK = true
+        allOK = Self.proveNotAnEPUBRefused(sample: original, in: runFolder) && allOK
+        allOK = Self.proveDRMRefused(sample: original, in: runFolder) && allOK
+        allOK = Self.proveReadOnlyRefused(sample: original, in: runFolder) && allOK
+        allOK = Self.proveCannotDisplaceRefused(sample: original, in: runFolder) && allOK
+        allOK = Self.proveReadBackFailedRefused(sample: original, in: runFolder) && allOK
+        return allOK
+    }
+
+    /// One book's copy, alone in its own numbered subfolder of `parent`, so
+    /// "exactly the original file and nothing else" can be checked with a
+    /// plain directory listing rather than having to name every sibling.
+    private static func aloneCopy(of sample: URL, named name: String, in parent: URL) throws -> URL {
+        let folder = parent.appendingPathComponent(name, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let copy = folder.appendingPathComponent(sample.lastPathComponent)
+        try FileManager.default.copyItem(at: sample, to: copy)
+        return copy
+    }
+
+    /// After a refusal, `folder` must hold exactly the one file the copy
+    /// started as – the same bytes, and nothing named after
+    /// `EPUBFileReplacement.partialPrefix` left behind.
+    private static func onlyOriginalRemains(in folder: URL, name: String, unchangedFrom before: Data) -> Bool {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        guard names == [name] else {
+            print("  ✗ \(folder.lastPathComponent): expected only \(name), found \(names)")
+            return false
+        }
+        let after = try? Data(contentsOf: folder.appendingPathComponent(name))
+        guard after == before else {
+            print("  ✗ \(folder.lastPathComponent): \(name) changed")
+            return false
+        }
+        return true
+    }
+
+    private static func proveNotAnEPUBRefused(sample: URL, in parent: URL) -> Bool {
+        do {
+            let copy = try Self.aloneCopy(of: sample, named: "not-an-epub", in: parent)
+            // Truncated to a handful of bytes: still named `.epub`, no
+            // longer a readable ZIP at all.
+            try Data([0x50, 0x4B, 0x03, 0x04]).write(to: copy, options: .atomic)
+            let before = try Data(contentsOf: copy)
+            do {
+                try EPUBFileReplacement.replace(with: Data(), at: copy, bookID: UUID())
+                print("not-an-epub: ✗ did not refuse")
+                return false
+            } catch EPUBFileReplacement.Refusal.notAnEPUB {
+                let ok = Self.onlyOriginalRemains(
+                    in: copy.deletingLastPathComponent(), name: copy.lastPathComponent, unchangedFrom: before)
+                print("not-an-epub: refused ✓, original intact \(ok ? "✓" : "✗")")
+                return ok
+            }
+        } catch {
+            print("not-an-epub: FAILED to set up – \(error)")
+            return false
+        }
+    }
+
+    private static func proveDRMRefused(sample: URL, in parent: URL) -> Bool {
+        do {
+            let copy = try Self.aloneCopy(of: sample, named: "drm-protected", in: parent)
+            let archive = try ZipReader(url: copy)
+            var entries = try EPUBArchiveWriter.entries(rewriting: archive)
+            entries.append(.raw(path: "META-INF/encryption.xml", text: "<encryption/>"))
+            try EPUBArchiveWriter.archive(entries).write(to: copy, options: .atomic)
+            let before = try Data(contentsOf: copy)
+            do {
+                try EPUBFileReplacement.replace(with: Data(), at: copy, bookID: UUID())
+                print("drm-protected: ✗ did not refuse")
+                return false
+            } catch EPUBFileReplacement.Refusal.drmProtected {
+                let ok = Self.onlyOriginalRemains(
+                    in: copy.deletingLastPathComponent(), name: copy.lastPathComponent, unchangedFrom: before)
+                print("drm-protected: refused ✓, original intact \(ok ? "✓" : "✗")")
+                return ok
+            }
+        } catch {
+            print("drm-protected: FAILED to set up – \(error)")
+            return false
+        }
+    }
+
+    private static func proveReadOnlyRefused(sample: URL, in parent: URL) -> Bool {
+        do {
+            let copy = try Self.aloneCopy(of: sample, named: "read-only", in: parent)
+            let folder = copy.deletingLastPathComponent()
+            let before = try Data(contentsOf: copy)
+            try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: folder.path)
+            defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path) }
+
+            guard !FileManager.default.isWritableFile(atPath: folder.path) else {
+                print("read-only: skipped – this process can write through the permission bits (root?)")
+                return true
+            }
+            do {
+                try EPUBFileReplacement.replace(with: Data(), at: copy, bookID: UUID())
+                print("read-only: ✗ did not refuse")
+                return false
+            } catch EPUBFileReplacement.Refusal.readOnlyVolume(let volume) {
+                let ok = Self.onlyOriginalRemains(in: folder, name: copy.lastPathComponent, unchangedFrom: before)
+                print("read-only: refused ✓ (“\(volume)”), original intact \(ok ? "✓" : "✗")")
+                return ok
+            }
+        } catch {
+            print("read-only: FAILED to set up – \(error)")
+            return false
+        }
+    }
+
+    private static func proveCannotDisplaceRefused(sample: URL, in parent: URL) -> Bool {
+        do {
+            let copy = try Self.aloneCopy(of: sample, named: "cannot-displace", in: parent)
+            let before = try Data(contentsOf: copy)
+            let archive = try ZipReader(data: before)
+            let read = EPUBMetadata.read(archive, fallbackTitle: copy.lastPathComponent)
+            let fields = EPUBOPFPatch.Fields(title: "[Shelf] " + read.book.title)
+            let patched = try EPUBOPFPatch.entries(patching: fields, in: archive, now: Date())
+            let newContent = try EPUBArchiveWriter.archive(patched.entries)
+            do {
+                try EPUBFileReplacement.replace(with: newContent, at: copy, bookID: UUID(), disposal: .none)
+                print("cannot-displace: ✗ did not refuse")
+                return false
+            } catch EPUBFileReplacement.Refusal.cannotDisplace {
+                let ok = Self.onlyOriginalRemains(
+                    in: copy.deletingLastPathComponent(), name: copy.lastPathComponent, unchangedFrom: before)
+                print("cannot-displace: refused ✓, original intact \(ok ? "✓" : "✗")")
+                return ok
+            }
+        } catch {
+            print("cannot-displace: FAILED to set up – \(error)")
+            return false
+        }
+    }
+
+    private static func proveReadBackFailedRefused(sample: URL, in parent: URL) -> Bool {
+        do {
+            let copy = try Self.aloneCopy(of: sample, named: "read-back-fails", in: parent)
+            let before = try Data(contentsOf: copy)
+            // A "new" file that is a readable EPUB but a different, much
+            // smaller book – the original's title and author do not come
+            // back, so the read-back step has to catch it.
+            let bareOPF = """
+                <?xml version='1.0' encoding='utf-8'?>
+                <package xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0" unique-identifier="id">
+                  <metadata>
+                    <dc:identifier id="id">urn:uuid:\(UUID().uuidString)</dc:identifier>
+                  </metadata>
+                  <manifest>
+                    <item id="text" href="text.xhtml" media-type="application/xhtml+xml"/>
+                  </manifest>
+                  <spine><itemref idref="text"/></spine>
+                </package>
+                """
+            let bareEntries: [ZipArchiveWriter.Entry] = [
+                .raw(path: "mimetype", text: "application/epub+zip"),
+                .raw(
+                    path: "META-INF/container.xml",
+                    text: """
+                        <?xml version="1.0" encoding="UTF-8"?>
+                        <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                          <rootfiles>
+                            <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+                          </rootfiles>
+                        </container>
+                        """),
+                .raw(path: "OEBPS/content.opf", text: bareOPF),
+                .raw(path: "OEBPS/text.xhtml", text: "<html><body><p>empty</p></body></html>"),
+            ]
+            let newContent = try EPUBArchiveWriter.archive(bareEntries)
+            do {
+                try EPUBFileReplacement.replace(with: newContent, at: copy, bookID: UUID())
+                print("read-back-fails: ✗ did not refuse")
+                return false
+            } catch EPUBFileReplacement.Refusal.readBackFailed {
+                let ok = Self.onlyOriginalRemains(
+                    in: copy.deletingLastPathComponent(), name: copy.lastPathComponent, unchangedFrom: before)
+                print("read-back-fails: refused ✓, original intact \(ok ? "✓" : "✗")")
+                return ok
+            }
+        } catch {
+            print("read-back-fails: FAILED to set up – \(error)")
+            return false
+        }
     }
 
     private static func verifyExactlyOneEntryDiffers(

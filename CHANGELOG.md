@@ -3,6 +3,84 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 10, Schritt E1 — a book's own file may now be replaced · 21 September 2026
+
+The rule that a book file is never written, deleted or overwritten falls
+here for the first time, in the controlled way `docs/adr/0021-…` describes.
+`EPUBFileReplacement` is the whole of it, and no window calls it yet:
+
+1. **Preflight, before a byte is touched** — is it a readable EPUB, is it
+   free of `META-INF/encryption.xml` (`DRMProbe`'s own check, reused, not
+   reimplemented), can its folder actually be written to. A read-only
+   volume is named here, not discovered halfway through a write.
+2. The new bytes are written under a `.shelf-epub-write-*.part` name next
+   to the original — the same prefix pattern `ImportRunner`, `ExportRunner`
+   and `CoverReplacement` already use, and swept the same way on an
+   interrupted run's next attempt.
+3. **Read back with Shelf's own reader**, `EPUBMetadata.read` — the same
+   one `BookFileReader` trusts for an import. Title, author (if the
+   original had one) and cover (if the original had one) all have to come
+   back, and the archive has to open at all, before the new file counts
+   for anything.
+4. The bytes on disk are hashed and checked against what was meant to be
+   written — `ContentHasher`'s own "copy, verify, then trust"
+   (`docs/adr/0002-…`), applied to a generated file rather than a copied
+   one.
+5. The original goes to the Trash through `FolderDisposal`, never
+   `removeItem`. A disposal that refuses leaves the `.part` swept and the
+   original exactly as it was.
+6. The `.part` takes the original's exact path.
+
+**No ⌘Z.** The Trash is the way back — the same answer a replaced cover
+already gives to "I didn't mean that", written as its own sentence in
+`EPUBFileReplacement`'s doc comment, on purpose: two different answers to
+⌘Z for two kinds of file change would be worse than one consistent one.
+
+**Only the index changes.** `BookFormat.byteSize`, `.sha256` and
+`.modifiedAt` are re-derived from the file that is now actually there and
+saved into `LibraryIndex` through `EPUBFileReplacement.commit`; nothing is
+mirrored into `metadata.opf`, because all three are exactly the kind of
+fact ADR 0001 already says stays out of the sidecar — re-derivable from the
+folder at any time, and stale the moment anything else touches the file.
+Confirmed as the right split before writing it, not after: a `shelf:
+file_sha256` in the OPF would have been a second copy of a fact nobody
+reads back out of there, going wrong the instant something else touches
+the book.
+
+**Sequential, never concurrent, across several books** — `commit` called in
+a plain loop, never a `TaskGroup` or `async let`. At 24 MB and 187 entries
+for a real, illustrated EPUB (the measurement below this one), the peak
+memory a batch of replacements costs is one book's, not the whole batch's.
+
+**Proof:** `shelf-tool epub-file-replace-proof`, wired into
+`Scripts/real-epub-proof.sh` as its section 7 — the whole path against
+copies of all six real books, one after another, through the *real* Trash
+(this is the CLI process, not the `swift test` runner — see the finding
+below), plus each of the five refusals proven once against a fresh real
+copy, with a check after each that its folder holds exactly the original
+file and nothing named `.shelf-epub-write-*`. 763 core tests, up from 754 –
+`EPUBFileReplacementTests`, nine of them, against synthetic fixtures built
+through `EPUBArchiveWriter` itself.
+
+**Measured — all six real books replaced one after another, `/usr/bin/time
+-l` around the whole run, this Mac:**
+
+68.3 s real, 268 238 848 B (255.8 MB) maximum resident set size, 224 051 968 B
+(213.7 MB) peak memory footprint. In the same range as the single 24 MB
+book's own peak (135 MB, measured below) rather than six times it – the
+batch's cost is the largest book's, not the sum of all six, which is what
+"sequential, never concurrent" was for.
+
+**A real, environment-specific bug found along the way, not a bug in this
+type:** `FileManager.trashItem` fails reproducibly inside the `swift test`
+runner process (`.cannotWrite("… couldn't be moved to "ShelfTests-…"
+because an item with the same name already exists.")`), confirmed by two
+standalone `swift` scripts that ran the identical sequence outside the test
+harness and both succeeded. Not a `shelf-tool` or app-process problem —
+only the Swift Testing runner. `EPUBFileReplacementTests` works around it
+the way `CoverReplacementTests` already does: a `Bin` that moves to a local
+sibling folder instead of asking the real Trash for anything.
+
 ## Sprint 10, part 2, extended — a missing field is created, not silently skipped · 21 September 2026
 
 The entry below said "never invents structure" and left it there: a field
