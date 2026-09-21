@@ -29,8 +29,9 @@ struct EPUBOPFPatchTests {
         // this test must find unchanged.
         let opf = Self.opf(extraMetadata: #"<dc:identifier opf:scheme="isbn">9780000000000</dc:identifier>"#)
         let patched = try EPUBOPFPatch.apply(.init(identifiers: ["isbn": "9781111111111"]), to: opf)
+        #expect(patched.unwritten.isEmpty)
 
-        let root = try XMLTree.parse(patched)
+        let root = try XMLTree.parse(patched.text)
         #expect(root.attribute("unique-identifier") == "id")
         let identifiers = root.descendants(named: "identifier")
         let anchor = identifiers.first { $0.attribute("id") == "id" }
@@ -39,11 +40,12 @@ struct EPUBOPFPatchTests {
         #expect(isbn?.text == "9781111111111")
     }
 
-    @Test("an identifier scheme Shelf has no value for is left exactly as it was")
+    @Test("an identifier scheme Shelf has no value for is left exactly as it was, and reported unwritten")
     func unmentionedIdentifierUntouched() throws {
         let opf = Self.opf(extraMetadata: #"<dc:identifier opf:scheme="isbn">9780000000000</dc:identifier>"#)
         let patched = try EPUBOPFPatch.apply(.init(identifiers: ["asin": "B000000000"]), to: opf)
-        #expect(patched == opf)
+        #expect(patched.text == opf)
+        #expect(patched.unwritten == ["identifier:asin"])
     }
 
     // MARK: Trap 2 — an author's id, EPUB 2 and EPUB 3
@@ -56,7 +58,7 @@ struct EPUBOPFPatchTests {
                 """)
         let patched = try EPUBOPFPatch.apply(.init(authors: ["Jane Smith"]), to: opf)
 
-        let root = try XMLTree.parse(patched)
+        let root = try XMLTree.parse(patched.text)
         let creator = try #require(root.descendants(named: "creator").first)
         #expect(creator.text == "Jane Smith")
         #expect(creator.attribute("file-as") == "Doe, Jane")
@@ -76,7 +78,7 @@ struct EPUBOPFPatchTests {
                 """)
         let patched = try EPUBOPFPatch.apply(.init(authors: ["Jane Smith"]), to: opf)
 
-        let root = try XMLTree.parse(patched)
+        let root = try XMLTree.parse(patched.text)
         let creator = try #require(root.descendants(named: "creator").first)
         #expect(creator.text == "Jane Smith")
         #expect(creator.attribute("id") == "creator1")
@@ -92,7 +94,7 @@ struct EPUBOPFPatchTests {
                 <dc:creator opf:file-as="Grimm, Wilhelm">Wilhelm Grimm</dc:creator>
                 """)
         let patched = try EPUBOPFPatch.apply(.init(authors: ["Author One", "Author Two"]), to: opf)
-        let root = try XMLTree.parse(patched)
+        let root = try XMLTree.parse(patched.text)
         #expect(root.descendants(named: "creator").map(\.text) == ["Author One", "Author Two"])
     }
 
@@ -116,7 +118,7 @@ struct EPUBOPFPatchTests {
         let now = calendar.date(from: components)!
 
         let patched = try EPUBOPFPatch.apply(.init(title: "New Title"), to: opf, now: now)
-        let root = try XMLTree.parse(patched)
+        let root = try XMLTree.parse(patched.text)
         let modified = root.descendants(named: "meta").first {
             $0.attribute("property")?.lowercased() == "dcterms:modified"
         }
@@ -130,14 +132,14 @@ struct EPUBOPFPatchTests {
                 <meta property="dcterms:modified">2020-01-01T00:00:00Z</meta>
                 """)
         let patched = try EPUBOPFPatch.apply(.init(), to: opf, now: Date())
-        #expect(patched == opf)
+        #expect(patched.text == opf)
     }
 
     @Test("EPUB 2 with no dcterms:modified never gets one invented")
     func dctermsModifiedNeverInvented() throws {
         let opf = Self.opf()
         let patched = try EPUBOPFPatch.apply(.init(title: "New Title"), to: opf, now: Date())
-        #expect(!patched.lowercased().contains("dcterms:modified"))
+        #expect(!patched.text.lowercased().contains("dcterms:modified"))
     }
 
     // MARK: Trap 4 — the cover
@@ -149,7 +151,7 @@ struct EPUBOPFPatchTests {
                 <meta name="cover" content="cover-image"/>
                 """)
         let patched = try EPUBOPFPatch.apply(.init(title: "New Title", publisher: "New Publisher"), to: opf)
-        #expect(patched.contains(#"<meta name="cover" content="cover-image"/>"#))
+        #expect(patched.text.contains(#"<meta name="cover" content="cover-image"/>"#))
     }
 
     @Test("EPUB 3's manifest cover-image property survives a metadata change untouched")
@@ -157,7 +159,7 @@ struct EPUBOPFPatchTests {
         let coverItem = #"<item id="cover-image" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>"#
         let opf = Self.opf(manifestExtra: coverItem)
         let patched = try EPUBOPFPatch.apply(.init(title: "New Title"), to: opf)
-        #expect(patched.contains(coverItem))
+        #expect(patched.text.contains(coverItem))
     }
 
     // MARK: Trap 5 — xml:lang and namespace prefixes
@@ -166,8 +168,8 @@ struct EPUBOPFPatchTests {
     func packageXMLLangSurvives() throws {
         let opf = Self.opf(packageAttributes: #" xml:lang="en""#)
         let patched = try EPUBOPFPatch.apply(.init(title: "New Title"), to: opf)
-        #expect(patched.contains(#"xml:lang="en""#))
-        #expect(try XMLTree.parse(patched).attribute("lang") == "en")
+        #expect(patched.text.contains(#"xml:lang="en""#))
+        #expect(try XMLTree.parse(patched.text).attribute("lang") == "en")
     }
 
     /// One file writing `<title>` under a default namespace and `<dc:creator>`
@@ -192,17 +194,114 @@ struct EPUBOPFPatchTests {
             </package>
             """
         let patched = try EPUBOPFPatch.apply(.init(title: "New Title"), to: opf)
-        #expect(patched.contains("<title>New Title</title>"))
-        #expect(patched.contains(#"<dc:creator opf:file-as="Doe, Jane">Jane Doe</dc:creator>"#))
+        #expect(patched.text.contains("<title>New Title</title>"))
+        #expect(patched.text.contains(#"<dc:creator opf:file-as="Doe, Jane">Jane Doe</dc:creator>"#))
     }
 
-    // MARK: Never invents
+    // MARK: Never invents (title, authors) vs. invented when missing (the other four)
 
-    @Test("a description this book never had is never invented")
-    func descriptionNeverInvented() throws {
-        let opf = Self.opf()
-        let patched = try EPUBOPFPatch.apply(.init(description: "A new description"), to: opf)
-        #expect(try XMLTree.parse(patched).descendants(named: "description").isEmpty)
+    @Test("a title this book never had is never invented, and is reported unwritten")
+    func titleNeverInvented() throws {
+        // No <dc:title> at all — deliberately not built through `Self.opf()`,
+        // which always has one.
+        let opf = """
+            <?xml version='1.0' encoding='utf-8'?>
+            <package xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0" unique-identifier="id">
+              <metadata>
+                <dc:identifier id="id">urn:uuid:11111111-1111-1111-1111-111111111111</dc:identifier>
+              </metadata>
+              <manifest>
+                <item id="text" href="text.xhtml" media-type="application/xhtml+xml"/>
+              </manifest>
+              <spine><itemref idref="text"/></spine>
+            </package>
+            """
+        let patched = try EPUBOPFPatch.apply(.init(title: "A New Title"), to: opf)
+        #expect(patched.text == opf)
+        #expect(patched.unwritten == ["title"])
+    }
+
+    @Test("a publisher this book never had is created, in the file's own dc: prefix, as the last metadata child")
+    func publisherInvented() throws {
+        // Close to a real Gutenberg book: an identifier, a title — no
+        // <dc:publisher> at all, which is the ordinary case, not an edge one.
+        let opf = """
+            <?xml version='1.0' encoding='utf-8'?>
+            <package xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0" unique-identifier="id">
+              <metadata>
+                <dc:identifier id="id">urn:uuid:11111111-1111-1111-1111-111111111111</dc:identifier>
+                <dc:title>Old Title</dc:title>
+              </metadata>
+              <manifest>
+                <item id="text" href="text.xhtml" media-type="application/xhtml+xml"/>
+              </manifest>
+              <spine><itemref idref="text"/></spine>
+            </package>
+            """
+        #expect(!opf.contains("publisher"))
+        let patched = try EPUBOPFPatch.apply(.init(publisher: "New Publisher"), to: opf)
+        #expect(patched.unwritten.isEmpty)
+
+        let root = try XMLTree.parse(patched.text)
+        #expect(root.descendants(named: "publisher").first?.text == "New Publisher")
+        #expect(patched.text.contains("<dc:publisher>New Publisher</dc:publisher>"))
+        // Still valid, still parses, and the identifier and title that were
+        // already there are exactly as they were.
+        #expect(root.descendants(named: "identifier").first?.text == "urn:uuid:11111111-1111-1111-1111-111111111111")
+        #expect(root.descendants(named: "title").first?.text == "Old Title")
+    }
+
+    @Test("language, date and description are each created the same way when missing")
+    func languageDateDescriptionInvented() throws {
+        let opf = """
+            <?xml version='1.0' encoding='utf-8'?>
+            <package xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0" unique-identifier="id">
+              <metadata>
+                <dc:identifier id="id">urn:uuid:11111111-1111-1111-1111-111111111111</dc:identifier>
+                <dc:title>A Book With Almost Nothing Else</dc:title>
+              </metadata>
+              <manifest>
+                <item id="text" href="text.xhtml" media-type="application/xhtml+xml"/>
+              </manifest>
+              <spine><itemref idref="text"/></spine>
+            </package>
+            """
+        var components = DateComponents()
+        components.year = 2020
+        components.month = 3
+        components.day = 4
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let published = calendar.date(from: components)!
+
+        let patched = try EPUBOPFPatch.apply(
+            .init(language: "de", published: published, description: "A new description"), to: opf)
+        #expect(patched.unwritten.isEmpty)
+
+        let root = try XMLTree.parse(patched.text)
+        #expect(root.descendants(named: "language").first?.text == "de")
+        #expect(root.descendants(named: "description").first?.text == "A new description")
+        #expect(root.descendants(named: "date").first?.text == OPFDate.render(published))
+    }
+
+    @Test("a new element goes in with no prefix when the file's own elements have none")
+    func insertedElementMatchesFilesOwnPrefix() throws {
+        let opf = """
+            <?xml version='1.0' encoding='utf-8'?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id">
+              <metadata>
+                <identifier id="id">urn:uuid:11111111-1111-1111-1111-111111111111</identifier>
+                <title>No Prefixes Here</title>
+              </metadata>
+              <manifest>
+                <item id="text" href="text.xhtml" media-type="application/xhtml+xml"/>
+              </manifest>
+              <spine><itemref idref="text"/></spine>
+            </package>
+            """
+        let patched = try EPUBOPFPatch.apply(.init(publisher: "New Publisher"), to: opf)
+        #expect(patched.text.contains("<publisher>New Publisher</publisher>"))
+        #expect(!patched.text.contains("dc:publisher"))
     }
 
     // MARK: Refusals
@@ -271,7 +370,8 @@ struct EPUBOPFPatchTests {
         let original = try ZipReader(data: before)
 
         let patched = try EPUBOPFPatch.entries(patching: .init(title: "A New Title"), in: original, now: Date())
-        let after = try EPUBArchiveWriter.archive(patched)
+        #expect(patched.unwritten.isEmpty)
+        let after = try EPUBArchiveWriter.archive(patched.entries)
         let result = try ZipReader(data: after)
 
         #expect(result.entries.map(\.path) == original.entries.map(\.path))

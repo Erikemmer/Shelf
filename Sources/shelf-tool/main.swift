@@ -2166,21 +2166,26 @@ enum Commands {
                     description: "[Shelf] a description this run added")
 
                 let patched = try EPUBOPFPatch.entries(patching: fields, in: originalArchive, now: Date())
-                let after = try EPUBArchiveWriter.archive(patched)
+                let after = try EPUBArchiveWriter.archive(patched.entries)
                 try after.write(to: output.appendingPathComponent(name))
                 let result = try ZipReader(data: after)
 
                 let outcome = try Self.verifyExactlyOneEntryDiffers(original: originalArchive, patched: result)
                 let readBack = EPUBMetadata.read(result, fallbackTitle: name)
                 let titleOK = readBack.book.title == fields.title
-                print(
-                    "\(name): \(before.count) bytes before, \(after.count) bytes after "
-                        + "(archive \(after.count >= before.count ? "+" : "")\(after.count - before.count)), "
-                        + "OPF \(outcome.opfBefore) → \(outcome.opfAfter) bytes "
-                        + "(+\(outcome.opfAfter - outcome.opfBefore)), "
-                        + "\(outcome.differing.count) entr\(outcome.differing.count == 1 ? "y" : "ies") differ"
-                        + " (\(outcome.differing.joined(separator: ", "))), "
-                        + "title read back \(titleOK ? "✓" : "✗ (\(readBack.book.title))")")
+                let sizeDelta = after.count - before.count
+                let sign = sizeDelta >= 0 ? "+" : ""
+                var line = "\(name): \(before.count) bytes before, \(after.count) bytes after "
+                line += "(archive \(sign)\(sizeDelta)), "
+                line +=
+                    "OPF \(outcome.opfBefore) → \(outcome.opfAfter) bytes (+\(outcome.opfAfter - outcome.opfBefore)), "
+                line += "\(outcome.differing.count) entr\(outcome.differing.count == 1 ? "y" : "ies") differ "
+                line += "(\(outcome.differing.joined(separator: ", "))), "
+                line += "title read back \(titleOK ? "✓" : "✗ (\(readBack.book.title))")"
+                if !patched.unwritten.isEmpty {
+                    line += ", could not write: \(patched.unwritten.joined(separator: ", "))"
+                }
+                print(line)
                 allOK = allOK && outcome.ok && titleOK
             } catch {
                 print("\(name): FAILED – \(error)")

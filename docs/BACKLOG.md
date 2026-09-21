@@ -797,8 +797,13 @@ that text in the original bytes, never re-rendering.
       and identifiers change; everything else — manifest, spine, guide,
       unknown elements, element order, namespace prefixes — is untouched
       because it is never looked at, let alone written
-- [x] Never invents structure: a field with no existing element to hold it
-      is left as the file has it, not added
+- [x] Mostly never invents structure: `dc:publisher`, `dc:language`,
+      `dc:date` and `dc:description` are created, as the last child of
+      `<metadata>` in the file's own namespace prefix, when the book has
+      none — a real Gutenberg EPUB usually has no `dc:publisher` at all.
+      `dc:title` and `dc:creator` are still never invented; a field that
+      still cannot be written, for any reason, is counted and returned in
+      `Result.unwritten`, not swallowed
 - [x] Refuses rather than guesses: a mismatched author count, a `dc:creator`
       whose role is not "author", or a local name spelled two ways in one
       file are all named refusals
@@ -831,14 +836,22 @@ that text in the original bytes, never re-rendering.
       and read like a bigger deal than it is. Writing a DEFLATEd OPF back
       would need a compressor this project does not have; not worth one for
       a fraction of a percent.
-- [ ] **A field with no existing element is never written**, which for a
-      real book most often means `dc:publisher` or `dc:description`: none
-      of the six real Gutenberg books had either, and Shelf cannot give one
-      to a book through this path yet. Adding an element correctly
-      (position, prefix, no `id` collision) is worth doing — `dc:publisher`,
-      `dc:language`, `dc:date` and `dc:description` are the safe four;
-      `dc:title` and `dc:creator` should probably stay refused, the same
-      reason adding an author does.
+- [x] **A field with no existing element was never written — fixed for the
+      four simple fields, left refused for the two structural ones.**
+      `dc:publisher`, `dc:language`, `dc:date` and `dc:description` are now
+      created when missing, in the file's own namespace prefix, as the last
+      child of `<metadata>` — real Gutenberg books usually have neither a
+      publisher nor a description, and this is what made that go from
+      silently doing nothing to actually writing it. `dc:title` and
+      `dc:creator` stay refused on purpose, since a book always has one and
+      a new author raises the `id`/`refines` question adding one already
+      declines to answer. `CHANGELOG.md`.
+- [x] **Two silent no-ops found while building the above, both fixed.** An
+      empty-creators source archive with authors requested returned
+      nothing instead of the `authorCountMismatch` it should have; an
+      identifier scheme with no existing element to match was dropped
+      instead of reported. Both now behave like every other "could not
+      write this" case — a thrown refusal or a name in `Result.unwritten`.
 - [ ] **Adding or removing an author is refused, not supported.** Doing it
       correctly needs a new `id` nothing else collides with and, in EPUB 3,
       new `refines` metas for role and sort form — real structural work,
@@ -850,3 +863,8 @@ that text in the original bytes, never re-rendering.
       book does, the replacement text is written as plain escaped text, not
       preserved as CDATA. Not observed as a problem, named because it was
       never tested against.
+- [ ] **A newly inserted element's indentation is fixed, not inferred from
+      the file's own style.** Always well-formed XML as the last child of
+      `<metadata>`, but two spaces every time rather than whatever the rest
+      of the file uses — cosmetic, visible only in a diff someone reads by
+      eye, not a correctness question.

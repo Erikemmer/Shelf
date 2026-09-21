@@ -15,14 +15,18 @@ import Foundation
 /// model, the document's own element order and its namespace prefixes stay
 /// exactly as they were (`docs/adr/0021-…`).
 ///
-/// **Never invents structure.** If a field has no existing element to hold
-/// it — an EPUB 2 with no `dcterms:modified`, a scheme Shelf has a value
-/// for but the file never declared, a `dc:description` this book never
-/// had — nothing is added. Only what already exists is changed. That is
-/// deliberate: inventing a new element correctly (the right position, the
-/// right prefix, an `id` nothing else collides with) is real work this
-/// sprint was not asked to do, and a silently-wrong insertion is worse than
-/// a field this pass leaves alone.
+/// **Mostly never invents structure — two fields are the deliberate
+/// exception.** `dc:publisher`, `dc:language`, `dc:date` and
+/// `dc:description` are inserted, in the file's own namespace prefix, as
+/// the last child of `<metadata>`, when the book has none: a real Gutenberg
+/// EPUB usually has no `dc:publisher` at all, and a field that silently
+/// does nothing because the element was never there is worse than one that
+/// creates it. `dc:title` and `dc:creator` are never invented: a book
+/// without a title or an author does not happen, and a new author raises
+/// the same `id`/`refines` question adding one already refuses on. Whatever
+/// still cannot be written — because it is one of those two, or because the
+/// file's own structure makes even a `dc:publisher` unsafe to add — is
+/// counted and returned, never silently dropped.
 ///
 /// **Refuses rather than guesses**, the same shape as the writer beneath
 /// it: a different number of authors than the file has creators for, a
@@ -89,9 +93,20 @@ public enum EPUBOPFPatch {
         }
     }
 
-    /// The OPF's text, `fields` applied. `now` is injectable so a test can
+    /// What `apply` produces: the OPF's new text, and the name of every
+    /// field `fields` asked for that could not be written — never silent,
+    /// even when there was nowhere safe to put it.
+    public struct Result: Sendable {
+        public var text: String
+        /// `"title"`, `"language"`, `"publisher"`, `"date"`, `"description"`,
+        /// or `"identifier:<scheme>"` — named, so a caller can tell a person
+        /// exactly which field did not make it in.
+        public var unwritten: [String]
+    }
+
+    /// `fields` applied to `opfText`. `now` is injectable so a test can
     /// compare byte for byte; production leaves it as `Date()`.
-    public static func apply(_ fields: Fields, to opfText: String, now: Date = Date()) throws -> String {
+    public static func apply(_ fields: Fields, to opfText: String, now: Date = Date()) throws -> Result {
         let root: XMLTree.Element
         do {
             root = try XMLTree.parse(opfText)
@@ -101,26 +116,42 @@ public enum EPUBOPFPatch {
 
         var replacements: [(range: Range<String.Index>, text: String)] = []
         var changedAnything = false
+        var unwritten: [String] = []
 
         // Not `expecting:` a count: a real OPF often has more than one
         // `dc:date` (publication *and* conversion, in every EPUB 2 Gutenberg
         // book this was checked against) – "first" is well-defined
         // regardless of how many exist, the same convention
         // `firstText(named:)` already uses for reading.
-        func replaceFirst(_ localName: String, with newValue: String) {
-            guard let element = root.descendants(named: localName).first else { return }
-            guard let body = Self.rawOccurrences(of: element.qualifiedName, in: opfText).first?.bodyRange else {
+        //
+        // `insertable`: `dc:title` is never created (a book without one
+        // does not happen); the other four are, as the last child of
+        // `<metadata>`, when this book has none.
+        func replaceOrInsert(_ localName: String, with newValue: String, insertable: Bool) {
+            if let element = root.descendants(named: localName).first,
+                let body = Self.rawOccurrences(of: element.qualifiedName, in: opfText).first?.bodyRange
+            {
+                replacements.append((body, OPFDocument.escaped(newValue)))
+                changedAnything = true
                 return
             }
-            replacements.append((body, OPFDocument.escaped(newValue)))
-            changedAnything = true
+            if insertable, let insertion = Self.insertion(for: localName, value: newValue, root: root, in: opfText) {
+                replacements.append(insertion)
+                changedAnything = true
+                return
+            }
+            unwritten.append(localName)
         }
 
-        if let title = fields.title { replaceFirst("title", with: title) }
-        if let language = fields.language { replaceFirst("language", with: language) }
-        if let publisher = fields.publisher { replaceFirst("publisher", with: publisher) }
-        if let published = fields.published { replaceFirst("date", with: OPFDate.render(published)) }
-        if let description = fields.description { replaceFirst("description", with: description) }
+        if let title = fields.title { replaceOrInsert("title", with: title, insertable: false) }
+        if let language = fields.language { replaceOrInsert("language", with: language, insertable: true) }
+        if let publisher = fields.publisher { replaceOrInsert("publisher", with: publisher, insertable: true) }
+        if let published = fields.published {
+            replaceOrInsert("date", with: OPFDate.render(published), insertable: true)
+        }
+        if let description = fields.description {
+            replaceOrInsert("description", with: description, insertable: true)
+        }
 
         if let authors = fields.authors {
             replacements.append(
@@ -130,7 +161,7 @@ public enum EPUBOPFPatch {
         if let identifiers = fields.identifiers {
             replacements.append(
                 contentsOf: try Self.identifierReplacements(
-                    identifiers, root: root, in: opfText, changed: &changedAnything))
+                    identifiers, root: root, in: opfText, changed: &changedAnything, unwritten: &unwritten))
         }
 
         if changedAnything, let modified = Self.dctermsModifiedElement(root),
@@ -140,7 +171,40 @@ public enum EPUBOPFPatch {
             replacements.append((body, OPFDocument.escaped(Self.renderModified(now))))
         }
 
-        return Self.splice(opfText, with: replacements)
+        return Result(text: Self.splice(opfText, with: replacements), unwritten: unwritten)
+    }
+
+    /// Where a new `dc:publisher`/`dc:language`/`dc:date`/`dc:description`
+    /// goes: the last child of `<metadata>`, in whatever namespace prefix
+    /// the file's own Dublin Core elements already use — `nil` when either
+    /// cannot be established, so the caller counts it as unwritten instead
+    /// of guessing at a prefix or a position.
+    private static func insertion(
+        for localName: String, value: String, root: XMLTree.Element, in text: String
+    ) -> (
+        range: Range<String.Index>, text: String
+    )? {
+        guard let prefix = Self.dublinCorePrefix(root) else { return nil }
+        guard let metadataElement = root.firstChild(named: "metadata"),
+            let insertionPoint = Self.rawOccurrences(of: metadataElement.qualifiedName, in: text).first?.bodyRange?
+                .upperBound
+        else { return nil }
+        let newElement = "    <\(prefix)\(localName)>\(OPFDocument.escaped(value))</\(prefix)\(localName)>\n  "
+        return (insertionPoint..<insertionPoint, newElement)
+    }
+
+    /// The prefix this file writes its own Dublin Core elements with —
+    /// `"dc:"`, or `""` for a default namespace — read off `dc:identifier`
+    /// (required by every valid OPF) or, failing that, `dc:title`. Not
+    /// assumed: a file that writes `<title>` rather than `<dc:title>` gets
+    /// a new `<publisher>`, not a `<dc:publisher>` that jars beside it.
+    private static func dublinCorePrefix(_ root: XMLTree.Element) -> String? {
+        guard
+            let sample = (root.descendants(named: "identifier").first ?? root.descendants(named: "title").first)?
+                .qualifiedName
+        else { return nil }
+        guard let colon = sample.firstIndex(of: ":") else { return "" }
+        return String(sample[...colon])
     }
 
     /// Every entry of `archive`, unchanged, except one: the OPF, patched
@@ -152,10 +216,18 @@ public enum EPUBOPFPatch {
     /// Refuses a DRM-protected archive outright, before the OPF is even
     /// read – the one check that has to hold regardless of what calls this,
     /// so it lives here rather than in whatever calls it next.
+    /// `entries` ready for `EPUBArchiveWriter.archive(_:)`, and every field
+    /// `fields` asked for that could not be written — `apply`'s own report,
+    /// carried through rather than dropped at this layer.
+    public struct ArchiveResult: Sendable {
+        public var entries: [ZipArchiveWriter.Entry]
+        public var unwritten: [String]
+    }
+
     public static func entries(
         patching fields: Fields, in archive: ZipReader, now: Date = Date()
     ) throws
-        -> [ZipArchiveWriter.Entry]
+        -> ArchiveResult
     {
         guard archive.entry(at: EPUBMetadata.encryptionPath) == nil else { throw Failure.drmProtected }
 
@@ -163,14 +235,14 @@ public enum EPUBOPFPatch {
         guard let opfPath = EPUBMetadata.opfPath(in: archive, warnings: &warnings) else {
             throw Failure.notAnOPF("no OPF found in the archive")
         }
-        let patchedText = try Self.apply(fields, to: try archive.text(at: opfPath), now: now)
+        let patched = try Self.apply(fields, to: try archive.text(at: opfPath), now: now)
 
         var entries = try EPUBArchiveWriter.entries(rewriting: archive)
         guard let index = entries.firstIndex(where: { $0.path == opfPath }) else {
             throw Failure.notAnOPF("the OPF entry \(opfPath) was not among the archive's own entries")
         }
-        entries[index] = .raw(path: opfPath, text: patchedText)
-        return entries
+        entries[index] = .raw(path: opfPath, text: patched.text)
+        return ArchiveResult(entries: entries, unwritten: patched.unwritten)
     }
 
     // MARK: Authors
@@ -179,7 +251,6 @@ public enum EPUBOPFPatch {
         _ authors: [String], root: XMLTree.Element, in text: String, changed: inout Bool
     ) throws -> [(range: Range<String.Index>, text: String)] {
         let creators = root.descendants(named: "creator")
-        guard !creators.isEmpty else { return [] }
 
         let roles = Self.refinedRoles(root)
         for creator in creators {
@@ -189,9 +260,13 @@ public enum EPUBOPFPatch {
             }
         }
 
+        // Checked before the emptiness guard below: zero existing creators
+        // and one or more requested authors is exactly the mismatch this
+        // refuses elsewhere, not a silent no-op.
         guard creators.count == authors.count else {
             throw Failure.authorCountMismatch(existing: creators.count, new: authors.count)
         }
+        guard !creators.isEmpty else { return [] }
 
         let occurrences = try Self.occurrences(
             of: creators[0].qualifiedName, expecting: creators.count, fieldName: "creator", in: text)
@@ -225,10 +300,14 @@ public enum EPUBOPFPatch {
     // MARK: Identifiers
 
     private static func identifierReplacements(
-        _ identifiers: [String: String], root: XMLTree.Element, in text: String, changed: inout Bool
+        _ identifiers: [String: String], root: XMLTree.Element, in text: String, changed: inout Bool,
+        unwritten: inout [String]
     ) throws -> [(range: Range<String.Index>, text: String)] {
         let allIdentifiers = root.descendants(named: "identifier")
-        guard !allIdentifiers.isEmpty else { return [] }
+        guard !allIdentifiers.isEmpty else {
+            unwritten.append(contentsOf: identifiers.keys.sorted().map { "identifier:\($0)" })
+            return []
+        }
         let anchorID = root.attribute("unique-identifier")
 
         let spellings = Set(allIdentifiers.map(\.qualifiedName))
@@ -242,6 +321,7 @@ public enum EPUBOPFPatch {
         let occurrences = try Self.occurrences(
             of: qualifiedName, expecting: allIdentifiers.count, fieldName: "identifier", in: text)
 
+        var matchedSchemes: Set<String> = []
         var result: [(range: Range<String.Index>, text: String)] = []
         for (element, occurrence) in zip(allIdentifiers, occurrences) {
             let isAnchor = anchorID != nil && element.attribute("id") == anchorID
@@ -250,8 +330,12 @@ public enum EPUBOPFPatch {
                 let body = occurrence.bodyRange
             else { continue }
             result.append((body, OPFDocument.escaped(value)))
+            matchedSchemes.insert(scheme)
         }
         if !result.isEmpty { changed = true }
+        for scheme in identifiers.keys.sorted() where !matchedSchemes.contains(scheme.lowercased()) {
+            unwritten.append("identifier:\(scheme)")
+        }
         return result
     }
 

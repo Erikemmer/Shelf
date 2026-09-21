@@ -3,6 +3,50 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 10, part 2, extended — a missing field is created, not silently skipped · 21 September 2026
+
+The entry below said "never invents structure" and left it there: a field
+with no existing element to hold it did nothing, silently. For `dc:title`
+and `dc:creator` that is right — a book without one does not happen, and a
+new author raises the `id`/`refines` question adding one already refuses
+on. For the other four it was the common case going unanswered: a real
+Gutenberg EPUB usually has no `dc:publisher` at all, and Erik typing one in
+and pressing "write into the book" would have changed nothing, silently.
+
+`dc:publisher`, `dc:language`, `dc:date` and `dc:description` are now
+**created** — as the last child of `<metadata>`, in whatever namespace
+prefix the file's own Dublin Core elements already use (`dc:` beside
+`dc:title`, no prefix beside a bare `<title>`) — when the book has none.
+`EPUBOPFPatch.apply` now returns both the patched text and the name of
+every field that still could not be written (`Result.unwritten`); nothing
+is swallowed. Two related fixes along the way: an empty-authors-list source
+archive with authors requested now correctly throws
+`authorCountMismatch(existing: 0, new: …)` instead of silently doing
+nothing, and an identifier scheme with no existing element to match is now
+reported in `unwritten` rather than dropped. 754 core tests, up from 751 —
+three new traps for the insertion path (a missing field is created; it goes
+in with the file's own prefix, even when that prefix is none; a genuinely
+missing title stays refused and is reported, not silently ignored).
+
+**Measured — the OPF entry, all six real books, now with publisher and
+description created rather than skipped** (none of the six had either
+before):
+
+| Book | OPF before → after | Absolute | Relative to the whole file |
+|---|---|---|---|
+| Die Verwandlung (EPUB2) | 845 → 2 186 bytes | +1 341 B | +1.3 % |
+| Alice's Adventures in Wonderland (EPUB2) | 1 099 → 4 586 bytes | +3 487 B | +2.6 % |
+| Grimms' Fairy Tales (EPUB2) | 1 740 → 14 288 bytes | +12 548 B | +2.4 % |
+| Pride and Prejudice (EPUB3) | 3 719 → 27 468 bytes | +23 749 B | +0.10 % |
+| Pride and Prejudice (EPUB2) | 3 666 → 28 459 bytes | +24 793 B | +0.10 % |
+| Les Misérables (EPUB3) | 7 249 → 79 990 bytes | +72 741 B | +0.72 % |
+
+Barely moved from the previous entry's numbers — a new `dc:publisher` and
+`dc:description` are a few dozen bytes each, nothing next to what losing
+DEFLATE already cost. `shelf-tool epub-metadata-patch` and
+`Scripts/real-epub-proof.sh` both confirm `unwritten` is empty for all six:
+every field asked for was actually written.
+
 ## Sprint 10, part 2 — changing content.opf in place, not rendering a new one · 21 September 2026
 
 `EPUBOPFPatch` changes title, authors, language, publisher, the published
