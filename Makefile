@@ -39,8 +39,9 @@ test: ## Run ShelfCore unit tests (works on macOS and Linux)
 build: ## Build ShelfCore
 	swift build --scratch-path $(SCRATCH)
 
-lint: ## Check formatting with swift-format (ships with the Swift 6 toolchain)
+lint: ## Check formatting with swift-format, and that no script can start Shelf without the guard
 	swift format lint --recursive --strict Sources Tests App
+	Scripts/check-shelf-guard.sh
 
 format: ## Reformat sources in place
 	swift format --in-place --recursive Sources Tests App

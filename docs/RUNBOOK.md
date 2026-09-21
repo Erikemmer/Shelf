@@ -20,7 +20,8 @@ Like every script under `Scripts/` that opens the app, it refuses outright if
 a Shelf is already running rather than trying to make it go away first
 (`Scripts/no-foreign-shelf.sh`) — a script cannot tell a leftover from an
 earlier run apart from a window Erik has open on purpose, and it is not its
-call to guess.
+call to guess. `make lint` checks every script under `Scripts/` for this
+rather than trusting that the next one remembers it (`Scripts/check-shelf-guard.sh`).
 
 ---
 

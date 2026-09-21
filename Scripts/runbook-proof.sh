@@ -14,6 +14,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$HERE/no-foreign-shelf.sh"
 ROOT="$(cd "$HERE/.." && pwd)"
 WORK="${1:-$HOME/Library/Caches/Shelf/runbook-7b}"
 SCRATCH="${SCRATCH:-$HOME/Library/Caches/Shelf/build}"
@@ -183,7 +184,13 @@ if [ -z "$APP" ]; then
     done < <(find ~/Library/Developer/Xcode/DerivedData -name "Shelf.app" -path "*/Build/Products/*" \
         -not -path "*Index.noindex*" -maxdepth 6 -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn)
 fi
-if [ -n "$APP" ] && ! pgrep -x Shelf >/dev/null; then
+# A soft check, not the hard refusal require_no_foreign_shelf gives every
+# other caller: this is one section of a much longer proof run, and a Shelf
+# already open (Erik's, or a leftover) should make this section skip itself
+# rather than take the rest of the runbook proof down with it. The subshell
+# keeps the guard's own `exit` from doing that while still asking the one
+# question that matters: is a foreign Shelf running right now.
+if [ -n "$APP" ] && (require_no_foreign_shelf) >/dev/null 2>&1; then
     SINCE=$(date "+%Y-%m-%d %H:%M:%S")
     FROM_THE_FUTURE="$WORK/from-the-future"
     rm -rf "$FROM_THE_FUTURE"

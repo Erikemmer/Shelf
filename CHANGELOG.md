@@ -3,6 +3,25 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## `make lint` now enforces the no-foreign-shelf guard · 21 September 2026
+
+Sprint 9 pulled the guard against ending a Shelf a script did not start into
+its own file (`Scripts/no-foreign-shelf.sh`) and sourced it into eighteen
+scripts — sixteen of which never actually called it. Those sixteen were fixed
+by hand; nothing stopped a nineteenth script from repeating the mistake, and
+one had: `Scripts/runbook-proof.sh` opens a Shelf instance for its "refuses a
+library from the future" demonstration and had its own ad-hoc `pgrep -x Shelf`
+check instead of the shared guard.
+
+`Scripts/check-shelf-guard.sh`, run by `make lint`, greps every script under
+`Scripts/` for a line that starts a Shelf instance and fails, naming the file
+and the line, if `require_no_foreign_shelf` is not called first. Demonstrated
+both ways: green against the repository as it stands, red with the call
+removed from one script (`Scripts/calibre-shot.sh`, restored after). Fixed
+`runbook-proof.sh` to source the guard and use it — as a soft check, since
+that one section of a much longer proof run should skip itself rather than
+abort the whole script, which is what its ad-hoc check already did.
+
 ## The 5 000-book proof, after the schema change · 19 September 2026
 
 Sprint 9 changed the database schema (`v3-cover-generation`) and the OPF
