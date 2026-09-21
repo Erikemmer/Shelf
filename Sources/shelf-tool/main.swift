@@ -86,9 +86,12 @@ let usage = """
                                     <working folder>: patched, written in
                                     place, read back, rehashed, the original
                                     to the Trash — one book at a time, never
-                                    concurrently — and then the five
+                                    concurrently — and then the four
                                     refusals, each proven to leave exactly
-                                    the original file and nothing else.
+                                    the original file and nothing else, plus
+                                    the disposal-failure fact: a Trash that
+                                    declines does not undo a swap that
+                                    already succeeded.
                                     <folder> itself is only ever read
       online-read <file>…           read stored answers from Open Library or
                                     Google Books the way the app does, and print
@@ -2217,9 +2220,11 @@ enum Commands {
     ///    requirement `EPUBFileReplacement`'s own doc comment states: a
     ///    caller replacing several books' files does them one at a time,
     ///    so the peak memory this run costs is one book's, not all six's.
-    /// 2. Each of the five refusals, once, against a fresh copy of a real
+    /// 2. Each of the four refusals, once, against a fresh copy of a real
     ///    book — and a check, after each, that exactly the original file
-    ///    is what that refusal's own folder still holds.
+    ///    is what that refusal's own folder still holds. Plus the case
+    ///    Korrektur 1 turned from a refusal into a fact: the Trash itself
+    ///    declining, after the swap already put the book right.
     ///
     /// Uses the real `.trash` disposal throughout: this is the CLI process,
     /// not the `swift test` runner, and `FolderDisposal.trash` is reliable
@@ -2246,7 +2251,7 @@ enum Commands {
         print("— the whole path, \(names.count) real books, one at a time —")
         allOK = Self.wholeReplacePathProof(names: names, source: folder, working: working) && allOK
         print("")
-        print("— the five refusals, each against a fresh copy —")
+        print("— the four refusals, plus the disposal-failure fact, each against a fresh copy —")
         allOK = Self.refusalProofs(sample: names[0], source: folder, working: working) && allOK
         if !allOK { exit(1) }
     }
@@ -2286,11 +2291,21 @@ enum Commands {
                 let readBack = try EPUBMetadata.read(url: copy)
                 let titleOK = readBack.book.title == fields.title
 
+                let trashLine: String
+                switch result.originalDisposal {
+                case .trashed:
+                    trashLine = "original in the Trash"
+                case .leftAsDebris(let debrisName, let reason):
+                    // The book is still correct; this is the disposal
+                    // itself declining, reported as a fact, not this run
+                    // failing (Korrektur 1).
+                    trashLine = "the Trash refused (\(reason)) — the old bytes are left as \(debrisName)"
+                }
+
                 print(
                     "\(name): \(before.count) → \(newContent.count) bytes, "
                         + "hash \(String(beforeDigest.prefix(10)))… → \(String(result.format.sha256.prefix(10)))…, "
-                        + "read back \(titleOK ? "✓" : "✗ (\(readBack.book.title))"), original in the Trash "
-                        + "(the Trash accepted it — `replace` would have refused otherwise)")
+                        + "read back \(titleOK ? "✓" : "✗ (\(readBack.book.title))"), \(trashLine)")
                 allOK = allOK && titleOK
             } catch {
                 print("\(name): FAILED – \(error)")
@@ -2300,10 +2315,13 @@ enum Commands {
         return allOK
     }
 
-    /// Section 2: the five refusals, each demonstrated once against a
+    /// Section 2: the four refusals, each demonstrated once against a
     /// fresh copy of `sample` — a real book, not a synthetic fixture — and
     /// each followed by a check that the refusal's own folder holds
     /// exactly the original file afterwards: no `.part`, no half-result.
+    /// Plus the one case that Korrektur 1 turned from a refusal into a
+    /// fact: the Trash itself declining the old bytes, once the swap has
+    /// already put the book right.
     private static func refusalProofs(sample: String, source: URL, working: URL) -> Bool {
         let runFolder = working.appendingPathComponent("refusals", isDirectory: true)
         try? FileManager.default.removeItem(at: runFolder)
@@ -2318,7 +2336,7 @@ enum Commands {
         allOK = Self.proveNotAnEPUBRefused(sample: original, in: runFolder) && allOK
         allOK = Self.proveDRMRefused(sample: original, in: runFolder) && allOK
         allOK = Self.proveReadOnlyRefused(sample: original, in: runFolder) && allOK
-        allOK = Self.proveCannotDisplaceRefused(sample: original, in: runFolder) && allOK
+        allOK = Self.proveDisposalFailureIsAFact(sample: original, in: runFolder) && allOK
         allOK = Self.proveReadBackFailedRefused(sample: original, in: runFolder) && allOK
         return allOK
     }
@@ -2425,27 +2443,39 @@ enum Commands {
         }
     }
 
-    private static func proveCannotDisplaceRefused(sample: URL, in parent: URL) -> Bool {
+    /// Not a refusal any more (Korrektur 1): the swap has already put the
+    /// book right by the time disposal is even attempted, so a Trash that
+    /// declines the old bytes does not undo it. Proves the book is correct,
+    /// and that the old bytes are still findable — under
+    /// `EPUBFileReplacement.partialPrefix`, not silently gone — for the
+    /// next call in that folder to sweep.
+    private static func proveDisposalFailureIsAFact(sample: URL, in parent: URL) -> Bool {
         do {
-            let copy = try Self.aloneCopy(of: sample, named: "cannot-displace", in: parent)
+            let copy = try Self.aloneCopy(of: sample, named: "disposal-fails", in: parent)
             let before = try Data(contentsOf: copy)
             let archive = try ZipReader(data: before)
             let read = EPUBMetadata.read(archive, fallbackTitle: copy.lastPathComponent)
             let fields = EPUBOPFPatch.Fields(title: "[Shelf] " + read.book.title)
             let patched = try EPUBOPFPatch.entries(patching: fields, in: archive, now: Date())
             let newContent = try EPUBArchiveWriter.archive(patched.entries)
-            do {
-                try EPUBFileReplacement.replace(with: newContent, at: copy, bookID: UUID(), disposal: .none)
-                print("cannot-displace: ✗ did not refuse")
+
+            let result = try EPUBFileReplacement.replace(with: newContent, at: copy, bookID: UUID(), disposal: .none)
+            guard case .leftAsDebris(let debrisName, let reason) = result.originalDisposal else {
+                print("disposal-fails: ✗ expected .leftAsDebris, got \(result.originalDisposal)")
                 return false
-            } catch EPUBFileReplacement.Refusal.cannotDisplace {
-                let ok = Self.onlyOriginalRemains(
-                    in: copy.deletingLastPathComponent(), name: copy.lastPathComponent, unchangedFrom: before)
-                print("cannot-displace: refused ✓, original intact \(ok ? "✓" : "✗")")
-                return ok
             }
+            let bookOK = (try? Data(contentsOf: copy)) == newContent
+            let folder = copy.deletingLastPathComponent()
+            let names = Set((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [])
+            let debrisIntact =
+                names == [copy.lastPathComponent, debrisName]
+                && (try? Data(contentsOf: folder.appendingPathComponent(debrisName))) == before
+            print(
+                "disposal-fails: not a refusal ✓ — book correct \(bookOK ? "✓" : "✗"), "
+                    + "old bytes left as \(debrisName) (\(reason)), intact and alone \(debrisIntact ? "✓" : "✗")")
+            return bookOK && debrisIntact
         } catch {
-            print("cannot-displace: FAILED to set up – \(error)")
+            print("disposal-fails: FAILED to set up – \(error)")
             return false
         }
     }

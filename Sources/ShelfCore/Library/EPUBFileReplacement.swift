@@ -26,14 +26,34 @@ public enum EPUBFileReplacement {
         /// Where the new file ended up — the same path the original had.
         public var written: URL
         /// The original file's name, for a report to name — by the time
-        /// anybody reads this it is in the Trash and its URL is no longer
-        /// where it was.
+        /// anybody reads this it has been moved out of the book's folder
+        /// and, ordinarily, on into the Trash.
         public var displacedOriginal: String
         /// The format row this book's index entry should be given in place
         /// of its old one: same `bookID`, same `fileName`, same `format`
         /// (`.epub`) — new `byteSize`, `sha256` and `modifiedAt`, freshly
         /// read off the file that is now actually there.
         public var format: BookFormat
+        /// What became of the displaced original. The swap itself has
+        /// already succeeded by the time this is decided — see
+        /// `DisposalOutcome` for why a failure here is a fact, not a
+        /// refusal.
+        public var originalDisposal: DisposalOutcome
+    }
+
+    /// What happened to the book's old bytes, after the new ones were
+    /// already safely in place at its path.
+    public enum DisposalOutcome: Equatable, Sendable {
+        /// The original reached the Trash.
+        case trashed
+        /// The book is correct — the swap happened before this was even
+        /// attempted — but the old bytes could not be moved to the Trash.
+        /// They are left in the book's own folder under
+        /// `EPUBFileReplacement.partialPrefix`, named here so a caller can
+        /// report it, and swept the next time anything in that folder goes
+        /// through this type. Not an error: the book already has the file
+        /// it is meant to have.
+        case leftAsDebris(name: String, reason: String)
     }
 
     public enum Refusal: Error, Equatable, Sendable {
@@ -53,9 +73,6 @@ public enum EPUBFileReplacement {
         /// caller expected, or the archive itself would not read. The
         /// original is untouched; the `.part` is swept away.
         case readBackFailed(String)
-        /// The original could not be moved to the Trash. The new file is
-        /// swept away and the original is left exactly where it was.
-        case cannotDisplace(String)
 
         /// The sentence, with no system text interpolated into it — one
         /// catalogue key rather than one per error the file system can have.
@@ -71,8 +88,6 @@ public enum EPUBFileReplacement {
                 return "The new file could not be written, so the book still has the one it had."
             case .readBackFailed:
                 return "The new file did not read back correctly, so it was discarded and nothing changed."
-            case .cannotDisplace:
-                return "The original file could not be moved to the Trash, so nothing was replaced."
             }
         }
 
@@ -82,7 +97,7 @@ public enum EPUBFileReplacement {
             switch self {
             case .notAnEPUB, .drmProtected: return nil
             case .readOnlyVolume: return nil
-            case .cannotWrite(let why), .readBackFailed(let why), .cannotDisplace(let why): return why
+            case .cannotWrite(let why), .readBackFailed(let why): return why
             }
         }
     }
@@ -129,7 +144,7 @@ public enum EPUBFileReplacement {
     /// The order is the one every other write in Shelf uses, for the reason
     /// `CoverReplacement.replace` and `copyAndVerify` use it: the new file is
     /// complete and proven **before** anything is taken away, so a failure at
-    /// any point leaves the book with the file it already had.
+    /// any point up to the swap leaves the book with the file it already had.
     ///
     /// 1. Preflight — see above.
     /// 2. `newContent` is written under a `.part` name, in the same folder.
@@ -141,10 +156,24 @@ public enum EPUBFileReplacement {
     ///    hash — the same "copy, verify, then trust" ADR 0002 already asks
     ///    of everything else that lands on disk, applied to a file that was
     ///    generated rather than copied.
-    /// 5. The original is moved to the Trash, through `FolderDisposal`.
-    ///    A disposal that cannot take it means the `.part` is swept and
-    ///    nothing about the original changes.
-    /// 6. The `.part` is moved to the exact path the original had.
+    /// 5. **The swap itself is two renames within the same folder, not a
+    ///    rename either side of a trip to the Trash.** `trashItem` is not
+    ///    guaranteed instant — it can be slow, it can go through iCloud, it
+    ///    can hang — and putting it between "the original is gone" and "the
+    ///    new file is in place" would leave the book with no file at all for
+    ///    as long as that takes. So: the original is renamed, within the
+    ///    folder, to a second `.part`-pattern name (5a); the new file is
+    ///    then renamed onto the original's exact path (5b). Both are plain
+    ///    renames on the same volume — as close to atomic as this gets — and
+    ///    the book has a file throughout. If 5a fails, nothing has moved and
+    ///    the `.part` is swept. If 5b fails, 5a is undone — the original
+    ///    goes back to its path — and the `.part` is swept.
+    /// 6. Only now, with the book already correct, is the renamed-aside
+    ///    original offered to `FolderDisposal`. A disposal that refuses it
+    ///    is not this call failing — the book already has the file it is
+    ///    meant to have — so it is reported in `Result.originalDisposal`
+    ///    rather than thrown, and the old bytes are left under
+    ///    `partialPrefix` for the next call in that folder to sweep.
     @discardableResult
     public static func replace(
         with newContent: Data, at url: URL, bookID: UUID, disposal: FolderDisposal = .trash,
@@ -183,22 +212,32 @@ public enum EPUBFileReplacement {
         }
 
         let originalName = url.lastPathComponent
+        let displaced = folder.appendingPathComponent(
+            "\(partialPrefix)\(UUID().uuidString.prefix(8))-original.part")
         do {
-            try disposal.dispose(url)
+            try FileManager.default.moveItem(at: url, to: displaced)
         } catch {
             try? FileManager.default.removeItem(at: part)
-            throw Refusal.cannotDisplace(error.localizedDescription)
+            throw Refusal.cannotWrite(error.localizedDescription)
         }
 
         do {
             try FileManager.default.moveItem(at: part, to: url)
         } catch {
-            // The original is already gone to the Trash at this point – it
-            // can be dragged back, but it is not where it was. Named in the
-            // failure rather than pretended away: this is the one step in
-            // the whole sequence that is not fully reversible by retrying,
-            // because there is no third place to put the new bytes.
+            // Roll back: the first rename is undone, not left half-done.
+            try? FileManager.default.moveItem(at: displaced, to: url)
+            try? FileManager.default.removeItem(at: part)
             throw Refusal.cannotWrite(error.localizedDescription)
+        }
+
+        // The book is correct from here on, whatever happens next.
+        let originalDisposal: DisposalOutcome
+        do {
+            try disposal.dispose(displaced)
+            originalDisposal = .trashed
+        } catch {
+            originalDisposal = .leftAsDebris(
+                name: displaced.lastPathComponent, reason: error.localizedDescription)
         }
 
         let facts = FileFacts.of(url)
@@ -206,7 +245,8 @@ public enum EPUBFileReplacement {
             bookID: bookID, format: .epub, fileName: originalName,
             byteSize: facts?.byteSize ?? Int64(newContent.count), sha256: writtenDigest,
             modifiedAt: facts?.modifiedAt ?? Date(), drm: nil)
-        return Result(written: url, displacedOriginal: originalName, format: format)
+        return Result(
+            written: url, displacedOriginal: originalName, format: format, originalDisposal: originalDisposal)
     }
 
     /// Reopens a candidate file with Shelf's own reader and checks it holds

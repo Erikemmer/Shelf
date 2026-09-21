@@ -3,6 +3,45 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 10, Schritt E1, Korrektur 1 — the swap is two renames, not a rename either side of the Trash · 21 September 2026
+
+`EPUBFileReplacement.replace` had a gap: original into the Trash, *then*
+the new file renamed onto its path. `trashItem` is not a rename — it can be
+slow, it can go through iCloud, it can hang — and for however long it
+takes, the book has no file at all. If the process died in that window,
+the folder held only a `.part` and the index still said the book had an
+EPUB.
+
+The swap is now two plain renames within the book's own folder, and
+disposal comes last:
+
+1. The original is renamed aside, in place, to a second
+   `.shelf-epub-write-*-original.part` name.
+2. The new file is renamed onto the original's exact path.
+3. Only now — with the book already correct — is the renamed-aside
+   original offered to `FolderDisposal`.
+
+If step 1 fails, nothing has moved. If step 2 fails, step 1 is undone and
+the `.part` is swept. Either way the original refusal behaviour holds. Step
+3 is different on purpose: a disposal that refuses at that point is not
+this call failing, because the book already has the file it is meant to
+have. It is reported as a fact — `Result.originalDisposal`, `.trashed` or
+`.leftAsDebris(name:reason:)` — never thrown. `Refusal.cannotDisplace` is
+gone; there is nothing left it could mean. Debris from a refused disposal
+sits under `EPUBFileReplacement.partialPrefix` in the book's own folder
+until the next call there sweeps it, exactly like any other `.part`.
+
+`CoverReplacement` has the same trash-before-swap gap and is deliberately
+untouched — `docs/BACKLOG.md` has it as its own line. A cover is a small
+picture kept in memory; a book kept nowhere for however long `trashItem`
+takes is a different weight of problem, and worth fixing here first.
+
+764 core tests, up from 763 — the whole path re-proven against the new
+order, plus a disposal-failure case that used to be a thrown refusal and
+now proves the book stays correct and the debris is named and swept, and a
+case proving that debris is actually swept by the next call in that
+folder. `shelf-tool epub-file-replace-proof` carries the same change.
+
 ## Sprint 10, Schritt E1 — a book's own file may now be replaced · 21 September 2026
 
 The rule that a book file is never written, deleted or overwritten falls

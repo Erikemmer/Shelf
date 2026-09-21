@@ -32,15 +32,20 @@ struct EPUBFileReplacementTests {
 
         #expect(result.written == url)
         #expect(result.displacedOriginal == "book.epub")
-        #expect(bin.taken == ["book.epub"])
-        // Got back, byte for byte — the point of the Trash rather than
-        // `removeItem`.
-        #expect(try Data(contentsOf: bin.folder.appendingPathComponent("book.epub")) == originalData)
         #expect(result.format.bookID == bookID)
         #expect(result.format.format == .epub)
         #expect(result.format.fileName == "book.epub")
         #expect(result.format.byteSize == Int64(newContent.count))
         #expect(result.format.drm == nil)
+
+        // The original reached the Trash — under a renamed-aside name, not
+        // its own, since the swap renames it aside before offering it to
+        // disposal at all (Korrektur 1).
+        #expect(result.originalDisposal == .trashed)
+        #expect(bin.taken.count == 1)
+        // Got back, byte for byte — the point of the Trash rather than
+        // `removeItem`.
+        #expect(try Data(contentsOf: bin.folder.appendingPathComponent(bin.taken[0])) == originalData)
 
         // The file at the original path now holds the new content, and its
         // hash is not the old file's.
@@ -173,20 +178,47 @@ struct EPUBFileReplacementTests {
         #expect(try Data(contentsOf: url) == before)
     }
 
-    @Test("the original file being possible to Trash is checked, and refused when it is not")
-    func cannotDisplaceRefused() throws {
+    @Test("a disposal that refuses the original is a fact, not a refusal — the book is already correct")
+    func disposalFailureLeavesTheBookCorrect() throws {
         let folder = try TemporaryFolder()
         let url = try folder.write("book.epub", data: Self.book(title: "A Book", author: "Someone"))
-        let before = try Data(contentsOf: url)
+        let newContent = Self.book(title: "New", author: "New")
 
-        #expect(
-            throws: EPUBFileReplacement.Refusal.cannotDisplace(FolderDisposal.Failure.noTrashHere.localizedDescription)
-        ) {
-            try EPUBFileReplacement.replace(
-                with: Self.book(title: "New", author: "New"), at: url, bookID: UUID(), disposal: .none)
+        // No `#expect(throws:)` here on purpose: by the time disposal is
+        // even attempted, the swap has already happened (Korrektur 1), so
+        // `FolderDisposal.none` refusing does not stop this from returning
+        // normally.
+        let result = try EPUBFileReplacement.replace(
+            with: newContent, at: url, bookID: UUID(), disposal: .none)
+
+        #expect(try Data(contentsOf: url) == newContent)
+        let read = try EPUBMetadata.read(url: url)
+        #expect(read.book.title == "New")
+
+        guard case .leftAsDebris(let name, let reason) = result.originalDisposal else {
+            Issue.record("expected .leftAsDebris, got \(result.originalDisposal)")
+            return
         }
-        #expect(try Data(contentsOf: url) == before)
-        #expect(folder.names(in: "") == ["book.epub"])
+        #expect(name.hasPrefix(EPUBFileReplacement.partialPrefix))
+        #expect(reason == FolderDisposal.Failure.noTrashHere.localizedDescription)
+        // The old bytes are still there under that name — not gone, just
+        // not in the Trash — for the next call in this folder to sweep.
+        #expect(folder.names(in: "").contains(name))
+    }
+
+    @Test("debris a failed disposal left behind is swept by the next call in that folder")
+    func debrisFromAFailedDisposalIsSweptByTheNextCall() throws {
+        let folder = try TemporaryFolder()
+        let url = try folder.write("book.epub", data: Self.book(title: "A Book", author: "Someone"))
+        _ = try EPUBFileReplacement.replace(
+            with: Self.book(title: "New", author: "New"), at: url, bookID: UUID(), disposal: .none)
+        #expect(folder.names(in: "").contains { $0.hasPrefix(EPUBFileReplacement.partialPrefix) })
+
+        let bin = try Bin(in: folder.url)
+        _ = try EPUBFileReplacement.replace(
+            with: Self.book(title: "Newer", author: "Newer"), at: url, bookID: UUID(), disposal: bin.disposal)
+
+        #expect(folder.names(in: "").allSatisfy { !$0.hasPrefix(EPUBFileReplacement.partialPrefix) })
     }
 
     @Test("a new file that loses the cover the original had is refused, and the original is untouched")

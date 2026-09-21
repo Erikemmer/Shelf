@@ -889,9 +889,12 @@ as it was.
 - [x] The written bytes are hashed and checked against what was meant to be
       written, `docs/adr/0002-…`'s "copy, verify, then trust" applied to a
       generated file
-- [x] The original goes to the Trash through `FolderDisposal`, never
-      `removeItem`; a refused disposal leaves the `.part` swept and the
-      original untouched
+- [x] The swap is two renames inside the book's own folder — original
+      aside, new file onto its path — with disposal to the Trash coming
+      *after*, never a rename either side of a trip through `trashItem`
+      (Korrektur 1, below): the book has a file throughout, and a disposal
+      that refuses at that point is a fact (`Result.originalDisposal`),
+      not a failure of the call
 - [x] No ⌘Z — the Trash is the way back, the same answer a replaced cover
       already gives, stated as its own sentence in the type's doc comment
 - [x] Only `LibraryIndex`'s `BookFormat.byteSize`/`.sha256`/`.modifiedAt`
@@ -903,14 +906,27 @@ as it was.
       all of them at once
 - [x] `shelf-tool epub-file-replace-proof`, in `Scripts/real-epub-proof.sh`
       section 7: the whole path against copies of all six real books, one
-      after another, through the real Trash, plus each of the five
+      after another, through the real Trash, plus each of the four
       refusals proven once against a fresh real copy with a check that its
-      folder holds exactly the original file afterwards. Nine
-      `EPUBFileReplacementTests`, synthetic, against fixtures built through
-      `EPUBArchiveWriter` itself
+      folder holds exactly the original file afterwards, plus the
+      disposal-failure fact proven the same way. Ten `EPUBFileReplacementTests`,
+      synthetic, against fixtures built through `EPUBArchiveWriter` itself
 
 ### What Schritt E1 found on the way
 
+- [x] **Korrektur 1: the swap had a gap where the book had no file at
+      all.** Original into the Trash, then the new file renamed onto its
+      path — `trashItem` is not a rename, and for however long it took, a
+      process dying there left a `.part` on disk and an index that still
+      claimed the book had an EPUB. Fixed by making the swap two renames
+      inside the folder, with disposal coming last, after the book is
+      already correct — a disposal that refuses at that point is reported
+      as a fact, not thrown. `CHANGELOG.md`.
+- [ ] **`CoverReplacement` has the same trash-before-swap gap, deliberately
+      left alone.** Erik's call: a cover is a small picture kept in memory
+      and worth less than a book kept nowhere for however long `trashItem`
+      takes to answer; Korrektur 1 above fixes it for `EPUBFileReplacement`
+      only. Worth the same fix later, at lower urgency.
 - [x] **`FileManager.trashItem` fails reproducibly inside the `swift test`
       runner process, not in `shelf-tool` or the app.** Confirmed with two
       standalone `swift` scripts that ran the identical write-then-trash
