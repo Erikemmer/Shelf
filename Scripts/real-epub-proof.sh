@@ -1,13 +1,17 @@
 #!/bin/bash
-# The strict round trip (`docs/adr/0021-…`) against EPUBs nobody here wrote.
+# The strict round trip, and a real metadata change (`docs/adr/0021-…`),
+# against EPUBs nobody here wrote.
 #
 # Every fixture `EPUBArchiveWriterTests` proves the writer against is built
 # by the writer itself – which means none of them was ever compressed by
 # anything else, and a real EPUB's `content.opf` always is. This is the
 # proof against that gap: six public-domain books from Project Gutenberg
 # (`Scripts/real-epubs.sh`), read with `ZipReader`, carried forward through
-# `EPUBArchiveWriter` unchanged (`shelf-tool epub-roundtrip`), and checked a
-# second way entirely outside Shelf's own code
+# `EPUBArchiveWriter` unchanged (`shelf-tool epub-roundtrip`), then with
+# title, authors and publisher actually patched via `EPUBOPFPatch`
+# (`shelf-tool epub-metadata-patch`) — proving that a real edit touches
+# exactly one entry, the OPF, and every other entry stays bit-identical.
+# Both are checked a second way entirely outside Shelf's own code
 # (`Scripts/epub-crosscheck.py`, stdlib `zipfile` and `xml.etree`).
 #
 # Reads-only against the books: nothing here is written back over an
@@ -62,8 +66,41 @@ else
     EPUBCHECK_FAILED=0
 fi
 
+say "5. A real metadata change — title, authors and publisher, via EPUBOPFPatch"
+PATCHED="$BOOKS/patched"
+rm -rf "$PATCHED"
+"$TOOL" epub-metadata-patch "$BOOKS" "$PATCHED"
+PATCH_STATUS=$?
+
+say "6. The cross-check again, against the patched copies — the title is expected to differ this time"
+PATCH_CROSSCHECK_FAILED=0
+title_of() {
+    python3 -c '
+import sys, zipfile, xml.etree.ElementTree as ET
+z = zipfile.ZipFile(sys.argv[1])
+with z.open("META-INF/container.xml") as h:
+    t = ET.parse(h)
+opf = next(e.attrib["full-path"] for e in t.iter() if e.tag.endswith("rootfile"))
+with z.open(opf) as h:
+    t2 = ET.parse(h)
+print(next((e.text or "").strip() for e in t2.iter() if e.tag.endswith("title")))
+' "$1"
+}
+for original in "$BOOKS"/*.epub; do
+    name="$(basename "$original")"
+    patched="$PATCHED/$name"
+    [ -f "$patched" ] || {
+        echo "  (skipped: $name has no patched copy – section 5 above already reported why)"
+        continue
+    }
+    expected="[Shelf] $(title_of "$original")"
+    python3 "$HERE/epub-crosscheck.py" "$original" "$patched" "$expected" || PATCH_CROSSCHECK_FAILED=1
+done
+
 say "Summary"
-if [ "$ROUNDTRIP_STATUS" -ne 0 ] || [ "$CROSSCHECK_FAILED" -ne 0 ] || [ "$EPUBCHECK_FAILED" -ne 0 ]; then
+if [ "$ROUNDTRIP_STATUS" -ne 0 ] || [ "$CROSSCHECK_FAILED" -ne 0 ] || [ "$EPUBCHECK_FAILED" -ne 0 ] \
+    || [ "$PATCH_STATUS" -ne 0 ] || [ "$PATCH_CROSSCHECK_FAILED" -ne 0 ]; then
     fail "at least one check above did not pass – see the sections it named"
 fi
-echo "real-epub-proof: every book round-tripped byte-identical per entry, and the cross-check agrees."
+echo "real-epub-proof: every book round-tripped byte-identical per entry, a real metadata change touches" \
+    "exactly the OPF in every one of them, and the cross-check agrees both times."

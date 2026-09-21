@@ -69,6 +69,16 @@ let usage = """
                                     bytes, same compression method, and the
                                     size before and after. Never touches
                                     <folder> itself (docs/adr/0021-…)
+      epub-metadata-patch <folder> <output folder>
+                                    every .epub in <folder>: title, authors
+                                    and publisher patched in content.opf
+                                    with EPUBOPFPatch, everything else
+                                    carried forward unchanged, written to
+                                    <output folder>. Prints, per book, the
+                                    number of entries that differ from the
+                                    original (must be exactly one — the OPF)
+                                    and the size of that one entry, before
+                                    and after. Never touches <folder> itself
       online-read <file>…           read stored answers from Open Library or
                                     Google Books the way the app does, and print
                                     the candidates with their match scores.
@@ -189,6 +199,7 @@ case "edit": try await Commands.edit(Array(arguments.dropFirst()))
 case "show": try await Commands.show(Array(arguments.dropFirst()))
 case "digest": try Commands.digest(Array(arguments.dropFirst()))
 case "epub-roundtrip": try Commands.epubRoundtrip(Array(arguments.dropFirst()))
+case "epub-metadata-patch": try Commands.epubMetadataPatch(Array(arguments.dropFirst()))
 case "online-read": try Commands.onlineRead(Array(arguments.dropFirst()))
 case "devices": Commands.devices()
 case "device-contents": try await Commands.deviceContents(Array(arguments.dropFirst()))
@@ -2114,6 +2125,96 @@ enum Commands {
             }
         }
         return ok
+    }
+
+    // MARK: epub-metadata-patch
+
+    /// The strict round trip, but with a real metadata change: title,
+    /// authors and publisher patched via `EPUBOPFPatch`, proving Sprint
+    /// 10's sharper claim — exactly one entry of the archive differs
+    /// afterwards, and it reads back as what was written — against real
+    /// books, not only synthetic ones.
+    static func epubMetadataPatch(_ arguments: [String]) throws {
+        guard arguments.count >= 2 else {
+            print("usage: shelf-tool epub-metadata-patch <folder> <output folder>")
+            exit(2)
+        }
+        let folder = URL(fileURLWithPath: (arguments[0] as NSString).expandingTildeInPath, isDirectory: true)
+        let output = URL(fileURLWithPath: (arguments[1] as NSString).expandingTildeInPath, isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+
+        let names =
+            (try? FileManager.default.contentsOfDirectory(atPath: folder.path))?
+            .filter { $0.lowercased().hasSuffix(".epub") }.sorted() ?? []
+        guard !names.isEmpty else {
+            print("no .epub files in \(folder.path)")
+            exit(2)
+        }
+
+        var allOK = true
+        for name in names {
+            let source = folder.appendingPathComponent(name)
+            do {
+                let before = try Data(contentsOf: source)
+                let originalArchive = try ZipReader(data: before)
+                let read = EPUBMetadata.read(originalArchive, fallbackTitle: name)
+
+                let fields = EPUBOPFPatch.Fields(
+                    title: "[Shelf] " + read.book.title,
+                    authors: read.book.authors.map { "[Shelf] " + $0 },
+                    publisher: "[Shelf] " + (read.book.publisher ?? "Publisher"),
+                    description: "[Shelf] a description this run added")
+
+                let patched = try EPUBOPFPatch.entries(patching: fields, in: originalArchive, now: Date())
+                let after = try EPUBArchiveWriter.archive(patched)
+                try after.write(to: output.appendingPathComponent(name))
+                let result = try ZipReader(data: after)
+
+                let outcome = try Self.verifyExactlyOneEntryDiffers(original: originalArchive, patched: result)
+                let readBack = EPUBMetadata.read(result, fallbackTitle: name)
+                let titleOK = readBack.book.title == fields.title
+                print(
+                    "\(name): \(before.count) bytes before, \(after.count) bytes after "
+                        + "(archive \(after.count >= before.count ? "+" : "")\(after.count - before.count)), "
+                        + "OPF \(outcome.opfBefore) → \(outcome.opfAfter) bytes "
+                        + "(+\(outcome.opfAfter - outcome.opfBefore)), "
+                        + "\(outcome.differing.count) entr\(outcome.differing.count == 1 ? "y" : "ies") differ"
+                        + " (\(outcome.differing.joined(separator: ", "))), "
+                        + "title read back \(titleOK ? "✓" : "✗ (\(readBack.book.title))")")
+                allOK = allOK && outcome.ok && titleOK
+            } catch {
+                print("\(name): FAILED – \(error)")
+                allOK = false
+            }
+        }
+        if !allOK { exit(1) }
+    }
+
+    private static func verifyExactlyOneEntryDiffers(
+        original: ZipReader, patched: ZipReader
+    ) throws -> (
+        ok: Bool, differing: [String], opfBefore: Int, opfAfter: Int
+    ) {
+        guard original.entries.map(\.path) == patched.entries.map(\.path) else {
+            return (false, ["(entry list differs)"], 0, 0)
+        }
+        var differing: [String] = []
+        var opfBefore = 0
+        var opfAfter = 0
+        for entry in original.files {
+            guard let patchedEntry = patched.entry(at: entry.path) else { continue }
+            let originalPayload = try original.compressedData(for: entry)
+            let patchedPayload = try patched.compressedData(for: patchedEntry)
+            let same =
+                entry.method == patchedEntry.method && entry.crc32 == patchedEntry.crc32
+                && entry.uncompressedSize == patchedEntry.uncompressedSize && originalPayload == patchedPayload
+            if !same {
+                differing.append(entry.path)
+                opfBefore = originalPayload.count
+                opfAfter = patchedPayload.count
+            }
+        }
+        return (differing.count == 1, differing, opfBefore, opfAfter)
     }
 
     // MARK: Helpers

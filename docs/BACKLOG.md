@@ -773,11 +773,73 @@ project generates itself.
       `Scripts/epub-crosscheck.py` against six real Project Gutenberg books,
       up to 10 MB and 429 entries (387 of them DEFLATEd) — every one
       byte-identical after the round trip, `CHANGELOG.md`.
-- [ ] **Memory and timing against a book-sized, genuinely compressed archive
-      are still not measured.** The correctness proof above answers "is it
-      still deflated and still correct"; it was not run under the same
-      memory/timing measurement the 60 MB synthetic entry gets. Les
-      Misérables (10 MB, 387 DEFLATEd entries) is sitting in
-      `~/Library/Caches/Shelf/real-epubs-10/` already and is the natural
-      candidate the next session that touches this writer should measure
-      against, rather than inventing a new large fixture.
+- [x] **Memory and timing against a realistic, mostly-stored real book are
+      now measured**: 2.02–2.06 s, ~135 MB maximum resident set size against
+      a real 24.8 MB, 187-entry illustrated EPUB (`/usr/bin/time -l`, no
+      code changed) — a far smaller cost than the synthetic 60 MB entry's
+      +420 MB, because a real illustrated EPUB mostly stores its images
+      rather than deflating them. `CHANGELOG.md`.
+- [ ] **Memory and timing against a book-sized, *mostly-deflated* archive are
+      still not measured.** The 24 MB measurement above is realistic for an
+      illustrated novel but is 22-of-187 entries deflated; Les Misérables
+      (10 MB, 387-of-429 entries deflated — the opposite shape) is sitting
+      in `~/Library/Caches/Shelf/real-epubs-10/` already and is the natural
+      candidate to measure against next, rather than inventing a new large
+      fixture.
+
+## Sprint 10, part 2 – changing content.opf in place · done, not yet used
+
+`EPUBOPFPatch`. Still not a command — the OPF-editing primitive the command
+will need, parsing with `XMLTree` to find what to change and editing only
+that text in the original bytes, never re-rendering.
+
+- [x] Title, authors, language, publisher, the published date, description
+      and identifiers change; everything else — manifest, spine, guide,
+      unknown elements, element order, namespace prefixes — is untouched
+      because it is never looked at, let alone written
+- [x] Never invents structure: a field with no existing element to hold it
+      is left as the file has it, not added
+- [x] Refuses rather than guesses: a mismatched author count, a `dc:creator`
+      whose role is not "author", or a local name spelled two ways in one
+      file are all named refusals
+- [x] A DRM-protected archive is refused before the OPF is even read, in
+      `ShelfCore` — `EPUBOPFPatch.entries(patching:in:now:)` checks this
+      itself, so nothing that calls it later has to remember to
+- [x] The five traps named up front, each with its own test: the
+      `unique-identifier` anchor; EPUB 2's `opf:file-as`/`opf:role` and
+      EPUB 3's `id` + `refines` surviving a replaced author; `dcterms:modified`
+      updated when it exists, never invented when it does not; the cover
+      meta/manifest property untouched; `xml:lang` and mixed namespace
+      prefixes surviving. Against synthetic OPFs and, via
+      `shelf-tool epub-metadata-patch` in `Scripts/real-epub-proof.sh`,
+      against all six real Gutenberg books
+- [x] The sharper proof: after a real change, exactly one entry of the
+      archive differs from the original — proven for all six real books,
+      not asserted
+
+### What Sprint 10, part 2 found on the way
+
+- [ ] **The OPF growth from losing DEFLATE compression ranges from ~1 KB to
+      ~71 KB across six real books, not a fixed "tens of KB".** It tracks
+      the *source* OPF's own size — Les Misérables' unusually large OPF
+      (429 manifest entries' worth) lost the most; the two simplest books'
+      OPFs lost the least, below what was predicted rather than above it.
+      `CHANGELOG.md` has the per-book numbers. Writing a DEFLATEd OPF back
+      would need a compressor this project does not have; worth revisiting
+      only if this range turns out to matter in practice.
+- [ ] **Adding or removing an author is refused, not supported.** Doing it
+      correctly needs a new `id` nothing else collides with and, in EPUB 3,
+      new `refines` metas for role and sort form — real structural work,
+      deliberately out of scope here. Today's authors field can only
+      replace names one-for-one against however many `dc:creator` elements
+      already exist.
+- [ ] **A field with no existing element is never written**, which for a
+      real book most often means `dc:description`: plenty of the real
+      Gutenberg books have none, and Shelf cannot give them one through
+      this path. Adding an element correctly (position, prefix, an `id`
+      that does not collide) is real work this sprint did not do.
+- [ ] **A `dc:creator` written as CDATA, or containing nested markup, is not
+      specially handled.** None of the six real books do this; if a future
+      book does, the replacement text is written as plain escaped text, not
+      preserved as CDATA. Not observed as a problem, named because it was
+      never tested against.

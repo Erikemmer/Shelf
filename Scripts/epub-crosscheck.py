@@ -14,7 +14,10 @@ with a round-tripped one on:
      find it (by tag, not by hard-coding this project's own namespace
      prefixes), reads the same before and after.
 
-Usage: epub-crosscheck.py <original.epub> <roundtripped.epub>
+Usage: epub-crosscheck.py <original.epub> <roundtripped.epub> [expected-title]
+With a third argument, the roundtripped title is checked against *that*
+value instead of the original's — for Sprint 10's metadata patch, where the
+title is deliberately different afterwards and everything else is not.
 Prints "ok: ..." and exits 0 on success; prints "FAILED: ..." and exits 1
 otherwise. Called from Scripts/real-epub-proof.sh, not meant to be run by
 hand as part of the proof (nothing stops running it by hand too).
@@ -48,11 +51,12 @@ def title_of(archive: zipfile.ZipFile) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("usage: epub-crosscheck.py <original.epub> <roundtripped.epub>")
+    if len(sys.argv) not in (3, 4):
+        print("usage: epub-crosscheck.py <original.epub> <roundtripped.epub> [expected-title]")
         return 2
 
     original_path, roundtripped_path = sys.argv[1], sys.argv[2]
+    expected_title = sys.argv[3] if len(sys.argv) == 4 else None
 
     with zipfile.ZipFile(original_path) as original, zipfile.ZipFile(roundtripped_path) as roundtripped:
         bad_member = roundtripped.testzip()
@@ -75,13 +79,21 @@ def main() -> int:
             print(f"FAILED: {roundtripped_path} - could not read a title: {error}")
             return 1
 
-        if original_title != roundtripped_title:
-            print(f"FAILED: {roundtripped_path} - title changed: {original_title!r} -> {roundtripped_title!r}")
+        if expected_title is None:
+            if original_title != roundtripped_title:
+                print(f"FAILED: {roundtripped_path} - title changed: {original_title!r} -> {roundtripped_title!r}")
+                return 1
+        elif roundtripped_title != expected_title:
+            print(
+                f"FAILED: {roundtripped_path} - expected title {expected_title!r}, "
+                f"found {roundtripped_title!r}"
+            )
             return 1
 
     print(
         f"ok: {roundtripped_path} - testzip clean, {len(roundtripped_names)} entries match, "
-        f"title {original_title!r}"
+        f"title {roundtripped_title!r}"
+        + ("" if expected_title is None else f" (was {original_title!r})")
     )
     return 0
 

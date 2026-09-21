@@ -3,6 +3,73 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 10, part 2 — changing content.opf in place, not rendering a new one · 21 September 2026
+
+`EPUBOPFPatch` changes title, authors, language, publisher, the published
+date, description and identifiers in an EPUB's own `content.opf` by parsing
+it with `XMLTree` to find exactly the elements Shelf is allowed to touch,
+then editing only their text in the *original bytes* — never rendering a
+new OPF, which would silently drop everything a real book's OPF carries
+that Shelf does not model (accessibility metadata, EPUB 3 rendition hints,
+a publisher's own extensions). `EPUBOPFPatch.entries(patching:in:now:)`
+ties it to the writer: every other entry is carried forward as
+`.passthrough`, untouched; the OPF alone is written `.raw`, because there
+is no compressor here to re-deflate it with. A DRM-protected archive is
+refused before the OPF is even read — in `ShelfCore`, not a check a future
+window adds.
+
+**Never invents structure.** If a field has no existing element — an EPUB 2
+with no `dcterms:modified`, a scheme Shelf has a value for but the file
+never declared, a book that never had a `dc:description` — nothing is
+added, only what already exists is changed. **Refuses rather than
+guesses**: a different number of authors than the file has creators for, a
+`dc:creator` whose role is not "author", or a local name spelled more than
+one way in the same file are all named refusals, not something picked
+between.
+
+**The five traps, each with its own test, against both synthetic OPFs and
+six real Gutenberg books**: the `unique-identifier` anchor survives a
+change to other identifiers; EPUB 2's `opf:file-as`/`opf:role` and EPUB 3's
+`id` + `refines` metas both survive a replaced author name; `dcterms:modified`
+updates to now when something else changes and is never invented on an
+EPUB 2; the cover meta (EPUB 2) and the manifest's `cover-image` property
+(EPUB 3) are untouched because nothing here targets them; `xml:lang` and
+mixed namespace prefixes (`<title>` under a default namespace beside
+`<dc:creator>`) survive because only text between existing tags is ever
+replaced, never the tags themselves. 751 core tests, up from 733.
+
+**The sharper proof passthrough makes possible**: after a real metadata
+change, `shelf-tool epub-metadata-patch` shows exactly **one** entry of the
+archive differs from the original — the OPF — for all six real books, and
+`Scripts/epub-crosscheck.py` (Python's own `zipfile` and `xml.etree`,
+extended to accept the title's deliberately new value) agrees on all six.
+
+**Measured — the OPF entry's size before and after, all six real books**
+(title, authors and publisher patched, `"[Shelf] "` prefixed onto each so
+the change is unmistakable in a diff):
+
+| Book | OPF before → after | Growth |
+|---|---|---|
+| Die Verwandlung (EPUB2) | 845 → 2 057 bytes | +1 212 B |
+| Alice's Adventures in Wonderland (EPUB2) | 1 099 → 4 457 bytes | +3 358 B |
+| Grimms' Fairy Tales (EPUB2) | 1 740 → 14 159 bytes | +12 419 B |
+| Pride and Prejudice (EPUB3) | 3 719 → 27 339 bytes | +23 620 B |
+| Pride and Prejudice (EPUB2) | 3 666 → 28 330 bytes | +24 664 B |
+| Les Misérables (EPUB3) | 7 249 → 79 861 bytes | +72 612 B |
+
+**Not all in the double-digit kilobyte range predicted — named as asked.**
+Two of six are *below* it: Die Verwandlung (+1.2 KB) and Alice (+3.4 KB),
+the two smallest, simplest OPFs of the six. One is well above it: Les
+Misérables (+70.9 KB) — its own OPF has by far the most metadata of the
+six (429 manifest entries' worth of front matter and structure) and
+therefore the most to lose by going from DEFLATEd to stored. The growth
+tracks the *original* OPF's own size and compressibility, not a fixed
+cost — every one of these bytes is the compression the change gave up, not
+new metadata text (the `"[Shelf] "` prefixes account for a few dozen bytes
+each, not thousands). Writing a DEFLATEd OPF back would need a compressor
+this project does not build; if this range turns out to matter in
+practice, it is `docs/BACKLOG.md`, not a redesign today.
+
 ## The size that actually matters: a real 24 MB, 187-entry EPUB · 21 September 2026
 
 The synthetic 60 MB entry that measures the writer's memory cost is not what
