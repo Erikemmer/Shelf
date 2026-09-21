@@ -747,16 +747,23 @@ project generates itself.
       begin with, since all nine are authored by the writer itself, which
       only ever stored. Fixed the same day: `.passthrough` carries a
       source entry's compressed bytes forward unchanged. `CHANGELOG.md`.
-- [ ] **A ~60 MB entry that was already stored now costs *more* memory than
-      before the fix, not less: +420 MB, up from +300 MB.** Re-measured
-      after the fix above, `CHANGELOG.md`. Not a regression — it is the
-      honest cost of `entries(rewriting:)` now decompressing an entry once
-      for the CRC check and separately reading its compressed bytes for the
-      payload, two passes instead of one, for an entry that gained nothing
-      from the fix because it was never compressed. The entry the fix
-      actually helps — something genuinely DEFLATEd — has only been measured
-      small (≈1.8 KB plain, in the test suite); nobody has measured what a
-      book-sized *compressed* entry costs, which is the number that would
-      actually matter once a real command uses this writer. Worth a real
-      number before that command reaches a real library, not a redesign
-      before then.
+- [x] **A ~60 MB entry that was already stored cost *more* memory after the
+      fix above than before it: +420 MB, up from +300 MB.** Traced to
+      `entries(rewriting:)` decompressing a stored entry twice — once to
+      check its CRC, once for the bytes actually written, the same bytes
+      both times. Fixed: the CRC is computed from the already-fetched
+      compressed payload directly, reused rather than fetched again.
+      Re-measured, three runs: **still +420 MB, unchanged.** The removed
+      copy was real but was never the dominant cost here — checked directly,
+      this test's own verification code decompresses the same 60 MB entry
+      twice more (once per reader, to compare payloads), on top of
+      `ZipReader` holding each archive whole as `[UInt8]` and the writer
+      building each archive as a fresh `Data`. `CHANGELOG.md`.
+- [ ] **Nobody has measured what a book-sized, genuinely *compressed* entry
+      costs.** The DEFLATE fixture that proves the passthrough fix works is
+      small (≈1.8 KB plain text, in the test suite); the 60 MB fixture that
+      measures memory was never compressed. The number that would actually
+      matter once a real command uses this writer — a real chapter's worth
+      of DEFLATEd text, decompressed once for its CRC and never again — has
+      not been measured at a realistic size. Worth a real number before that
+      command reaches a real library, not a redesign before then.

@@ -67,21 +67,37 @@ public enum EPUBArchiveWriter {
     /// or looks at what an entry contains – that is Sprint 10's job, once it
     /// exists, working with what this returns rather than inside it.
     ///
-    /// Each entry is still decompressed once, here, but only to check its
-    /// CRC against what the source archive's own central directory claims
-    /// for it — the same check unpacking used to give for free when this
-    /// type wrote decompressed bytes back out. Checking it explicitly is
-    /// what keeps that guarantee now that the bytes actually written are the
-    /// *compressed* ones, which this check never touches.
+    /// Each entry's CRC is still checked against what the source archive's
+    /// own central directory claims for it — the same check unpacking used
+    /// to give for free when this type wrote decompressed bytes back out.
+    /// **A stored entry's compressed bytes *are* its content**, so checking
+    /// its CRC needs no second copy: `compressed` is reused directly, which
+    /// `Data`'s copy-on-write storage makes free. Only a compressed entry —
+    /// DEFLATE, or anything this reader does not recognise — genuinely needs
+    /// decompressing to get bytes the CRC can be checked against at all, and
+    /// that call is where a truncated or otherwise malformed stream is
+    /// caught too.
     public static func entries(rewriting archive: ZipReader) throws -> [ZipArchiveWriter.Entry] {
         try archive.entries.map { entry in
             guard !entry.isEncrypted else { throw Failure.encryptedEntry(entry.path) }
-            let decompressed = try archive.data(for: entry)
-            guard ZipCRC32.of(decompressed) == entry.crc32 else {
+            let compressed = try archive.compressedData(for: entry)
+
+            let uncompressed: Data
+            switch entry.method {
+            case .stored:
+                guard compressed.count == entry.uncompressedSize else {
+                    throw Failure.corruptSourceEntry(entry.path)
+                }
+                uncompressed = compressed
+            default:
+                uncompressed = try archive.data(for: entry)
+            }
+            guard ZipCRC32.of(uncompressed) == entry.crc32 else {
                 throw Failure.corruptSourceEntry(entry.path)
             }
+
             return ZipArchiveWriter.Entry.passthrough(
-                path: entry.path, compressedData: try archive.compressedData(for: entry), method: entry.method,
+                path: entry.path, compressedData: compressed, method: entry.method,
                 uncompressedSize: entry.uncompressedSize, crc32: entry.crc32, modTime: entry.modTime,
                 modDate: entry.modDate)
         }

@@ -3,6 +3,30 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 10, part 1, the double-decompression removed — the number did not move · 21 September 2026
+
+`entries(rewriting:)` decompressed a stored entry twice: once via
+`archive.data(for:)` to check its CRC, once via `archive.compressedData(for:)`
+for the bytes actually written — for a *stored* entry those are the same
+bytes, so the first call was a copy for nothing. Fixed: a stored entry's CRC
+is now computed directly from the compressed payload already fetched, reusing
+it through `Data`'s copy-on-write storage rather than fetching it a second
+time. A DEFLATEd entry still decompresses once, because that is the only way
+to get bytes its CRC can be checked against at all.
+
+**Measured — the ~60 MB entry, three more runs: 1.82–1.83 s, +420 MB.**
+Unchanged from the previous entry, within measurement noise. The fix is real
+— one genuine redundant copy is gone — and it simply does not move this
+number, because it was never the dominant cost here. Checked directly: this
+test's own verification code (`assertStrictRoundTrip`) calls `.data(at:)` on
+*both* readers for the large entry to compare payloads, which decompresses
+it twice more, on top of `ZipReader` holding each of the two archives whole
+as `[UInt8]` and the writer building each archive as a fresh `Data`. The one
+copy Part B removed was a small fraction of a total dominated by allocations
+outside what this fix was scoped to touch — the test's own comparison code
+included, which was left as it is rather than trimmed to make this number
+look better. `docs/BACKLOG.md`.
+
 ## Sprint 10, part 1, corrected – entries pass through instead of being recompressed · 21 September 2026
 
 The writer below stored every entry, always — which meant `entries(rewriting:)`
