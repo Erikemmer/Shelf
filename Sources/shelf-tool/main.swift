@@ -85,13 +85,14 @@ let usage = """
                                     every .epub in <folder>, made in
                                     <working folder>: patched, written in
                                     place, read back, rehashed, the original
-                                    to the Trash — one book at a time, never
-                                    concurrently — and then the four
-                                    refusals, each proven to leave exactly
-                                    the original file and nothing else, plus
-                                    the disposal-failure fact: a Trash that
-                                    declines does not undo a swap that
-                                    already succeeded.
+                                    to the Trash and hashed there too, not
+                                    just trusted to have arrived — one book
+                                    at a time, never concurrently — and then
+                                    the four refusals, each proven to leave
+                                    exactly the original file and nothing
+                                    else, plus the disposal-failure fact: a
+                                    Trash that declines does not undo a
+                                    swap that already succeeded.
                                     <folder> itself is only ever read
       online-read <file>…           read stored answers from Open Library or
                                     Google Books the way the app does, and print
@@ -2270,6 +2271,7 @@ enum Commands {
         }
 
         var allOK = true
+        var verifiedInTrash = 0
         for name in names {
             let copy = runFolder.appendingPathComponent(name)
             do {
@@ -2291,10 +2293,23 @@ enum Commands {
                 let readBack = try EPUBMetadata.read(url: copy)
                 let titleOK = readBack.book.title == fields.title
 
+                // Korrektur 2: don't take "the Trash accepted it" on faith
+                // — hash what actually landed there and check it against
+                // what the folder held before, the same "copy, verify,
+                // then trust" ADR 0002 asks of every other copy.
+                var trashOK = true
                 let trashLine: String
                 switch result.originalDisposal {
-                case .trashed:
-                    trashLine = "original in the Trash"
+                case .trashed(let trashedAt):
+                    if let trashedAt, let trashedData = try? Data(contentsOf: trashedAt),
+                        FileDigest.sha256(of: trashedData, makeHasher: PortableSHA256Hasher.factory) == beforeDigest
+                    {
+                        verifiedInTrash += 1
+                        trashLine = "original in the Trash, hashed there and confirmed bit-identical ✓"
+                    } else {
+                        trashOK = false
+                        trashLine = "✗ original said to be in the Trash but its hash there does not match"
+                    }
                 case .leftAsDebris(let debrisName, let reason):
                     // The book is still correct; this is the disposal
                     // itself declining, reported as a fact, not this run
@@ -2306,12 +2321,13 @@ enum Commands {
                     "\(name): \(before.count) → \(newContent.count) bytes, "
                         + "hash \(String(beforeDigest.prefix(10)))… → \(String(result.format.sha256.prefix(10)))…, "
                         + "read back \(titleOK ? "✓" : "✗ (\(readBack.book.title))"), \(trashLine)")
-                allOK = allOK && titleOK
+                allOK = allOK && titleOK && trashOK
             } catch {
                 print("\(name): FAILED – \(error)")
                 allOK = false
             }
         }
+        print("original verified bit-identical in the Trash for \(verifiedInTrash) of \(names.count) books")
         return allOK
     }
 

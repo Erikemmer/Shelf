@@ -324,7 +324,10 @@ struct OrganizeTests {
         try Data("finder".utf8).write(to: library.root.appendingPathComponent("Wrong/.DS_Store"))
 
         let asked = Recorder()
-        let spy = FolderDisposal { url in asked.record(url.lastPathComponent) }
+        let spy = FolderDisposal { url in
+            asked.record(url.lastPathComponent)
+            return nil
+        }
         let plan = OrganizePlanner.plan(
             entries: [mover], foldsCase: VolumeCase.folds(at: library.root),
             folderExists: { OrganizeBookProbe.exists($0, under: library.root) })
@@ -351,7 +354,10 @@ struct OrganizeTests {
         try Data("mine".utf8).write(to: library.root.appendingPathComponent("Keep/.gitignore"))
 
         let asked = Recorder()
-        let spy = FolderDisposal { url in asked.record(url.lastPathComponent) }
+        let spy = FolderDisposal { url in
+            asked.record(url.lastPathComponent)
+            return nil
+        }
         let plan = OrganizePlanner.plan(
             entries: [mover], foldsCase: VolumeCase.folds(at: library.root),
             folderExists: { OrganizeBookProbe.exists($0, under: library.root) })

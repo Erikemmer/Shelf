@@ -40,12 +40,17 @@ struct EPUBFileReplacementTests {
 
         // The original reached the Trash — under a renamed-aside name, not
         // its own, since the swap renames it aside before offering it to
-        // disposal at all (Korrektur 1).
-        #expect(result.originalDisposal == .trashed)
+        // disposal at all (Korrektur 1). `originalDisposal` says exactly
+        // where `FolderDisposal` put it (Korrektur 2), and it is byte for
+        // byte the file that was there — got back, not merely gone, the
+        // point of the Trash rather than `removeItem`.
+        guard case .trashed(let trashedAt) = result.originalDisposal, let trashedAt else {
+            Issue.record("expected .trashed(at:), got \(result.originalDisposal)")
+            return
+        }
         #expect(bin.taken.count == 1)
-        // Got back, byte for byte — the point of the Trash rather than
-        // `removeItem`.
-        #expect(try Data(contentsOf: bin.folder.appendingPathComponent(bin.taken[0])) == originalData)
+        #expect(trashedAt == bin.folder.appendingPathComponent(bin.taken[0]))
+        #expect(try Data(contentsOf: trashedAt) == originalData)
 
         // The file at the original path now holds the new content, and its
         // hash is not the old file's.
@@ -272,6 +277,7 @@ struct EPUBFileReplacementTests {
                 try? FileManager.default.removeItem(at: target)
                 try FileManager.default.moveItem(at: url, to: target)
                 taken.append(url.lastPathComponent)
+                return target
             }
         }
     }

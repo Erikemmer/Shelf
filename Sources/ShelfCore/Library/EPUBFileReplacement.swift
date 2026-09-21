@@ -44,8 +44,10 @@ public enum EPUBFileReplacement {
     /// What happened to the book's old bytes, after the new ones were
     /// already safely in place at its path.
     public enum DisposalOutcome: Equatable, Sendable {
-        /// The original reached the Trash.
-        case trashed
+        /// The original reached the Trash. `at` is where `FolderDisposal`
+        /// itself says it landed — `nil` when the disposal used cannot say
+        /// (a test double, most often).
+        case trashed(at: URL?)
         /// The book is correct — the swap happened before this was even
         /// attempted — but the old bytes could not be moved to the Trash.
         /// They are left in the book's own folder under
@@ -233,8 +235,8 @@ public enum EPUBFileReplacement {
         // The book is correct from here on, whatever happens next.
         let originalDisposal: DisposalOutcome
         do {
-            try disposal.dispose(displaced)
-            originalDisposal = .trashed
+            let trashedAt = try disposal.dispose(displaced)
+            originalDisposal = .trashed(at: trashedAt)
         } catch {
             originalDisposal = .leftAsDebris(
                 name: displaced.lastPathComponent, reason: error.localizedDescription)

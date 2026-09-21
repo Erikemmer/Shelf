@@ -3,6 +3,40 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 10, Schritt E1, Korrektur 2 — the Trash is hashed and checked, not trusted · 21 September 2026
+
+Korrektur 1 said "original disposed of, not verified" and left it there:
+`FolderDisposal.dispose` returned nothing, so a caller had no way to
+confirm what actually landed in the Trash was the file that used to be in
+the book's folder — only that `trashItem` didn't throw.
+
+`FolderDisposal.dispose` now returns the destination, `URL?` — what
+`trashItem`'s own `resultingItemURL` reports, `nil` for a disposal that
+cannot say one (a test double, mostly). `EPUBFileReplacement.DisposalOutcome
+.trashed` carries it: `.trashed(at: URL?)`. `shelf-tool
+epub-file-replace-proof` uses it to do what Korrektur 1 only reported —
+hash the file at that URL and check it against the digest the folder held
+before the swap, the same "copy, verify, then trust" ADR 0002 already asks
+of everything else. The report now names the count: for how many of the
+six real books this was actually proven, not assumed.
+
+`CoverReplacement.swift` and `OrganizeRunner.swift` call `dispose` for its
+side effect only and needed no change — a caller ignoring an extra return
+value is exactly what "the callers that don't need the URL, ignore it"
+meant. Their own test doubles (`CoverReplacementTests`, `OrganizeTests`)
+and `EPUBFileReplacementTests`' `Bin` do construct `FolderDisposal`
+closures, and those needed one line each to return the destination they
+already know, to satisfy the new signature — mechanical, no behaviour
+changed.
+
+764 core tests, still — the whole path's own test now confirms
+`.trashed(at:)` against the exact URL the test double moved the file to,
+not merely that some disposal happened.
+
+**Measured — all six real books, `shelf-tool epub-file-replace-proof`,
+this Mac:** original verified bit-identical in the real Trash for **6 of
+6 books**.
+
 ## Sprint 10, Schritt E1, Korrektur 1 — the swap is two renames, not a rename either side of the Trash · 21 September 2026
 
 `EPUBFileReplacement.replace` had a gap: original into the Trash, *then*

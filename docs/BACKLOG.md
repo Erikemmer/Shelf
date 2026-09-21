@@ -906,11 +906,13 @@ as it was.
       all of them at once
 - [x] `shelf-tool epub-file-replace-proof`, in `Scripts/real-epub-proof.sh`
       section 7: the whole path against copies of all six real books, one
-      after another, through the real Trash, plus each of the four
-      refusals proven once against a fresh real copy with a check that its
-      folder holds exactly the original file afterwards, plus the
-      disposal-failure fact proven the same way. Ten `EPUBFileReplacementTests`,
-      synthetic, against fixtures built through `EPUBArchiveWriter` itself
+      after another, through the real Trash — hashed there and confirmed
+      bit-identical, not just trusted to have arrived (Korrektur 2) —
+      plus each of the four refusals proven once against a fresh real copy
+      with a check that its folder holds exactly the original file
+      afterwards, plus the disposal-failure fact proven the same way. Ten
+      `EPUBFileReplacementTests`, synthetic, against fixtures built through
+      `EPUBArchiveWriter` itself
 
 ### What Schritt E1 found on the way
 
@@ -922,6 +924,17 @@ as it was.
       inside the folder, with disposal coming last, after the book is
       already correct — a disposal that refuses at that point is reported
       as a fact, not thrown. `CHANGELOG.md`.
+- [x] **Korrektur 2: "original in the Trash" rested on `dispose` not
+      throwing, never on anyone looking.** `FolderDisposal.dispose` now
+      returns where `trashItem` says it put the item, and
+      `epub-file-replace-proof` hashes what is actually there against what
+      the folder held before — 6 of 6 real books, this Mac. Mechanical
+      follow-on: every `FolderDisposal { … }` closure in the test doubles
+      (`CoverReplacementTests`, `OrganizeTests`, `EPUBFileReplacementTests`)
+      needed one line to return the destination it already knew; the
+      production callers that only use `dispose` for its side effect
+      (`CoverReplacement.swift`, `OrganizeRunner.swift`) needed none, and
+      now carry a harmless "result unused" warning apiece. `CHANGELOG.md`.
 - [ ] **`CoverReplacement` has the same trash-before-swap gap, deliberately
       left alone.** Erik's call: a cover is a small picture kept in memory
       and worth less than a book kept nowhere for however long `trashItem`

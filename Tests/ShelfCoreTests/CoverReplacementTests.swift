@@ -43,6 +43,7 @@ struct CoverReplacementTests {
                 try? FileManager.default.removeItem(at: target)
                 try FileManager.default.moveItem(at: url, to: target)
                 taken.append(url.lastPathComponent)
+                return target
             }
         }
     }
@@ -377,7 +378,7 @@ struct CoverGenerationTests {
         // the picture changed.
         let replaced = try CoverReplacement.replace(
             with: MinimalPNG.cover(width: 10, height: 15, seed: 3), in: folder,
-            previousGeneration: book.coverGeneration, disposal: FolderDisposal { _ in })
+            previousGeneration: book.coverGeneration, disposal: FolderDisposal { _ in nil })
         let change = MetadataChange.make(from: book) { $0.coverGeneration = replaced.generation }
         try await MetadataEditor(library: library).apply(change, to: entry, in: index)
 

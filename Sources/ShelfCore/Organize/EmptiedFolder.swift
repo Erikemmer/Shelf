@@ -86,11 +86,15 @@ public enum EmptiedFolder {
 /// would not build on Linux, which is the guard rail that keeps this package
 /// honest.
 public struct FolderDisposal: Sendable {
-    /// Moves the folder somewhere it can be got back from. Throws if it
-    /// cannot, and the caller then leaves the folder exactly where it is.
-    public var dispose: @Sendable (URL) throws -> Void
+    /// Moves the folder somewhere it can be got back from, and returns where
+    /// — the destination `trashItem` itself reports, when the disposal can
+    /// say one at all; a test double that only records that it was asked
+    /// has none to give and returns `nil`. Throws if the item cannot be
+    /// moved, and the caller then leaves it exactly where it is. Callers
+    /// that have no use for the destination simply ignore it.
+    public var dispose: @Sendable (URL) throws -> URL?
 
-    public init(dispose: @escaping @Sendable (URL) throws -> Void) {
+    public init(dispose: @escaping @Sendable (URL) throws -> URL?) {
         self.dispose = dispose
     }
 
@@ -108,6 +112,7 @@ public struct FolderDisposal: Sendable {
         #if os(macOS)
             var resulting: NSURL?
             try FileManager.default.trashItem(at: url, resultingItemURL: &resulting)
+            return resulting as URL?
         #else
             throw Failure.noTrashHere
         #endif
