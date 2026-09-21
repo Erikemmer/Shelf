@@ -3,12 +3,22 @@ import ShelfCore
 
 /// Writes a ZIP archive with uncompressed entries.
 ///
-/// **What this is for.** Shelf never writes a book file (CONCEPT §1), so no
-/// part of the app calls this. It exists because the EPUB reader has to be
-/// tested against EPUBs, and the only EPUBs this project will ever have are the
-/// ones it makes itself – no borrowed books in the repo. The tests build their
-/// fixtures with it, and `shelf-tool synthesise` builds the 5 000-book library
-/// the performance run measures against.
+/// **What this is for.** Until `docs/adr/0021-…`, no part of the app ever
+/// wrote a book file, and this was purely a test tool: the only EPUBs this
+/// project will ever have are the ones it makes itself, and this is what
+/// `SyntheticEPUB`, `SyntheticComic` and `SyntheticCalibreLibrary` build them
+/// with, along with the 5 000-book library `shelf-tool synthesise` measures
+/// against. It still is that tool for all of them — none of that changed.
+///
+/// What changed is that `ShelfCore` now has a *production* archive writer,
+/// `EPUBArchiveWriter`, proven by a strict round trip against `ZipReader`. A
+/// new test that needs a **valid** archive to prove that writer against
+/// builds it with `EPUBArchiveWriter`, so the test exercises the real code
+/// path rather than a second implementation of the same format. This type
+/// keeps its existing callers, and is where a test reaches for an
+/// **intentionally malformed** archive — `EPUBArchiveWriter` refuses to
+/// produce one of those by construction, which is exactly why it cannot be
+/// used to make one for a test that wants to see a refusal handled.
 ///
 /// Stored, not deflated: a compressor would be a second algorithm to get right
 /// for no gain, and `mimetype` has to be stored anyway. The reader's DEFLATE

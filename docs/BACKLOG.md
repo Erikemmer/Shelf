@@ -704,3 +704,39 @@ the most visible hole in the grid.
       pixel sizes it produced against the disk. **An app-side test target would
       fix this and is the honest answer**; it would be the first one in the
       project.
+
+## Sprint 10, part 1 – a ZIP archive writer for EPUBs · done, not yet used
+
+`docs/adr/0021-metadata-and-a-cover-may-be-written-into-an-epub.md`. Not a
+command — the writer the command will need, proven against archives this
+project generates itself.
+
+- [x] `ZipArchiveWriter`: a stored-only ZIP writer that refuses to write an
+      archive that would need ZIP64 (more than 65 535 entries, or a size or
+      offset past a 32-bit field) rather than writing one that opens in some
+      tools and not others
+- [x] `EPUBArchiveWriter`: the one EPUB-specific rule on top of it —
+      `mimetype` first, or refused, whether it is missing, out of place, or
+      written twice
+- [x] The strict round trip: read, rewrite every entry unchanged, read again,
+      same names and the same decompressed bytes — proven against an EPUB 2,
+      an EPUB 3, no cover, a cover the OPF names but the archive lacks, an OPF
+      outside `OEBPS`, deep non-ASCII paths, a file no manifest mentions, and
+      a DRM announcement
+- [x] A ZIP-encrypted entry is refused when copying an archive forward, named,
+      rather than carried through as something this writer cannot actually
+      honour
+
+### What Sprint 10, part 1 found on the way
+
+- [ ] **A ~60 MB entry costs roughly five times its own size in resident
+      memory across one round trip** — measured at +300 MB for a 60 MB entry,
+      `CHANGELOG.md`. `ZipReader` holds a whole archive as `[UInt8]` by
+      design (Sprint 1: every file it was written against was a few
+      megabytes), and this writer builds a whole new `Data` the same way.
+      Not a defect in either — both do exactly what their own documentation
+      says — but a real EPUB with a large embedded video or a comic's issue
+      of images could make this the actual cost of the command Sprint 10 is
+      building towards, and nobody has measured what a book-sized (rather
+      than a 60 MB stress-test-sized) file costs. Worth a real number before
+      that command reaches a real library, not a redesign before then.

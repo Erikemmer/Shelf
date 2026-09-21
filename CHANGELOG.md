@@ -3,6 +3,43 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 10, part 1 – a ZIP archive writer for EPUBs, proven and not yet used · 21 September 2026
+
+`docs/adr/0021-…` allows Shelf to write into an EPUB, on request, once a
+command exists for it. This is the part that comes before any command:
+`ZipArchiveWriter` (a stored-only ZIP writer that refuses ZIP64 conditions
+by name rather than truncating a real archive) and `EPUBArchiveWriter` (the
+one EPUB-specific rule on top — `mimetype` first or refused). Nothing calls
+either yet. No book file, real or synthetic-but-kept, was written by this
+session; every archive below lives only in a test's memory.
+
+**Proven — the strict round trip.** Every fixture is built with
+`EPUBArchiveWriter` itself, read with `ZipReader`, handed straight back to
+`EPUBArchiveWriter` unchanged, and read a second time: same entry names,
+same decompressed bytes, not merely "opens again". 723 core tests, up from
+701 — an EPUB 2 and an EPUB 3, no cover, a cover the OPF names but the
+archive lacks, an OPF outside `OEBPS`, deep paths with an umlaut and a
+Cyrillic name, a file the manifest never mentions, a `META-INF/
+encryption.xml` DRM announcement, and a ~60 MB entry, plus the refusals:
+`mimetype` missing, `mimetype` not first, `mimetype` twice, and a
+ZIP-encrypted entry (which nothing in this writer can honour, so copying
+one forward is refused rather than attempted).
+
+**Measured — the ~60 MB entry**, on Erik's Mac, `swift test` (`-Onone`,
+unoptimised — a release build would read faster):
+
+| | |
+|---|---|
+| the round trip (read, rewrite, read again) | 1.79–1.89 s across three runs |
+| resident memory during it | +300 MB |
+
+`ZipReader` holds a whole archive as `[UInt8]`; this writer builds a whole
+new `Data` the same way. For a 60 MB entry that is roughly five times its
+own size in memory at the round trip's peak — every one of read once,
+decompress, hold as `[Entry]`, write once, read again, touches the full 60
+MB. Uncomfortable enough to name, not urgent enough to redesign before a
+command exists that would actually feel it: `docs/BACKLOG.md`.
+
 ## 1.0.0
 
 Sprints 1–9, summarised from the sections below rather than restated:

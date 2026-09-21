@@ -22,6 +22,12 @@ public struct ZipReader: Sendable {
         /// Where the local header of this entry starts.
         public var localHeaderOffset: Int
         public var crc32: UInt32
+        /// General-purpose bit 0 – the entry's bytes are ZIP-encrypted, a
+        /// different thing from an EPUB announcing DRM in its own
+        /// `META-INF/encryption.xml`. Nothing in Shelf can decrypt one, so a
+        /// writer copying entries forward has to refuse rather than carry a
+        /// flag it cannot honour.
+        public var isEncrypted: Bool
 
         /// Whether the entry is a folder marker rather than a file.
         public var isDirectory: Bool { path.hasSuffix("/") }
@@ -177,7 +183,8 @@ public struct ZipReader: Sendable {
                     uncompressedSize: uncompressed,
                     method: Method(uint16(bytes, offset + 10)),
                     localHeaderOffset: localOffset,
-                    crc32: uint32(bytes, offset + 16)))
+                    crc32: uint32(bytes, offset + 16),
+                    isEncrypted: uint16(bytes, offset + 8) & 0x0001 != 0))
             offset = nameStart + nameLength + extraLength + commentLength
         }
         return result
