@@ -129,6 +129,14 @@ UI zuerst Englisch, Deutsch in Sprint 7 (wie Selector). Bezeichner Englisch.
   zusätzlich Regale und Gelesen-Status als Calibre-Tags, weil Calibre eine
   unbekannte `<meta>` ignoriert). Zählprotokoll vorher, Bericht nachher; ein
   zweiter Lauf schreibt nur die Unterschiede und liest nie zurück (ADR 0019)
+- **„Write into the Book File" / „Ins Buch schreiben"** – auf ausdrückliche
+  Anweisung, nie beiläufig: Titel, Autoren, Verlag, Datum, Sprache und
+  Beschreibung werden in die EPUB-Datei selbst geschrieben. Erst eine
+  Bestätigung, die jedes Buch beim Namen nennt und jedes Feld alt → neu, dann
+  – nach Vorprüfung (EPUB? DRM-frei? beschreibbarer Datenträger?) – die neue
+  Datei geprüft und erst dann getauscht, das Original in den Papierkorb. Kein
+  ⌘Z; der Papierkorb ist der Rückweg. Nur EPUB; PDF, MOBI und AZW3 bleiben
+  unangetastet (ADR 0021, Sprint 10 Schritt E1/E2)
 
 **Should**
 
@@ -148,8 +156,15 @@ UI zuerst Englisch, Deutsch in Sprint 7 (wie Selector). Bezeichner Englisch.
 - Format-Konvertierung (v1.x über installiertes Calibre `ebook-convert` als Hilfsprogramm, erkannt und aufgerufen, nie mitgeliefert; eigene Engine nicht geplant)
 - Integrierter Reader (v2: EPUB via WebKit, PDF via PDFKit, Comics wie Selector-Viewer)
 - Lesefortschritt aufs Gerät schreiben
-- Metadaten in die Buchdatei einbetten (v1.0 schreibt nur `metadata.opf` und Index; die Buchdatei bleibt unverändert)
 - iPad, App Store
+
+**Was seit Sprint 10 kein Nicht-Ziel mehr ist.** Hier stand: „Metadaten in
+die Buchdatei einbetten (v1.0 schreibt nur `metadata.opf` und Index; die
+Buchdatei bleibt unverändert)." Das galt bis Schritt E2 dieses Sprints.
+Gefallen ist es kontrolliert, auf ausdrückliche Anweisung und nie beiläufig
+– siehe den neuen Punkt oben unter **Must** und ADR 0021. Weiterhin wahr:
+kein Format außer EPUB wird je geschrieben, und ohne diese eine Anweisung
+ändert sich an einer Buchdatei nichts.
 
 ## 5. Datenmodell
 
@@ -171,7 +186,7 @@ My Library/
 
 Die Ordnerstruktur ist Calibre-kompatibel (`Autor/Titel (id)/`), damit ein Calibre-Import 1:1 übernehmen kann und ein Rückweg bleibt. `metadata.opf` folgt dem Calibre-OPF-Schema (Dublin Core + `calibre:`-Metas: `series`, `series_index`, `rating`, `timestamp`, `user_metadata` für eigene Spalten). Shelf-eigene Felder (Gelesen-Status, Regalzugehörigkeit, Gerätezuordnung) stehen in `<meta name="shelf:…">`; Calibre ignoriert sie stillschweigend.
 
-**Regel:** Ein Schreibvorgang auf `metadata.opf` schreibt in eine `.opf.part`-Datei und benennt atomar um (wie `.ingest-*.part` bei Selector). Die Buchdatei selbst wird in v1.0 nie geschrieben.
+**Regel:** Ein Schreibvorgang auf `metadata.opf` schreibt in eine `.opf.part`-Datei und benennt atomar um (wie `.ingest-*.part` bei Selector). Die Buchdatei selbst wird nie *beiläufig* geschrieben – bis Sprint 10 stand hier „Die Buchdatei selbst wird in v1.0 nie geschrieben", ohne Einschränkung; seit Schritt E2 kann sie es, aber ausschließlich über „Write into the Book File", mit eigener Vorprüfung, eigener Bestätigung und eigenem Rückweg über den Papierkorb (ADR 0021, §4 oben). Jeder andere Schreibvorgang in Shelf – eine Bewertung, ein Tag, eine Verschiebung – geht weiterhin ausschließlich nach `metadata.opf` und in den Index.
 
 **Namenskollisionen und Groß-/Kleinschreibung.** Der Soll-Pfad eines Buchs wird
 aus seinen Metadaten gebildet (`AutorSort/Titel (Nummer)/`), und zwei Bücher
@@ -330,7 +345,9 @@ Wiederverwendung aus Selector (kopieren, nicht koppeln, weil fachlich verschiede
 
 Kein Nachbau der Calibre-Oberfläche. Keine Plugins. Kein Server, keine Web-Oberfläche. Keine Cloud-Synchronisation der Bibliothek in v1.0 (iCloud-Drive-Bibliotheken werden erkannt und mit Warnung geöffnet; SQLite in iCloud ist ein bekanntes Problem). Kein Umgehen von DRM, in keiner Form.
 
-**Was seit Sprint 8 kein Nicht-Ziel mehr ist.** „Die Ordner in Ruhe lassen“ stand hier nicht als Satz, aber es war die Haltung: ADR 0007 hielt fest, dass eine Metadatenänderung den Ordner nicht umbenennt, und daraus wurde gelesen, Shelf rühre Ordner überhaupt nicht an. Das gilt so nicht mehr. ADR 0018 trennt die beiden Dinge: **beiläufig** wird nie umbenannt, **auf ausdrückliche Anweisung, mit Vorschau und Rückweg** schon. Unverändert bleibt, was darunter liegt und wovon nichts verhandelbar ist: **eine Buchdatei wird nie geschrieben, nie überschrieben, nie gelöscht.** Ordner werden bewegt, Inhalte nicht. Und nichts wird endgültig gelöscht – was weggehen soll, geht in den Papierkorb.
+**Was seit Sprint 8 kein Nicht-Ziel mehr ist.** „Die Ordner in Ruhe lassen“ stand hier nicht als Satz, aber es war die Haltung: ADR 0007 hielt fest, dass eine Metadatenänderung den Ordner nicht umbenennt, und daraus wurde gelesen, Shelf rühre Ordner überhaupt nicht an. Das gilt so nicht mehr. ADR 0018 trennt die beiden Dinge: **beiläufig** wird nie umbenannt, **auf ausdrückliche Anweisung, mit Vorschau und Rückweg** schon. Ordner werden bewegt, Inhalte nicht. Und nichts wird endgültig gelöscht – was weggehen soll, geht in den Papierkorb.
+
+**Was seit Sprint 10 kein Nicht-Ziel mehr ist.** Hier stand bis dahin, ohne Einschränkung: „eine Buchdatei wird nie geschrieben, nie überschrieben, nie gelöscht." Das war bis Schritt E2 dieses Sprints wahr und ist es beiläufig immer noch – gefallen ist es genau einmal, mit Datum (21. September 2026) und Begründung, nicht stillschweigend. ADR 0021 erlaubt **auf ausdrückliche Anweisung, mit Vorprüfung, Vorschau und Rückweg über den Papierkorb**, Metadaten und ein Cover in eine EPUB-Datei zu schreiben – „Write into the Book File", nirgends sonst erreichbar. Weiterhin nicht verhandelbar: kein anderes Format wird je geschrieben, eine Buchdatei wird nie *überschrieben* (immer neu geschrieben, geprüft, dann getauscht), nie ohne diese eine Bestätigung, und nie gelöscht – das Original geht in den Papierkorb, mit ausdrücklich keinem ⌘Z, weil der Papierkorb selbst der Rückweg ist.
 
 ## 13. Risiken
 

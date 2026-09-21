@@ -91,6 +91,13 @@ struct ContentView: View {
         ) {
             ExportSheet().environment(model)
         }
+        .sheet(
+            isPresented: Binding(
+                get: { model.epubWritePhase != nil },
+                set: { if !$0 { model.epubWritePhase = nil } })
+        ) {
+            WriteIntoBookSheet().environment(model)
+        }
         .onAppear {
             editingKeys.start(handleWindowKey)
             focus = model.focusTarget

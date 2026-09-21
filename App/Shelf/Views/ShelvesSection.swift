@@ -317,6 +317,12 @@ struct BookMenu: View {
         }
         Divider()
         Button(Loc.string("Show in Finder")) { model.revealSelectedInFinder() }
+        // Only offered when at least one of `books` actually qualifies —
+        // the plan itself decides book by book which of a mixed selection
+        // gets written and which is left alone, named in the sheet.
+        if books.contains(where: EPUBWrite.isEligible) {
+            Button(Loc.string("Write into the Book File…")) { model.beginEPUBWrite(for: books) }
+        }
     }
 
     /// The books the menu acts on: the whole selection when this book is in it,

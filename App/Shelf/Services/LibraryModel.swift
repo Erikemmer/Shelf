@@ -1961,6 +1961,62 @@ final class LibraryModel {
         }
     }
 
+    // MARK: Writing into a book's own file (Sprint 10, Schritt E2)
+
+    /// Where the `Write into the Book File…` sheet has got to.
+    enum EPUBWritePhase: Equatable {
+        case planning
+        /// The preview. Nothing has been written.
+        case ready(EPUBWrite.Plan)
+        case running(EPUBWrite.Progress)
+        case done(EPUBWrite.Report)
+    }
+
+    var epubWritePhase: EPUBWritePhase?
+
+    /// Opens the sheet on a fresh plan for `entry` — the whole selection if
+    /// `entry` is part of it and there is more than one book selected,
+    /// otherwise just `entry` alone, the same "book or selection" rule
+    /// `BookMenu.subject` already uses.
+    func beginEPUBWrite(for entry: LibraryEntry) {
+        let books = selection.contains(entry.id) && selection.count > 1 ? selectedEntries : [entry]
+        beginEPUBWrite(for: books)
+    }
+
+    func beginEPUBWrite(for books: [LibraryEntry]) {
+        epubWritePhase = .planning
+        Task { await planEPUBWrite(books) }
+    }
+
+    private func planEPUBWrite(_ books: [LibraryEntry]) async {
+        guard let library else { return }
+        let plan = await Task.detached(priority: .userInitiated) {
+            EPUBWrite.plan(for: books, library: library)
+        }.value
+        epubWritePhase = .ready(plan)
+    }
+
+    /// Writes every book the plan names, one at a time — `EPUBWrite.run`'s
+    /// own rule, never a `TaskGroup` here either. The plan handed in is the
+    /// exact plan `beginEPUBWrite` showed; nothing is replanned first.
+    func runEPUBWrite(_ plan: EPUBWrite.Plan) {
+        guard let library, let index else { return }
+        epubWritePhase = .running(EPUBWrite.Progress(done: 0, total: plan.books.count, currentTitle: ""))
+        let ids = Set(plan.books.map(\.entryID))
+        let entriesByID = Dictionary(uniqueKeysWithValues: entries.filter { ids.contains($0.id) }.map { ($0.id, $0) })
+        Task {
+            let onProgress: @Sendable (EPUBWrite.Progress) -> Void = { [weak self] progress in
+                Task { @MainActor in self?.epubWritePhase = .running(progress) }
+            }
+            let report = await Task.detached(priority: .userInitiated) {
+                await EPUBWrite.run(
+                    plan.books, entries: entriesByID, library: library, index: index, progress: onProgress)
+            }.value
+            epubWritePhase = .done(report)
+            await reload()
+        }
+    }
+
     /// Why this book is in *Duplicates*, in one line — or nothing when it is
     /// not. The best-founded rule when several matched: identical bytes is a
     /// fact and identical title-and-author is a guess, and the guess is the one

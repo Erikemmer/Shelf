@@ -12,9 +12,21 @@ builds on Linux), UI in `App/Shelf` (SwiftUI + AppKit) on top of the shared
 `docs/ARCHITECTURE.md`.
 
 ## The rules that are not negotiable
-- **A book file is never written, deleted or overwritten** in v1.0. Metadata
-  goes into `metadata.opf` next to the book and into the index – never into the
-  book (CONCEPT §4, "Won't").
+- **A book file is never written, deleted or overwritten *by accident* — never
+  by a routine metadata edit.** Until Sprint 10 this line read, without
+  qualification, "a book file is never written, deleted or overwritten in
+  v1.0", and that stayed true right up to Schritt E2 of that sprint. It fell
+  once, deliberately, with a date (21 September 2026) and a reason, not
+  quietly: `docs/adr/0021-metadata-and-a-cover-may-be-written-into-an-epub.md`
+  allows an EPUB's own file to be written **on explicit instruction only** —
+  "Write into the Book File", reachable nowhere else, gated by preflight (is
+  it an EPUB? DRM-free? on a writable volume?), a confirmation naming every
+  book and every field old → new, a verified rewrite before anything is
+  displaced, and the original to the Trash — never `removeItem`, never
+  undone by ⌘Z, because the Trash *is* the way back. A rating, a tag, a
+  shelf, a move — every other write in Shelf still goes only into
+  `metadata.opf` next to the book and into the index, never into the book
+  itself (CONCEPT §4, "Won't"; §12).
 - **A Calibre folder is only ever read**, and `metadata.db` through a copy in
   `~/Library/Caches/Shelf/`.
 - **The folder is the truth; the index is a cache.** It can be deleted and

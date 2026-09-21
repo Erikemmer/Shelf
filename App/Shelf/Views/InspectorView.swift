@@ -724,6 +724,15 @@ struct InspectorView: View {
                 .help(Loc.string("Hands the file to Books, Preview or whatever reads it (↩)"))
             SlateSecondaryButton(Loc.string("Show in Finder")) { model.revealSelectedInFinder() }
                 .help(Loc.string("Reveals %@ (⇧⌘R)", entry.folder))
+            // Only for a book that actually has an EPUB with no DRM — the
+            // one rule Shelf never quietly bends (`docs/adr/0021-…`).
+            if EPUBWrite.isEligible(entry) {
+                SlateSecondaryButton(Loc.string("Write into the Book File…")) { model.beginEPUBWrite(for: entry) }
+                    .help(
+                        Loc.string(
+                            "Writes title, authors, publisher, date, language and description into "
+                                + "the EPUB itself — the file it had goes to the Trash"))
+            }
         }
         .frame(maxWidth: .infinity)
     }

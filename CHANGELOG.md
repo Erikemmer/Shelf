@@ -3,6 +3,83 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 10, Schritt E2 — "Write into the Book File", in the window · 21 September 2026
+
+The rule that a book file is never written falls here for the first time
+in the window itself, on explicit instruction only — never in passing,
+never from a menu bar
+([ADR 0021](docs/adr/0021-metadata-and-a-cover-may-be-written-into-an-epub.md)).
+
+`EPUBWrite` (`Sources/ShelfCore/Library/EPUBWrite.swift`) is the plan-then-
+run core: `plan(for:library:)` reads an entry's EPUB, computes what six
+fields — title, authors, publisher, published date, language, description
+— would change against what `entry.book` now holds, and produces the
+exact bytes `run` will write, so what a confirmation shows and what
+actually gets written can never drift apart. A book with no EPUB, DRM, an
+author count that does not match its file, or any other preflight refusal
+is named in `Plan.skipped`, never silently dropped. `run` writes a
+selection's books one at a time — a plain loop, never a `TaskGroup` — the
+same rule `EPUBFileReplacement` itself states, restated at the one new
+caller that could otherwise reach for concurrency.
+
+`WriteIntoBookSheet` is the window: reachable from the inspector's
+**Formats** section and from the grid/table's own context menu
+(`BookMenu`), never the menu bar — the same reason `CoverReplacement`'s
+commands live in the inspector and nowhere else. The confirmation names
+every book and every field, old struck through above new, "already the
+same" for what would not change, and — in the accent colour, on the same
+list — **"cannot be written"** for a field `EPUBOPFPatch` genuinely cannot
+place (a `dc:title` with no element in the file to replace; the one real
+case `EPUBOPFPatch` never invents a title for). A mixed selection writes
+into what qualifies and lists the rest under **"Left alone"**, by name and
+by reason. States plainly what will *not* happen — only the EPUB, PDF/
+MOBI/AZW3 untouched — beside what will: the original to the Trash, no ⌘Z,
+said once in the confirmation and once again after it is done. A checkbox
+("I have read the list above") gates the button, the same second
+deliberate act `DeleteFromDeviceSheet` already asks for Shelf's other
+irreversible operation.
+
+Every new sentence goes through `Loc.string`/`Loc.count`/`Loc.core`,
+enforced by `LocalisationTests` — 26 new catalogue entries, English and
+German both, including a genuine plural pair ("1 book will have its EPUB
+file replaced." / "%lld books…"). Every field row carries its own
+VoiceOver label, read as a sentence ("Publisher changes from nothing to
+Erik & Erik Press") rather than the two-line visual layout taken literally.
+
+**Proof:** `Scripts/write-into-book-shot.sh`, against the five-book
+library `shelf-tool epub-write-fixture` builds (three ordinary synthetic
+books, one announcing Adobe DRM, one EPUB with no `<dc:title>` element at
+all). Five pictures, both languages, `docs/screenshots/sprint-10/` (and
+`/de`) with a README carrying a verdict under each: the command itself,
+the confirmation with a real old→new, the unwritable-title marker, the
+DRM refusal inside a mixed selection, and the state afterward. Every claim
+checked against the book's own file on disk — `2-confirmation.jpg` and
+`5-after.jpg` are the same book before and after, and the run reads
+`OEBPS/content.opf` back out of the new EPUB and fails if the publisher it
+asked for is not actually there.
+
+**Found taking the screenshots, not before:** the inspector is one long
+`ScrollView`, and the new button sits well past the first screenful for
+any book with a description. `AXScrollToVisible` — tried on the theory
+that an off-screen control found by the accessibility API could be
+scrolled into view before being clicked — is a genuine no-op against this
+SwiftUI view; `Scripts/scroll-at.swift`, a real scroll-wheel event already
+in the repository for exactly this reason, is the actual fix. Separately:
+"Write into the Book File" (the sheet's own button) is a prefix of "Write
+into the Book File…" (the inspector's, left dimmed behind the sheet), and
+`cell-point.swift`'s prefix matching found the dimmed one first — fixed by
+asking for the second occurrence explicitly, not by changing the button
+text. `click-at.swift` gained a `cmd` word (holds ⌘ for the click) to
+demonstrate the DRM refusal inside a two-book selection.
+
+**`CLAUDE.md` and `docs/CONCEPT.md` updated last, only now that this is
+proven working** — the old, unqualified "a book file is never written"
+wording is kept as a quoted sentence in each of the three places it
+appeared, with today's date and the reason it fell.
+
+`docs/BACKLOG.md` marks Schritt E2 done; Sprint 10 is now complete except
+for what its own "found on the way" lists still carry forward.
+
 ## Sprint 10, Schritt E1, Korrektur 2 — the Trash is hashed and checked, not trusted · 21 September 2026
 
 Korrektur 1 said "original disposed of, not verified" and left it there:

@@ -94,6 +94,14 @@ let usage = """
                                     Trash that declines does not undo a
                                     swap that already succeeded.
                                     <folder> itself is only ever read
+      epub-write-fixture <library folder>
+                                    a small library for
+                                    Scripts/write-into-book-shot.sh: three
+                                    ordinary EPUBs, one with Adobe DRM, one
+                                    with no dc:title at all, and one book
+                                    edited in Shelf so its publisher,
+                                    language, date and description differ
+                                    from its own file. Synthetic only
       online-read <file>…           read stored answers from Open Library or
                                     Google Books the way the app does, and print
                                     the candidates with their match scores.
@@ -216,6 +224,7 @@ case "digest": try Commands.digest(Array(arguments.dropFirst()))
 case "epub-roundtrip": try Commands.epubRoundtrip(Array(arguments.dropFirst()))
 case "epub-metadata-patch": try Commands.epubMetadataPatch(Array(arguments.dropFirst()))
 case "epub-file-replace-proof": try Commands.epubFileReplaceProof(Array(arguments.dropFirst()))
+case "epub-write-fixture": try await Commands.epubWriteFixture(Array(arguments.dropFirst()))
 case "online-read": try Commands.onlineRead(Array(arguments.dropFirst()))
 case "devices": Commands.devices()
 case "device-contents": try await Commands.deviceContents(Array(arguments.dropFirst()))
@@ -2545,6 +2554,112 @@ enum Commands {
             print("read-back-fails: FAILED to set up – \(error)")
             return false
         }
+    }
+
+    // MARK: epub-write-fixture
+
+    /// Builds the small library `Scripts/write-into-book-shot.sh` screenshots
+    /// "Write into the Book File" against: three ordinary EPUBs, one
+    /// protected by Adobe DRM (refused before anything is written), and one
+    /// with no `<dc:title>` element at all — the one real case
+    /// `EPUBOPFPatch` never invents a title for, and the reason the sheet's
+    /// "cannot be written" marker exists. One ordinary book is then edited
+    /// in Shelf — publisher, language, published date, description — so it
+    /// carries fields the book's own file does not yet, which is what the
+    /// sheet's old→new list has something to show. Synthetic only
+    /// (`CLAUDE.md`); nothing here is a borrowed book.
+    static func epubWriteFixture(_ arguments: [String]) async throws {
+        guard let folder = arguments.first else {
+            print("usage: shelf-tool epub-write-fixture <library folder>")
+            exit(2)
+        }
+        let libraryURL = URL(fileURLWithPath: (folder as NSString).expandingTildeInPath, isDirectory: true)
+        let source = libraryURL.deletingLastPathComponent()
+            .appendingPathComponent("epub-write-fixture-source", isDirectory: true)
+        try? FileManager.default.removeItem(at: source)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+
+        // Plain, short, hand-picked books — a screenshot needs titles a
+        // reader can take in at a glance, not `SyntheticBooks`' own
+        // edge-case ones (a title long enough to trip a file-name limit is
+        // exactly what that generator is for).
+        let ordinary = [
+            Book(title: "The Glass Almanac", authors: ["Rosa Feldmann"]),
+            Book(title: "Cinders and Salt", authors: ["Tomas Okafor"]),
+            Book(title: "The Quiet Harbour", authors: ["Ingrid Solberg"]),
+        ]
+        var editedTitle = ""
+        for book in ordinary {
+            let epub = SyntheticEPUB(book: book).data()
+            try epub.write(to: source.appendingPathComponent("\(book.title).epub"))
+            if editedTitle.isEmpty { editedTitle = book.title }
+        }
+
+        let drmBook = Book(title: "A Protected Book", authors: ["Someone Protected"])
+        try SyntheticEPUB.withAdobeDRM(book: drmBook).data()
+            .write(to: source.appendingPathComponent("A Protected Book.epub"))
+
+        try Self.noTitleEPUB(author: "A Nameless Author")
+            .write(to: source.appendingPathComponent("Nameless.epub"))
+
+        try await Self.importFolder([source.path, libraryURL.path])
+        try? FileManager.default.removeItem(at: source)
+
+        let (library, index) = try Self.openLibrary(libraryURL.path)
+        let entry = try await Self.findBook(editedTitle, in: index)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let published = calendar.date(from: DateComponents(year: 2024, month: 3, day: 7))
+        let change = MetadataChange.make(from: entry.book) {
+            $0.publisher = "Erik & Erik Press"
+            $0.language = "en"
+            $0.published = published
+            $0.description = "Added in Shelf, not yet in the book's own file."
+        }
+        let updated = try await MetadataEditor(library: library).apply(change, to: entry, in: index)
+
+        let noTitleEntry = try await Self.findBook("Nameless", in: index)
+        print("epub-write-fixture: \(libraryURL.path)")
+        print("  edited book, publisher/language/date/description now differ: “\(updated.book.title)”")
+        print("  DRM book, refused before anything is written: “A Protected Book”")
+        print("  no-title book, title cannot be written: “\(noTitleEntry.book.title)”")
+    }
+
+    /// A minimal, valid EPUB with a `dc:creator` but no `dc:title` at all —
+    /// built with `EPUBArchiveWriter` itself, not a second implementation.
+    /// `SyntheticEPUB` always writes a title, on purpose (every fixture
+    /// elsewhere needs one), so this one case is built by hand.
+    private static func noTitleEPUB(author: String) throws -> Data {
+        let opf = """
+            <?xml version='1.0' encoding='utf-8'?>
+            <package xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf" \
+            version="2.0" unique-identifier="id">
+              <metadata>
+                <dc:identifier id="id">urn:uuid:\(UUID().uuidString)</dc:identifier>
+                <dc:creator opf:role="aut">\(author)</dc:creator>
+              </metadata>
+              <manifest>
+                <item id="text" href="text.xhtml" media-type="application/xhtml+xml"/>
+              </manifest>
+              <spine><itemref idref="text"/></spine>
+            </package>
+            """
+        let entries: [ZipArchiveWriter.Entry] = [
+            .raw(path: "mimetype", text: "application/epub+zip"),
+            .raw(
+                path: "META-INF/container.xml",
+                text: """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                      <rootfiles>
+                        <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+                      </rootfiles>
+                    </container>
+                    """),
+            .raw(path: "OEBPS/content.opf", text: opf),
+            .raw(path: "OEBPS/text.xhtml", text: "<html><body><p>A nameless book.</p></body></html>"),
+        ]
+        return try EPUBArchiveWriter.archive(entries)
     }
 
     private static func verifyExactlyOneEntryDiffers(

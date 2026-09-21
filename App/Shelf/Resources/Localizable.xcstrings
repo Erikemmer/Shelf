@@ -103,6 +103,23 @@
         }
       }
     },
+    "%1$@ changes from %2$@ to %3$@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ ändert sich von %2$@ zu %3$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ changes from %2$@ to %3$@"
+          }
+        }
+      }
+    },
     "%1$@ copied · %2$@ hard links": {
       "extractionState": "manual",
       "localizations": {
@@ -324,6 +341,23 @@
         }
       }
     },
+    "%@ cannot be written": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ kann nicht geschrieben werden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ cannot be written"
+          }
+        }
+      }
+    },
     "%@ free": {
       "extractionState": "manual",
       "localizations": {
@@ -354,6 +388,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ holds no metadata.db, so it is not a Calibre library. Choose the folder that has metadata.db in it."
+          }
+        }
+      }
+    },
+    "%@ is already the same": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist schon gleich"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is already the same"
           }
         }
       }
@@ -958,6 +1009,88 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld books selected"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld books were written into.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Buch wurde beschrieben."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Bücher wurden beschrieben."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld book was written into."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld books were written into."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld books will have their EPUB file replaced.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Buch bekommt eine neue EPUB-Datei."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Bücher bekommen eine neue EPUB-Datei."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld book will have its EPUB file replaced."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld books will have their EPUB file replaced."
                 }
               }
             }
@@ -2893,6 +3026,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Books that share only a title and a first author — editions, translations and namesakes look like this too"
+          }
+        }
+      }
+    },
+    "Books that will be written into": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bücher, die beschrieben werden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Books that will be written into"
           }
         }
       }
@@ -4890,6 +5040,23 @@
         }
       }
     },
+    "Left alone": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unangetastet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left alone"
+          }
+        }
+      }
+    },
     "Library": {
       "extractionState": "manual",
       "localizations": {
@@ -5900,6 +6067,23 @@
         }
       }
     },
+    "No ⌘Z for this. Each original is in the Trash and can be dragged back from there.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dafür gibt es kein ⌘Z. Jedes Original liegt im Papierkorb und kann von dort zurückgeholt werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No ⌘Z for this. Each original is in the Trash and can be dragged back from there."
+          }
+        }
+      }
+    },
     "None of them": {
       "extractionState": "manual",
       "localizations": {
@@ -5913,6 +6097,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "None of them"
+          }
+        }
+      }
+    },
+    "None of this can be written into.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts davon kann beschrieben werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None of this can be written into."
           }
         }
       }
@@ -6002,6 +6203,23 @@
         }
       }
     },
+    "Not set": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gesetzt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not set"
+          }
+        }
+      }
+    },
     "Not verified": {
       "extractionState": "manual",
       "localizations": {
@@ -6083,6 +6301,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nothing is selected on the device."
+          }
+        }
+      }
+    },
+    "Nothing is selected.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts ist ausgewählt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing is selected."
           }
         }
       }
@@ -6355,6 +6590,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "One flat folder"
+          }
+        }
+      }
+    },
+    "Only the EPUB is written into — PDF, MOBI and AZW3 are left exactly as they are. Each book's current file goes to the Trash, not away for good, but there is no ⌘Z for this: look in the Trash if you need one back.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur die EPUB-Datei wird beschrieben – PDF, MOBI und AZW3 bleiben genau, wie sie sind. Die bisherige Datei jedes Buchs geht in den Papierkorb, nicht endgültig weg, aber dafür gibt es kein ⌘Z: Wer eine Datei zurückbraucht, findet sie im Papierkorb."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only the EPUB is written into — PDF, MOBI and AZW3 are left exactly as they are. Each book's current file goes to the Trash, not away for good, but there is no ⌘Z for this: look in the Trash if you need one back."
           }
         }
       }
@@ -8423,6 +8675,23 @@
         }
       }
     },
+    "That is not a readable EPUB, so nothing was written.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist keine lesbare EPUB, es wurde also nichts geschrieben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That is not a readable EPUB, so nothing was written."
+          }
+        }
+      }
+    },
     "That is not an image Shelf recognises, so nothing was written.": {
       "extractionState": "manual",
       "localizations": {
@@ -8644,6 +8913,40 @@
         }
       }
     },
+    "The new file could not be written, so the book still has the one it had.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die neue Datei konnte nicht geschrieben werden, das Buch hat also weiterhin die, die es hatte."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The new file could not be written, so the book still has the one it had."
+          }
+        }
+      }
+    },
+    "The new file did not read back correctly, so it was discarded and nothing changed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die neue Datei ließ sich nicht richtig zurücklesen, sie wurde deshalb verworfen und nichts geändert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The new file did not read back correctly, so it was discarded and nothing changed."
+          }
+        }
+      }
+    },
     "The rating, the read status, the tags and the shelves are not in this folder. They live in the metadata.opf, which was not written.": {
       "extractionState": "manual",
       "localizations": {
@@ -8814,6 +9117,40 @@
         }
       }
     },
+    "This book could not be prepared: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Buch konnte nicht vorbereitet werden: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This book could not be prepared: %@"
+          }
+        }
+      }
+    },
+    "This book has no EPUB — only PDF, MOBI or AZW3, which are never written into.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Buch hat keine EPUB – nur PDF, MOBI oder AZW3, die nie beschrieben werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This book has no EPUB — only PDF, MOBI or AZW3, which are never written into."
+          }
+        }
+      }
+    },
     "This book has no ISBN and no title to look it up by, so nothing was asked.": {
       "extractionState": "manual",
       "localizations": {
@@ -8827,6 +9164,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "This book has no ISBN and no title to look it up by, so nothing was asked."
+          }
+        }
+      }
+    },
+    "This book is protected, so Shelf will not write into its file.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Buch ist geschützt, Shelf schreibt deshalb nicht in seine Datei."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This book is protected, so Shelf will not write into its file."
+          }
+        }
+      }
+    },
+    "This book's file and Shelf disagree on how many authors it has (%1$lld against %2$lld) — Shelf does not add or remove authors, so it is left alone.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Datei dieses Buchs und Shelf sind sich uneinig, wie viele Autoren es hat (%1$lld gegen %2$lld) – Shelf fügt keine Autoren hinzu und entfernt keine, das Buch bleibt deshalb unangetastet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This book's file and Shelf disagree on how many authors it has (%1$lld against %2$lld) — Shelf does not add or remove authors, so it is left alone."
           }
         }
       }
@@ -9239,6 +9610,23 @@
         }
       }
     },
+    "Working out what would change in each book's own file. Nothing is written yet.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird ermittelt, was sich in der eigenen Datei jedes Buchs ändern würde. Noch wird nichts geschrieben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working out what would change in each book's own file. Nothing is written yet."
+          }
+        }
+      }
+    },
     "Working out where every book's folder should be. Nothing is being moved.": {
       "extractionState": "manual",
       "localizations": {
@@ -9256,6 +9644,40 @@
         }
       }
     },
+    "Write into the Book File": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ins Buch schreiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write into the Book File"
+          }
+        }
+      }
+    },
+    "Write into the Book File…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ins Buch schreiben…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write into the Book File…"
+          }
+        }
+      }
+    },
     "Writes cover.jpg next to the book. The book file is not touched": {
       "extractionState": "manual",
       "localizations": {
@@ -9269,6 +9691,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Writes cover.jpg next to the book. The book file is not touched"
+          }
+        }
+      }
+    },
+    "Writes title, authors, publisher, date, language and description into the EPUB itself — the file it had goes to the Trash": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreibt Titel, Autoren, Verlag, Datum, Sprache und Beschreibung in die EPUB-Datei selbst – die bisherige Datei geht in den Papierkorb"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Writes title, authors, publisher, date, language and description into the EPUB itself — the file it had goes to the Trash"
           }
         }
       }
@@ -9507,6 +9946,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "cannot be sent: too big for this device's file system"
+          }
+        }
+      }
+    },
+    "cannot be written": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kann nicht geschrieben werden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot be written"
           }
         }
       }
@@ -9796,6 +10252,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "not set"
+          }
+        }
+      }
+    },
+    "nothing": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nichts"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nothing"
           }
         }
       }
@@ -10340,6 +10813,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "“%@” already holds a library. Open it instead."
+          }
+        }
+      }
+    },
+    "“%@” cannot be written to, so nothing was changed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ kann nicht beschrieben werden, es wurde also nichts geändert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” cannot be written to, so nothing was changed."
           }
         }
       }

@@ -9,20 +9,23 @@
 //
 // Needs the Accessibility permission for whatever runs it.
 //
-// Usage: swift Scripts/click-at.swift <x> <y> [right]
+// Usage: swift Scripts/click-at.swift <x> <y> [right] [cmd]
 //   x, y    screen points, origin top-left
 //   right   posts a right-click instead, for a context menu
+//   cmd     holds ⌘ for the click — extending a selection, the way a person
+//           ⌘-clicks a second cover
 import CoreGraphics
 import Foundation
 
 let words = Array(CommandLine.arguments.dropFirst())
 let numbers = words.compactMap(Double.init)
 guard numbers.count >= 2 else {
-    FileHandle.standardError.write(Data("usage: click-at.swift <x> <y> [right]\n".utf8))
+    FileHandle.standardError.write(Data("usage: click-at.swift <x> <y> [right] [cmd]\n".utf8))
     exit(2)
 }
 let point = CGPoint(x: numbers[0], y: numbers[1])
 let isRight = words.contains("right")
+let holdsCommand = words.contains("cmd")
 let down: CGEventType = isRight ? .rightMouseDown : .leftMouseDown
 let up: CGEventType = isRight ? .rightMouseUp : .leftMouseUp
 let button: CGMouseButton = isRight ? .right : .left
@@ -38,6 +41,7 @@ func post(_ type: CGEventType) {
     // jumps to the cover, the click is posted, and nothing at all is selected.
     // An hour of "the fix does not work" was this line missing.
     event.setIntegerValueField(.mouseEventClickState, value: 1)
+    if holdsCommand { event.flags.insert(.maskCommand) }
     event.post(tap: .cghidEventTap)
 }
 

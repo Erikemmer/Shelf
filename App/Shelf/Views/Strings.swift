@@ -169,4 +169,60 @@ extension Loc {
                 "A shelf cannot be put inside itself or inside one of its own shelves.")
         }
     }
+
+    /// Why "Write into the Book File" refused a book's own file, before
+    /// anything was written.
+    ///
+    /// `EPUBFileReplacement.Refusal.message` is not looked up through
+    /// `Loc.core` here, the way `CoverReplacement.Refusal`'s is — one case,
+    /// `readOnlyVolume`, has the volume's name already written into it, and
+    /// a catalogue key cannot hold a different volume name every time
+    /// (`CoverReplacement.Refusal`'s own doc comment states the rule this
+    /// breaks). So the core answers which refusal it is and with what, and
+    /// the window says it in words — the same seam `message(for
+    /// rejection:)` above uses.
+    static func message(for refusal: EPUBFileReplacement.Refusal) -> String {
+        switch refusal {
+        case .notAnEPUB:
+            return string("That is not a readable EPUB, so nothing was written.")
+        case .drmProtected:
+            return string("This book is protected, so Shelf will not write into its file.")
+        case .readOnlyVolume(let volume):
+            return string("“%@” cannot be written to, so nothing was changed.", volume)
+        case .cannotWrite:
+            return string("The new file could not be written, so the book still has the one it had.")
+        case .readBackFailed:
+            return string("The new file did not read back correctly, so it was discarded and nothing changed.")
+        }
+    }
+
+    /// Why a book has no plan at all in the "Write into the Book File"
+    /// sheet — shown beside its title in the list of what will be skipped.
+    static func message(for failure: EPUBWrite.PlanFailure) -> String {
+        switch failure {
+        case .noEPUB:
+            return string("This book has no EPUB — only PDF, MOBI or AZW3, which are never written into.")
+        case .refused(let refusal):
+            return message(for: refusal)
+        case .authorCountMismatch(let existing, let new):
+            return string(
+                "This book's file and Shelf disagree on how many authors it has (%1$lld against %2$lld) "
+                    + "— Shelf does not add or remove authors, so it is left alone.", existing, new)
+        case .cannotPrepare(let why):
+            return string("This book could not be prepared: %@", why)
+        }
+    }
+
+    /// A field's label in the "Write into the Book File" sheet's old→new
+    /// list.
+    static func label(for field: EPUBWrite.FieldChange.Field) -> String {
+        switch field {
+        case .title: return string("Title")
+        case .authors: return string("Author")
+        case .publisher: return string("Publisher")
+        case .published: return string("Published")
+        case .language: return string("Language")
+        case .description: return string("Description")
+        }
+    }
 }

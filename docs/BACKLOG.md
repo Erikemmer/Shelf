@@ -869,7 +869,7 @@ that text in the original bytes, never re-rendering.
       of the file uses — cosmetic, visible only in a diff someone reads by
       eye, not a correctness question.
 
-## Sprint 10, Schritt E1 – a book's own file may be replaced · done, no window yet
+## Sprint 10, Schritt E1 – a book's own file may be replaced · done
 
 `EPUBFileReplacement`. The rule that a book file is never written falls
 here for the first time, in the order `docs/adr/0021-…` describes — every
@@ -950,9 +950,79 @@ as it was.
       works around it exactly the way `CoverReplacementTests` already does
       — a `Bin` that moves into a local sibling folder instead of asking
       the real Trash for anything. `CHANGELOG.md`.
-- [ ] **Schritt E2 — the confirmation sheet, the window's own command — not
-      started.** Waits on Erik's word per Sprint 10's plan; the five
-      pre-decided answers for it (button text, per-field before/after
-      listing, hashes recomputed after the swap, EPUB-only stated on the
-      sheet, read-only detected the same way beforehand) are recorded in
-      the sprint conversation, not yet in this file.
+- [x] **Schritt E2 — the confirmation sheet, the window's own command —
+      done.** `CHANGELOG.md` has the full account.
+
+## Sprint 10, Schritt E2 – "Write into the Book File" in the window · done
+
+`EPUBWrite` (plan, then run — the same two-step shape `OrganizePlan` and
+`TransferRunner` already have) plus `WriteIntoBookSheet`, wired into the
+inspector's **Formats** section and the grid/table's own context menu
+(`BookMenu`). The rule falls here, in the window, exactly as it fell in
+the core in Schritt E1: on explicit instruction only.
+
+- [x] Reachable from the inspector (`Write into the Book File…`, beside
+      *Open in Default App* and *Show in Finder*) and from the grid/table
+      context menu (`BookMenu`) — never the menu bar, the same reason a
+      cover's commands aren't there either
+- [x] A confirmation that names every book and every field, old → new:
+      struck-through old value above the new one, "already the same" for
+      what would not change, "cannot be written" — in the accent colour,
+      on the very list, never dropped — for a field `EPUBOPFPatch` cannot
+      place (`dc:title` with no element to replace, the one real case)
+- [x] States plainly what will *not* happen beside what will: only the
+      EPUB is written into, PDF/MOBI/AZW3 untouched; the original goes to
+      the Trash; no ⌘Z, said twice — once before, once after
+      (`DeleteFromDeviceSheet`'s own shape, reused for Shelf's second
+      irreversible operation)
+- [x] A mixed selection — some eligible, some not — writes into the ones
+      that qualify and lists the rest under **"Left alone"**, by name and
+      by reason (DRM, no EPUB, an author count that does not match); a
+      DRM book alone offers no command at all, since `isEligible` says no
+      before a sheet could ever be shown for it
+- [x] Sequential, never concurrent, across a selection — `EPUBWrite.run`
+      loops, never a `TaskGroup`, restated at the one caller that could
+      otherwise reach for one
+- [x] Every new sentence through `Loc.string`/`Loc.count`/`Loc.core`, both
+      languages, enforced by `LocalisationTests` (26 new catalogue
+      entries — the "%lld books" plural pair included) — no "English
+      until Sprint 7" exception taken for this
+- [x] VoiceOver: every field row's accessibility label reads as a
+      sentence ("Publisher changes from nothing to Erik & Erik Press",
+      "Title cannot be written") rather than the visual two-line layout
+      read literally
+- [x] Screenshots, both languages, `docs/screenshots/sprint-10/` (and
+      `/de`) with a README carrying a verdict under each picture, in the
+      Sprint 9 style — every claim checked against the book's own file on
+      disk afterward, not against the screenshot
+- [x] `CLAUDE.md` and `docs/CONCEPT.md` (§4, §5, §12) updated last, only
+      once this was proven working — the old, unqualified wording of "a
+      book file is never written" kept as a quoted sentence in each place,
+      with the date and the reason it fell
+
+### What Schritt E2 found on the way
+
+- [x] **The inspector is one long `ScrollView`, and the new button is at
+      the very bottom — well past the first screenful for any book with a
+      description.** `AXScrollToVisible`, tried first on the theory that
+      accessibility could scroll an off-screen control into view before
+      clicking it, is a genuine no-op against this SwiftUI view. The fix
+      is `Scripts/scroll-at.swift`, a real scroll-wheel `CGEvent`, already
+      in the repository for the reason its own header names — this is the
+      second script to need it. `Scripts/cell-point.swift` was tried and
+      reverted rather than kept with dead code once the no-op was
+      confirmed.
+- [x] **"Write into the Book File" (the sheet's own button) is a prefix
+      match away from "Write into the Book File…" (the inspector's,
+      sitting dimmed behind the sheet) — and the dimmed one is found
+      first.** `cell-point.swift`'s `desc=` matching is `hasPrefix`, on
+      purpose, for the ellipsis case; here it meant a naive click on
+      occurrence 0 would have hit the wrong button, silently, since a
+      `CGEvent` click does not know which one a person meant. Fixed in the
+      screenshot script by asking for occurrence 1 explicitly, with the
+      reason written down rather than left for the next script to
+      rediscover.
+- [x] **`click-at.swift` gained a `cmd` word** (holds ⌘ for the click,
+      extending a selection) — needed to demonstrate the DRM refusal
+      inside a mixed selection from the grid, and general enough that any
+      future script needing a multi-select can use it too.
