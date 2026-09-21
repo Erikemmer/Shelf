@@ -67,6 +67,20 @@ make smoke         # start it and check it shows a window and settles
 Every push runs three jobs — the core's tests on Linux, the core's tests on
 macOS, and the app build — and `main` is green on all three.
 
+## If you were handed a build instead of building it
+
+There is no Developer ID certificate for Shelf yet — that needs a paid Apple
+Developer Program membership Erik has not bought — so nothing has ever been
+notarised. Copy `Shelf.app` to a Mac that did not build it, and Gatekeeper
+says it is damaged and should be moved to the Trash. That is not a warning
+that anything is actually wrong with the file; it is what every unsigned app
+looks like to a Mac meeting it for the first time. To open it anyway:
+right-click (Control-click) `Shelf.app` in Finder, choose **Open**, and
+confirm **Open** again in the dialogue that appears — that tells Gatekeeper
+to trust this one app from then on. If Finder offers no such menu,
+`System Settings ▸ Privacy & Security` has an **Open Anyway** button for it
+after the first refused attempt.
+
 ## Everyday commands
 
 ```bash

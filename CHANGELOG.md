@@ -3,6 +3,42 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## 1.0.0
+
+Sprints 1–9, summarised from the sections below rather than restated:
+
+- **A library**: import EPUB, MOBI, AZW3, PDF, CBZ and CBR (Sprint 1, 4);
+  metadata editing field by field, with undo (Sprint 2a–2c); shelves, search
+  and acting on many books at once (Sprint 2c); renaming and merging authors,
+  series, publishers and tags, and `Organize Library…` to bring the folders
+  into step (Sprint 8).
+- **A cover**: set, drop, take from the book file, or download it — four ways
+  in, one path underneath, with the old picture going to the Trash rather than
+  being overwritten, and ⌘Z to put it back (Sprint 9).
+- **Calibre**: `File ▸ Import from Calibre…` reads a Calibre library through a
+  copy of `metadata.db`, never in place; export writes Calibre's own OPF
+  schema back out, with a mapping so shelves and read status survive the trip
+  too (Sprint 3, 8).
+- **Online metadata**: ⌘E asks Open Library and Google Books, shows old beside
+  new with the source on each line, and ticks only what fills a gap
+  (Sprint 6).
+- **Devices**: send books to an e-reader, verified by hash on both sides
+  before a transfer counts, with deletion only after a confirmation that
+  names every file (Sprint 5).
+- **English and German**, everywhere the app itself speaks, with tests that
+  fail on a missing translation rather than falling back to English silently
+  (Sprint 7).
+- **Accessibility and contrast**: every control has a name, every colour
+  passes WCAG AA, checked by `make accessibility` and `make contrast` rather
+  than by eye (Sprint 7).
+- **What it does not do, on purpose**: no reader, no format conversion, no
+  writing into a book file ever, no touching DRM beyond detecting and badging
+  it.
+
+Not signed or notarised — see the README's "If you were handed a build
+instead of building it" and `docs/RELEASE.md`. The tag `v1.0.0` is set by
+Erik, not by this changelog.
+
 ## `make lint` now enforces the no-foreign-shelf guard · 21 September 2026
 
 Sprint 9 pulled the guard against ending a Shelf a script did not start into

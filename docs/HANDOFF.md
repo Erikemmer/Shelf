@@ -1,5 +1,30 @@
 # Handoff – where Shelf stands, and what is left
 
+**v1.0 candidate: the last commit this session pushes to `main`, 21 September
+2026** (`git log -1` there names it — this file cannot cite its own commit's
+hash). The tag `v1.0.0` is Erik's to set; this session sets none. What this
+session did: made `make lint` refuse a script that can start a Shelf instance
+without the guard (`Scripts/check-shelf-guard.sh`, and it found and fixed one
+real gap — `runbook-proof.sh` had its own ad-hoc check instead of the shared
+one); tried to settle the 907 ms question and could not — free disk space was
+**≈23 GiB**, under the 25 GiB this session was told to require before
+measuring, so it was not re-measured and nothing was deleted to make room;
+wrote the README's paragraph on opening an unsigned build, a `1.0.0` section
+in `CHANGELOG.md`, and a fresh `make release-dry` run in `docs/RELEASE.md`.
+
+**Still open, unchanged by this session:**
+
+1. **The 907 ms question itself.** Sprint 9's own measurement — 907–1 028 ms
+   against Sprint 8's 738 ms, on a disk that was 98–100 % full at the time —
+   is still unexplained. It needs a re-measurement on a disk with more than
+   25 GiB free, which this Mac did not have today.
+2. **A Developer ID certificate and a notarytool profile.** Nothing has ever
+   been notarised. `docs/RELEASE.md` says how; both are Erik's to make.
+3. **The four judgement calls about covers**, listed below.
+4. **Everything only real hardware and real books can answer**, listed below.
+
+---
+
 **Next step: release v1.0.** What is open is what Erik has to contribute.
 
 Sprints 1–**9** are done. `main` is green, **701 core tests** on macOS *and* on

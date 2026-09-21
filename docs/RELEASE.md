@@ -106,6 +106,30 @@ com.apple.security.network.client                     true
 Five, and no more. There is **no** server entitlement: Shelf listens for nothing
 (CONCEPT §12).
 
+Measured again on 21 September 2026, version 1.0.0, on Erik's Mac — the numbers
+that can change between releases, quoted so the next run can be checked
+against them:
+
+```
+release: ── 3/7  archive ──
+release: archived: …/release/Shelf-1.0.0.xcarchive
+
+release: ── 4/7  the signature ──
+    …/Shelf.app: valid on disk
+    …/Shelf.app: satisfies its Designated Requirement
+release: code directory flags: 0x10002(adhoc,runtime)
+release: hardened runtime: on
+release: entitlements written to …/release/entitlements.plist
+
+release: ── 5/7  zip ──
+release: Shelf-1.0.0.zip (5696 KB)
+```
+
+The five entitlements above, read back out of this build, are unchanged.
+**Universal** (`lipo -info`: `x86_64 arm64`), app bundle **13 MB** on disk,
+zip **5 832 984 bytes**. Steps 6 and 7 (notarise, staple) skipped and said so
+— no Developer ID certificate on this Mac (`docs/HANDOFF.md` §1).
+
 And with no certificate in the keychain, a real run stops at step 2 and says so:
 
 ```
