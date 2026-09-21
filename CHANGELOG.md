@@ -3,7 +3,65 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 10, part 1, corrected – entries pass through instead of being recompressed · 21 September 2026
+
+The writer below stored every entry, always — which meant `entries(rewriting:)`
+decompressed a source archive's DEFLATEd text and `ZipArchiveWriter` stored it
+back uncompressed. For running text that is roughly **2.7 times** the entry's
+own size; a 4 MB EPUB becomes something close to 10 MB. "Unchanged" was true
+of the decompressed bytes and false of the file. Found before any command
+used this, against a real EPUB, not by anything in this test suite — none of
+the nine fixtures below was ever compressed to begin with, because all nine
+are authored by the writer itself, which only ever stored.
+
+**Fixed: entries pass through.** `ZipReader.compressedData(for:)` returns an
+entry's bytes exactly as stored, never decompressed. `ZipArchiveWriter.Entry`
+is now two cases — `.raw` (bytes Shelf itself produced: an edited OPF, a new
+cover, always stored) and `.passthrough` (an entry carried forward from a
+source archive: its compressed bytes, its own method, size and CRC, never
+decompressed and never recompressed). `entries(rewriting:)` still decompresses
+each entry once, but only to check its CRC against what the source archive's
+own central directory claims — the check unpacking used to give for free —
+and writes the *compressed* bytes it already had, not the decompressed ones
+it checked. `EPUBArchiveWriter` now checks `mimetype` is stored explicitly,
+because that stopped being automatic the moment an entry could carry a
+source's own method forward.
+
+**Measured — the nine fixtures, size before and after the round trip**, on
+Erik's Mac: identical, byte for byte, every one of the nine — `1 619`,
+`1 710`, `1 302`, `1 505`, `1 324`, `1 722`, `1 619`, `1 771` and `2 092`
+bytes, unchanged. Proves the writer is not silently rewriting an unchanged
+archive into a *different* unchanged archive; proves nothing about the
+original bug, because none of these nine was ever compressed. A tenth,
+hand-built fixture — three invented paragraphs (not from any real book),
+DEFLATE-compressed the way a real EPUB tool compresses them
+(`python3 -c "import zlib; …"`, `wbits = -15`, the same method
+`InflateTests` already uses reference vectors from) — is what proves the
+actual fix: **1 168 bytes before, 1 168 bytes after**, the entry still reads
+as `.deflate`, against `1 823` bytes for the plain text alone. Neither writer
+in this codebase can produce a DEFLATE stream on purpose, which is why this
+one fixture is hand-built rather than written through either.
+
+**Measured — the ~60 MB entry, again**, three runs: **1.82–1.90 s, +420 MB**
+resident memory — **up** from the 1.79–1.89 s / +300 MB in the entry below,
+not down. This is not a regression in the fix; it is what the fix actually
+costs for an entry that was *already stored*, which this one is (it is
+authored by `EPUBArchiveWriter` itself, `.raw`, for the same reason the nine
+fixtures above never exercised the original bug). `entries(rewriting:)` now
+decompresses an entry once for the CRC check and separately reads its
+compressed bytes for the payload — two passes over the entry instead of one,
+where before there was only ever one (decompress, and write what was
+decompressed). For an already-stored 60 MB entry that is a real cost with no
+matching benefit, because there was nothing compressed to protect. The entry
+this fix actually helps — a genuinely DEFLATEd one — was never 60 MB in this
+test suite and was not re-measured at that size. `docs/BACKLOG.md`.
+
 ## Sprint 10, part 1 – a ZIP archive writer for EPUBs, proven and not yet used · 21 September 2026
+
+**The always-stored design below was corrected the same day** — see the entry
+above. The +300 MB figure for the 60 MB entry no longer holds either way;
+read the correction for the current number and why it moved the direction it
+did.
 
 `docs/adr/0021-…` allows Shelf to write into an EPUB, on request, once a
 command exists for it. This is the part that comes before any command:

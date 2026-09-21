@@ -3,18 +3,14 @@ import Testing
 
 @testable import ShelfCore
 
-// `mach_task_basic_info`, for the one test here that measures resident
-// memory. macOS only, the same reason `shelf-tool`'s `fileSystemName(of:)`
-// is: an unconditional `import Darwin` breaks the Linux build this target
-// also runs on.
 #if canImport(Darwin)
     import Darwin
 #endif
 
 /// Proves `EPUBArchiveWriter` against the strictest form it is meant to
 /// survive: read an archive, hand every entry straight back to the writer
-/// unchanged, read the result a second time, and compare names and
-/// decompressed bytes — not "opens again", but identical.
+/// unchanged, read the result a second time, and compare not just
+/// decompressed payloads but the archives themselves, byte for byte.
 ///
 /// Every valid archive below is built with `EPUBArchiveWriter` itself, never
 /// `ShelfFixtures.ZipWriter` — these tests exist to prove the production
@@ -31,13 +27,18 @@ struct EPUBArchiveWriterTests {
 
     // MARK: The round trip itself
 
-    /// Reads `entries` as written, writes every entry straight back through
-    /// `EPUBArchiveWriter`, reads the result a second time, and checks the
-    /// two readings agree.
+    /// Builds `entries`, reads the result, carries every entry straight
+    /// through `EPUBArchiveWriter` a second time, and checks that the two
+    /// archives agree in every way that matters: the same entry names, the
+    /// same decompressed bytes, and — since every entry is now carried
+    /// forward as `.passthrough` rather than decompressed and re-stored —
+    /// the two archives' bytes are identical, not merely equivalent.
     private func assertStrictRoundTrip(_ entries: [ZipArchiveWriter.Entry]) throws {
-        let first = try ZipReader(data: try EPUBArchiveWriter.archive(entries))
+        let firstBytes = try EPUBArchiveWriter.archive(entries)
+        let first = try ZipReader(data: firstBytes)
         let rewritten = try EPUBArchiveWriter.entries(rewriting: first)
-        let second = try ZipReader(data: try EPUBArchiveWriter.archive(rewritten))
+        let secondBytes = try EPUBArchiveWriter.archive(rewritten)
+        let second = try ZipReader(data: secondBytes)
 
         #expect(second.entries.map(\.path) == first.entries.map(\.path))
         for entry in first.files {
@@ -45,6 +46,7 @@ struct EPUBArchiveWriterTests {
                 try second.data(at: entry.path) == (try first.data(at: entry.path)),
                 "payload differs at \(entry.path)")
         }
+        #expect(secondBytes == firstBytes, "the round-tripped archive is not byte-identical to the original")
     }
 
     // MARK: The nine (ten) shapes
@@ -83,11 +85,16 @@ struct EPUBArchiveWriterTests {
         try assertStrictRoundTrip(Self.deepNonASCIIPaths())
     }
 
-    /// `ZipArchiveWriter` has exactly one mode – stored – so this is not a
-    /// special case to construct: it is what every fixture in this file
-    /// already is. Named and asserted directly anyway, because the
-    /// requirement was named directly.
-    @Test("an entry that arrives already stored round-trips exactly, which is every entry here")
+    /// Every entry `epub2()` authors is `.raw`, which `ZipArchiveWriter`
+    /// always stores — so this is not a special case to construct: it is
+    /// what every author-produced fixture in this file already is. Named
+    /// and asserted directly anyway, because the requirement was named
+    /// directly. The *interesting* already-stored case — one carried
+    /// forward from a source archive rather than authored here — is
+    /// `deflateCompressedEntryStaysDeflated` below, proving the opposite:
+    /// a passthrough entry that was *not* stored to begin with stays that
+    /// way too.
+    @Test("an entry that arrives already stored round-trips exactly, which is every author-produced entry here")
     func alreadyStoredRoundTrip() throws {
         let entries = Self.epub2()
         let archive = try ZipReader(data: try EPUBArchiveWriter.archive(entries))
@@ -109,19 +116,49 @@ struct EPUBArchiveWriterTests {
         try assertStrictRoundTrip(Self.withDRMAnnouncement())
     }
 
-    // MARK: mimetype, first or refused
+    /// What Erik actually asked to see: the archive's own byte size, before
+    /// and after, for every one of the nine shapes. All nine are authored
+    /// through `EPUBArchiveWriter` itself, so every entry in every one of
+    /// them was already stored before the round trip even starts — which is
+    /// exactly why a real, previously-DEFLATEd entry needed its own separate
+    /// proof (`deflateCompressedEntryStaysDeflated`, below): none of these
+    /// nine would have caught the original bug, because none of them was
+    /// ever compressed to begin with.
+    @Test("size before and after the round trip, named, for every shape")
+    func sizeBeforeAndAfter() throws {
+        let fixtures: [(name: String, entries: [ZipArchiveWriter.Entry])] = [
+            ("EPUB 2", Self.epub2()),
+            ("EPUB 3", Self.epub3()),
+            ("no cover", Self.noCover()),
+            ("cover referenced but missing", Self.coverReferencedButMissing()),
+            ("OPF in a subfolder", Self.opfInSubfolder()),
+            ("deep non-ASCII paths", Self.deepNonASCIIPaths()),
+            ("already stored", Self.epub2()),
+            ("unmanifested file", Self.withUnmanifestedFile()),
+            ("DRM announcement", Self.withDRMAnnouncement()),
+        ]
+        for fixture in fixtures {
+            let before = try EPUBArchiveWriter.archive(fixture.entries)
+            let rewritten = try EPUBArchiveWriter.entries(rewriting: try ZipReader(data: before))
+            let after = try EPUBArchiveWriter.archive(rewritten)
+            print("\(fixture.name): \(before.count) bytes before, \(after.count) bytes after")
+            #expect(after.count == before.count, "\(fixture.name) changed size on an unchanged round trip")
+        }
+    }
+
+    // MARK: mimetype, first, stored, or refused
 
     @Test("mimetype missing entirely is refused")
     func missingMimetype() {
         #expect(throws: EPUBArchiveWriter.Failure.mimetypeMustBeFirst) {
-            try EPUBArchiveWriter.archive([.init(path: "a.txt", text: "x")])
+            try EPUBArchiveWriter.archive([.raw(path: "a.txt", text: "x")])
         }
     }
 
     @Test("mimetype present but not first is refused")
     func mimetypeNotFirst() {
         #expect(throws: EPUBArchiveWriter.Failure.mimetypeMustBeFirst) {
-            try EPUBArchiveWriter.archive([.init(path: "a.txt", text: "x"), Self.mimetype])
+            try EPUBArchiveWriter.archive([.raw(path: "a.txt", text: "x"), Self.mimetype])
         }
     }
 
@@ -139,7 +176,21 @@ struct EPUBArchiveWriterTests {
         }
     }
 
-    // MARK: Encrypted entries
+    /// The check that only became necessary once entries could carry their
+    /// own method forward: before `.passthrough` existed, every entry this
+    /// writer produced was stored, so `mimetype` being stored was true by
+    /// construction and needed no check of its own. Now it is not.
+    @Test("mimetype present, first, but not stored is refused")
+    func mimetypeNotStored() {
+        let notStored = ZipArchiveWriter.Entry.passthrough(
+            path: "mimetype", compressedData: Data([1, 2, 3]), method: .deflate,
+            uncompressedSize: 10, crc32: 0, modTime: 0, modDate: 0)
+        #expect(throws: EPUBArchiveWriter.Failure.mimetypeMustBeStored) {
+            try EPUBArchiveWriter.archive([notStored])
+        }
+    }
+
+    // MARK: Encrypted and corrupt entries
 
     @Test("a ZIP-encrypted entry is refused when copying an archive forward, named")
     func encryptedEntryRefused() throws {
@@ -153,6 +204,26 @@ struct EPUBArchiveWriterTests {
         let archive = try ZipReader(data: data)
         #expect(archive.entry(at: "OEBPS/cover.jpg")?.isEncrypted == true)
         #expect(throws: EPUBArchiveWriter.Failure.encryptedEntry("OEBPS/cover.jpg")) {
+            try EPUBArchiveWriter.entries(rewriting: archive)
+        }
+    }
+
+    /// The check that replaces what unpacking-and-storing used to give for
+    /// free: this writer no longer decompresses a passthrough entry's bytes
+    /// to write them back out, so the CRC has to be checked on purpose or a
+    /// corrupt source archive's corruption would go unnoticed and simply be
+    /// copied into a second file.
+    @Test("a source entry whose bytes do not match its own recorded CRC is refused, named")
+    func corruptSourceEntryRefused() throws {
+        var data = try EPUBArchiveWriter.archive(Self.epub2())
+        guard let offset = Self.centralDirectoryRecordOffset(of: "OEBPS/text.xhtml", in: data) else {
+            Issue.record("no central directory entry for OEBPS/text.xhtml in the written archive")
+            return
+        }
+        data[offset + 16] ^= 0xFF  // the CRC field, four bytes in
+
+        let archive = try ZipReader(data: data)
+        #expect(throws: EPUBArchiveWriter.Failure.corruptSourceEntry("OEBPS/text.xhtml")) {
             try EPUBArchiveWriter.entries(rewriting: archive)
         }
     }
@@ -185,12 +256,211 @@ struct EPUBArchiveWriterTests {
         return nil
     }
 
+    // MARK: A genuinely DEFLATE-compressed entry
+    //
+    // The nine shapes above are all authored through EPUBArchiveWriter,
+    // which only ever stores – so not one of them was ever compressed to
+    // begin with, and re-running them alone would not have caught the bug
+    // this file's writer used to have: decompressing a DEFLATEd entry and
+    // storing it back, which for running text costs roughly 2.7 times the
+    // entry's own size. Proving the fix needs an entry that was actually
+    // compressed by something else, which neither writer in this codebase
+    // can produce on purpose (`ZipArchiveWriter` and `ShelfFixtures`'
+    // `ZipWriter` are both stored-only) – so this one is hand-built, the
+    // same reason `InflateTests`' vectors are hand-built: a real DEFLATE
+    // stream, from `python3 -c "import zlib; …"` at `wbits = -15`, embedded
+    // rather than produced by code this project owns.
+
+    /// Three invented paragraphs, not from any real book – varied enough
+    /// that DEFLATE does not collapse them into the extreme ratios a
+    /// repeated block gets, closer to what a real page of prose compresses
+    /// to.
+    private static let deflateTestProse = """
+        The keeper of the small library had long since stopped counting the books that
+        arrived without a name attached, their covers worn soft by hands she would never
+        meet. Each morning she walked the narrow aisles before the doors opened, running
+        a finger along the spines as though greeting old acquaintances, and each evening
+        she wrote a line or two in a ledger nobody else had ever asked to read. It was not
+        that the town lacked readers; it was that most of them preferred to borrow rather
+        than to linger, and lingering was the whole of what she loved about the place.
+
+        A traveller had once told her that every library was really two libraries at
+        once: the one printed on the shelves, and the one remembered by whoever tended
+        them. She thought about that remark more often than she admitted, usually while
+        dusting a shelf nobody had touched in a year, wondering whether the second
+        library would outlast the first. The valley outside had its own quiet rhythms,
+        the river bending twice before it reached the sea, farmers arguing gently over
+        fences, children racing bicycles down the one paved road, and none of it seemed
+        to notice the small building where paper slowly turned the colour of weak tea.
+
+        Sometimes a stranger would ask why she never sorted the unclaimed books by
+        subject, the way a proper library should. She never had a tidy answer. The truth,
+        which she rarely spoke aloud, was that she preferred discovering the shape of a
+        collection by accident: a cookbook beside a treatise on bridges, a diary beside a
+        manual for engines nobody built any more. Order, she suspected, was something
+        readers imposed afterward, in their own heads, and it was not really hers to
+        arrange for them in advance. She had made her peace with that a long time ago,
+        somewhere between the second shelf and the window that never quite closed.
+        """
+
+    /// `zlib.compressobj(9, zlib.DEFLATED, -15)` of the text above, encoded
+    /// UTF-8. 1 823 plain bytes → 926 compressed, ratio ≈ 1.97 – lower than
+    /// the ratio Erik measured against a real EPUB (≈ 2.7), which is
+    /// expected: a real book is longer and more repetitive across chapters
+    /// than three unrelated paragraphs. The direction and the order of
+    /// magnitude are what this test is proving, not the exact number.
+    private static let deflateTestCompressedHex =
+        "4d5531b6db380cec750a1cc0cf07c8565b6cb1d516c9052009b6984f110a49594fb7df1952765259a640600633807e2c2"
+        + "65f669b65f18754fc2babc628318c59f3298bce123d3da58434e165f56db35926df530d38e68dd1fdabe049eba039871"
+        + "7de1fa12ebe575149ba9a68ad3a2d36df181f32aebf2c17393c2729fea832b2529a8b14e43b7c8fb32443ccb09ad5bbf"
+        + "c83dbb2229a255b88c62f9461f5849a7e888612adc8680fcfd65ecceea8e19b2516ce7be2ed41e5811fd0d546ab31de4"
+        + "2c2552507df9f8b3c33aab29403874ebf760da92af8979b00a518e1005e4bd8e064af6089ae2513cf520f97907860336"
+        + "b251f7d3ec562b1d6515243bd46c1259bce77f9b7825541681dd8ca86acfa9124eac44046a1697f49e8812d68f5522fe"
+        + "156d9b23d2ce79e74f4d696ac78959931f13436ee9d457f26cd9e0e34168fc6740773935874aaa923b564c40630761f8"
+        + "6bfa5667d598ce041424e7354b60bd53a34723c3f3e62093088f16ccde9c7815daf032f7f6be91deddb00a91a5376711"
+        + "68baf77e3df31d9565b4723553807b05b43aba5d9e681bdb8cb77b6afc9593ff8810a37357fd14b248a1bd25a43ae3aa"
+        + "fa1567a652f7b437a2c21da30efa599411b96c75b4cd2aebed3d65debd3149d3d1c207a5717abbd1b606113ce874f379"
+        + "ac3012a6ae98d7d845c60f41f787ca1b69d7c5bc2dcfd122a8c0c2bfcda8381c372d6652d373215ce5b86edd3dcc6f10"
+        + "810e21a8240ba6dee2e0c7a9387e695a3a7f9b9f3c2d3520553cee3f0b06ef109b4e78cd6649d183386e99c385c33317"
+        + "c74525a23bbce5d9bc4437807558b411f08e1743301fdde2be38edc5777329370f394e8078db1e774619d3cfade56d2"
+        + "61fa056515a6fbee2bc672a569b088b2b631eeadc42c21e3d9746c8b036b25d72bd99ea6a8b8375f9b6a3c87b28f3f6d"
+        + "aab76e7b3d9171cb4e2c6f89cac2c4dd473d238550a901da6b2a87e52e57cd7b5d6e03bc82a5c0fab86e605336ff326e"
+        + "991d0dfa0c2c037ecfe91c4a5b85ef4d5a16f483ac7540072210068c012caed3042fa4fa0d0826902011c8dc0c024c90"
+        + "b986425d64cc012b87f382ec24f28e1a564db0b5c01a62e9d956de65658a822949679b8bbbfc97672e09622d7bd900c3"
+        + "2e0e85122c5c7bd73a92b06e5eb823304cf9d08cc090ae354fbb2c88bba6377c36dc7b152ccc509d9f0daad9b0b555c6"
+        + "819a5f5cb95d01f67e554e0384d8606a6b9f98de53ed5f285a43f4e9b78128bbbf46ab8759fa6306af217e6f932324b8"
+        + "bae7e93263c6b0cba74856f7ff01"
+
+    /// A hand-built archive – `mimetype` stored, one entry genuinely
+    /// DEFLATE-compressed – simulating what a real EPUB tool writes.
+    /// Neither writer in this codebase can produce this, which is the point:
+    /// this is the shape the fix in `docs/adr/0021-…` exists to keep intact.
+    private static func archiveWithADeflatedEntry() -> Data {
+        let mimetype = Data("application/epub+zip".utf8)
+        let plain = Data(deflateTestProse.utf8)
+        let compressed = Hex.data(deflateTestCompressedHex)
+
+        var output: [UInt8] = []
+        var directory: [UInt8] = []
+
+        func add(path: String, payload: Data, method: UInt16, crc: UInt32, uncompressedSize: Int) {
+            let name = Array(path.utf8)
+            let offset = UInt32(output.count)
+            // A plausible, non-placeholder date – 15 June 2020, noon – so a
+            // passthrough test can tell "carried the source's own stamp"
+            // apart from "used the `.raw` placeholder".
+            let modDate: UInt16 = 0x50CF
+            let modTime: UInt16 = 0x6000
+
+            output += [0x50, 0x4B, 0x03, 0x04]
+            output += le16(20)
+            output += le16(0x0800)
+            output += le16(method)
+            output += le16(modTime)
+            output += le16(modDate)
+            output += le32(crc)
+            output += le32(UInt32(payload.count))
+            output += le32(UInt32(uncompressedSize))
+            output += le16(UInt16(name.count))
+            output += le16(0)
+            output += name
+            output += Array(payload)
+
+            directory += [0x50, 0x4B, 0x01, 0x02]
+            directory += le16(20)
+            directory += le16(20)
+            directory += le16(0x0800)
+            directory += le16(method)
+            directory += le16(modTime)
+            directory += le16(modDate)
+            directory += le32(crc)
+            directory += le32(UInt32(payload.count))
+            directory += le32(UInt32(uncompressedSize))
+            directory += le16(UInt16(name.count))
+            directory += le16(0)  // extra field length
+            directory += le16(0)  // comment length
+            directory += le16(0)  // disk number start
+            directory += le16(0)  // internal file attributes
+            directory += le32(0)  // external file attributes
+            directory += le32(offset)
+            directory += name
+        }
+
+        add(
+            path: "mimetype", payload: mimetype, method: 0, crc: ZipCRC32.of(mimetype),
+            uncompressedSize: mimetype.count)
+        add(
+            path: "OEBPS/text.xhtml", payload: compressed, method: 8, crc: ZipCRC32.of(plain),
+            uncompressedSize: plain.count)
+
+        let directoryOffset = UInt32(output.count)
+        output += directory
+        output += [0x50, 0x4B, 0x05, 0x06]
+        output += le16(0)  // this disk
+        output += le16(0)  // disk with the directory's start
+        output += le16(2)  // entries on this disk
+        output += le16(2)  // entries in total
+        output += le32(UInt32(directory.count))
+        output += le32(directoryOffset)
+        output += le16(0)  // comment length
+        return Data(output)
+    }
+
+    private static func le16(_ value: UInt16) -> [UInt8] {
+        [UInt8(value & 0xFF), UInt8((value >> 8) & 0xFF)]
+    }
+
+    private static func le32(_ value: UInt32) -> [UInt8] {
+        [
+            UInt8(value & 0xFF), UInt8((value >> 8) & 0xFF),
+            UInt8((value >> 16) & 0xFF), UInt8((value >> 24) & 0xFF),
+        ]
+    }
+
+    @Test("the hand-built fixture itself reads back correctly, before it proves anything about the writer")
+    func deflateFixtureReadsBack() throws {
+        let archive = try ZipReader(data: Self.archiveWithADeflatedEntry())
+        #expect(archive.entry(at: "OEBPS/text.xhtml")?.method == .deflate)
+        #expect(try archive.text(at: "OEBPS/text.xhtml") == Self.deflateTestProse)
+    }
+
+    /// The test this whole section exists for: a passthrough entry keeps
+    /// its source's compression, its source's modification stamp, and the
+    /// archive does not balloon to roughly the size the plain text alone
+    /// would take.
+    @Test("a DEFLATE-compressed source entry stays compressed through the round trip, and the archive stays small")
+    func deflateCompressedEntryStaysDeflated() throws {
+        let before = Self.archiveWithADeflatedEntry()
+        let firstRead = try ZipReader(data: before)
+        let rewritten = try EPUBArchiveWriter.entries(rewriting: firstRead)
+        let after = try EPUBArchiveWriter.archive(rewritten)
+        let secondRead = try ZipReader(data: after)
+
+        let entry = try #require(secondRead.entry(at: "OEBPS/text.xhtml"))
+        #expect(entry.method == .deflate)
+        #expect(entry.modDate == 0x50CF)  // the source's own stamp, not the `.raw` placeholder
+        #expect(entry.modTime == 0x6000)
+        #expect(try secondRead.text(at: "OEBPS/text.xhtml") == Self.deflateTestProse)
+
+        print(
+            "deflate-compressed entry: \(before.count) bytes before, \(after.count) bytes after "
+                + "(plain text alone is \(Self.deflateTestProse.utf8.count) bytes)")
+        // The bug this fixes turned every compressed entry into roughly its
+        // own uncompressed size; the archive staying within a few dozen
+        // bytes of its own size — header overhead only, no entry re-encoded
+        // — is the difference between the two.
+        #expect(abs(after.count - before.count) < 64)
+    }
+
     // MARK: The 60 MB entry
 
-    /// Not a claim about performance, a measurement of it: `ZipReader` holds
-    /// the whole archive as `[UInt8]`, and this is where that assumption
-    /// either costs nothing worth naming or costs something worth writing
-    /// down (`docs/BACKLOG.md` if it is the latter).
+    /// Re-measured after the `.passthrough` fix. This fixture's one large
+    /// entry was authored through `EPUBArchiveWriter` itself (`.raw`), so it
+    /// was already stored before the fix and stays stored after it — this
+    /// specific number was never expected to fall the way a genuinely
+    /// compressed entry's would (`deflateCompressedEntryStaysDeflated`
+    /// above is what proves that side); it is re-measured because it is a
+    /// real number that could have moved, not because the fix targets it.
     @Test("a ~60 MB entry round-trips exactly, and the cost of it is measured rather than assumed")
     func largeEntryMeasured() throws {
         let size = 60_000_000
@@ -199,7 +469,7 @@ struct EPUBArchiveWriterTests {
             let base = buffer.bindMemory(to: UInt8.self)
             for index in 0..<size { base[index] = UInt8(truncatingIfNeeded: index) }
         }
-        let entries = Self.epub2() + [ZipArchiveWriter.Entry(path: "OEBPS/video.bin", data: payload)]
+        let entries = Self.epub2() + [ZipArchiveWriter.Entry.raw(path: "OEBPS/video.bin", data: payload)]
 
         let before = Self.residentMemoryBytes()
         let start = ContinuousClock.now
@@ -239,7 +509,7 @@ struct EPUBArchiveWriterTests {
 
     // MARK: Fixtures, built through the writer under test
 
-    private static let mimetype = ZipArchiveWriter.Entry(path: "mimetype", text: "application/epub+zip")
+    private static let mimetype = ZipArchiveWriter.Entry.raw(path: "mimetype", text: "application/epub+zip")
 
     private static func container(opfPath: String) -> String {
         """
@@ -271,10 +541,10 @@ struct EPUBArchiveWriterTests {
             """
         return [
             mimetype,
-            .init(path: "META-INF/container.xml", text: container(opfPath: "OEBPS/content.opf")),
-            .init(path: "OEBPS/content.opf", text: opf),
-            .init(path: "OEBPS/text.xhtml", text: "<html><body><p>An EPUB 2 book.</p></body></html>"),
-            .init(path: "OEBPS/cover.jpg", data: Data([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4])),
+            .raw(path: "META-INF/container.xml", text: container(opfPath: "OEBPS/content.opf")),
+            .raw(path: "OEBPS/content.opf", text: opf),
+            .raw(path: "OEBPS/text.xhtml", text: "<html><body><p>An EPUB 2 book.</p></body></html>"),
+            .raw(path: "OEBPS/cover.jpg", data: Data([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4])),
         ]
     }
 
@@ -298,10 +568,10 @@ struct EPUBArchiveWriterTests {
             """
         return [
             mimetype,
-            .init(path: "META-INF/container.xml", text: container(opfPath: "OEBPS/content.opf")),
-            .init(path: "OEBPS/content.opf", text: opf),
-            .init(path: "OEBPS/text.xhtml", text: "<html><body><p>An EPUB 3 book.</p></body></html>"),
-            .init(path: "OEBPS/cover.png", data: Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2])),
+            .raw(path: "META-INF/container.xml", text: container(opfPath: "OEBPS/content.opf")),
+            .raw(path: "OEBPS/content.opf", text: opf),
+            .raw(path: "OEBPS/text.xhtml", text: "<html><body><p>An EPUB 3 book.</p></body></html>"),
+            .raw(path: "OEBPS/cover.png", data: Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2])),
         ]
     }
 
@@ -321,9 +591,9 @@ struct EPUBArchiveWriterTests {
             """
         return [
             mimetype,
-            .init(path: "META-INF/container.xml", text: container(opfPath: "OEBPS/content.opf")),
-            .init(path: "OEBPS/content.opf", text: opf),
-            .init(path: "OEBPS/text.xhtml", text: "<html><body><p>No cover.</p></body></html>"),
+            .raw(path: "META-INF/container.xml", text: container(opfPath: "OEBPS/content.opf")),
+            .raw(path: "OEBPS/content.opf", text: opf),
+            .raw(path: "OEBPS/text.xhtml", text: "<html><body><p>No cover.</p></body></html>"),
         ]
     }
 
@@ -349,9 +619,9 @@ struct EPUBArchiveWriterTests {
             """
         return [
             mimetype,
-            .init(path: "META-INF/container.xml", text: container(opfPath: "content/package.opf")),
-            .init(path: "content/package.opf", text: opf),
-            .init(path: "content/text.xhtml", text: "<html><body><p>Not in OEBPS.</p></body></html>"),
+            .raw(path: "META-INF/container.xml", text: container(opfPath: "content/package.opf")),
+            .raw(path: "content/package.opf", text: opf),
+            .raw(path: "content/text.xhtml", text: "<html><body><p>Not in OEBPS.</p></body></html>"),
         ]
     }
 
@@ -377,15 +647,15 @@ struct EPUBArchiveWriterTests {
             """
         return [
             mimetype,
-            .init(path: "META-INF/container.xml", text: container(opfPath: "OEBPS/content.opf")),
-            .init(path: "OEBPS/content.opf", text: opf),
-            .init(path: chapterPath, text: "<html><body><p>Über die Königin.</p></body></html>"),
-            .init(path: coverPath, data: Data([0xFF, 0xD8, 0xFF, 0xE0, 5, 6, 7])),
+            .raw(path: "META-INF/container.xml", text: container(opfPath: "OEBPS/content.opf")),
+            .raw(path: "OEBPS/content.opf", text: opf),
+            .raw(path: chapterPath, text: "<html><body><p>Über die Königin.</p></body></html>"),
+            .raw(path: coverPath, data: Data([0xFF, 0xD8, 0xFF, 0xE0, 5, 6, 7])),
         ]
     }
 
     static func withUnmanifestedFile() -> [ZipArchiveWriter.Entry] {
-        Self.epub2() + [ZipArchiveWriter.Entry(path: "OEBPS/notes-nobody-declared.txt", text: "leftover notes")]
+        Self.epub2() + [ZipArchiveWriter.Entry.raw(path: "OEBPS/notes-nobody-declared.txt", text: "leftover notes")]
     }
 
     static func withDRMAnnouncement() -> [ZipArchiveWriter.Entry] {
@@ -403,6 +673,6 @@ struct EPUBArchiveWriterTests {
               </EncryptedData>
             </encryption>
             """
-        return Self.epub2() + [ZipArchiveWriter.Entry(path: "META-INF/encryption.xml", text: encryption)]
+        return Self.epub2() + [ZipArchiveWriter.Entry.raw(path: "META-INF/encryption.xml", text: encryption)]
     }
 }

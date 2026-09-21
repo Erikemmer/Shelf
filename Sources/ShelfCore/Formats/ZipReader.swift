@@ -28,6 +28,12 @@ public struct ZipReader: Sendable {
         /// writer copying entries forward has to refuse rather than carry a
         /// flag it cannot honour.
         public var isEncrypted: Bool
+        /// The DOS date and time the central directory records for this
+        /// entry, carried as the two raw 16-bit fields rather than decoded –
+        /// nothing here reads them, and a writer passing the entry forward
+        /// wants exactly these bits back, not a `Date` re-encoded from them.
+        public var modTime: UInt16
+        public var modDate: UInt16
 
         /// Whether the entry is a folder marker rather than a file.
         public var isDirectory: Bool { path.hasSuffix("/") }
@@ -48,6 +54,17 @@ public struct ZipReader: Sendable {
             case 0: self = .stored
             case 8: self = .deflate
             default: self = .unsupported(raw)
+            }
+        }
+
+        /// The method number a header actually carries – the inverse of
+        /// `init(_:)`, for a writer passing an entry's own method forward
+        /// rather than always writing `0`.
+        var rawValue: UInt16 {
+            switch self {
+            case .stored: return 0
+            case .deflate: return 8
+            case .unsupported(let raw): return raw
             }
         }
     }
@@ -123,6 +140,15 @@ public struct ZipReader: Sendable {
         return try data(for: entry)
     }
 
+    /// The bytes of one entry exactly as the archive stores them – never
+    /// decompressed. A writer carrying an entry forward unchanged wants
+    /// these, not `data(for:)`'s result recompressed a second time: the same
+    /// payload location, the same bounds check, but no `Inflate` call and no
+    /// method-specific handling, because passing bytes through needs neither.
+    public func compressedData(for entry: Entry) throws -> Data {
+        Data(bytes[try payloadRange(of: entry)])
+    }
+
     /// Text of one entry, decoded as UTF-8 and – for the handful of older EPUBs
     /// that are not – as Latin-1, which cannot fail. An OPF that reads as
     /// mojibake still yields a title; one that fails to read yields nothing.
@@ -184,7 +210,9 @@ public struct ZipReader: Sendable {
                     method: Method(uint16(bytes, offset + 10)),
                     localHeaderOffset: localOffset,
                     crc32: uint32(bytes, offset + 16),
-                    isEncrypted: uint16(bytes, offset + 8) & 0x0001 != 0))
+                    isEncrypted: uint16(bytes, offset + 8) & 0x0001 != 0,
+                    modTime: uint16(bytes, offset + 12),
+                    modDate: uint16(bytes, offset + 14)))
             offset = nameStart + nameLength + extraLength + commentLength
         }
         return result

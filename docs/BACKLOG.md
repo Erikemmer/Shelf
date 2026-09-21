@@ -711,32 +711,52 @@ the most visible hole in the grid.
 command — the writer the command will need, proven against archives this
 project generates itself.
 
-- [x] `ZipArchiveWriter`: a stored-only ZIP writer that refuses to write an
-      archive that would need ZIP64 (more than 65 535 entries, or a size or
-      offset past a 32-bit field) rather than writing one that opens in some
-      tools and not others
-- [x] `EPUBArchiveWriter`: the one EPUB-specific rule on top of it —
-      `mimetype` first, or refused, whether it is missing, out of place, or
-      written twice
-- [x] The strict round trip: read, rewrite every entry unchanged, read again,
-      same names and the same decompressed bytes — proven against an EPUB 2,
-      an EPUB 3, no cover, a cover the OPF names but the archive lacks, an OPF
-      outside `OEBPS`, deep non-ASCII paths, a file no manifest mentions, and
-      a DRM announcement
+- [x] `ZipArchiveWriter`: two ways to hand it an entry, `.raw` (bytes Shelf
+      itself produced, always stored) and `.passthrough` (an entry carried
+      forward from a source archive, its own compressed bytes and method
+      never decompressed and never recompressed). Refuses to write an archive
+      that would need ZIP64 (more than 65 535 entries, or a size or offset
+      past a 32-bit field), or a path that is absolute or climbs out with
+      `..`, rather than writing one that opens in some tools and not others
+- [x] `EPUBArchiveWriter`: `mimetype` first, stored, or refused — the second
+      check only became necessary once an entry could carry a source's own
+      method forward, and it is checked explicitly rather than relied on as
+      something the writer beneath happens to always do
+- [x] The strict round trip: read, carry every entry forward unchanged, read
+      again, same names, same decompressed bytes, and — since nothing is
+      decompressed and re-stored any more — the two archives' *bytes* are
+      identical, not merely equivalent. Proven against an EPUB 2, an EPUB 3,
+      no cover, a cover the OPF names but the archive lacks, an OPF outside
+      `OEBPS`, deep non-ASCII paths, a file no manifest mentions, a DRM
+      announcement, and a genuinely DEFLATE-compressed entry (hand-built —
+      neither writer in this codebase can produce one on purpose)
 - [x] A ZIP-encrypted entry is refused when copying an archive forward, named,
       rather than carried through as something this writer cannot actually
       honour
+- [x] A source entry whose bytes do not match its own recorded CRC is
+      refused, named — the check unpacking used to give for free before
+      `.passthrough` existed, restored explicitly
 
 ### What Sprint 10, part 1 found on the way
 
-- [ ] **A ~60 MB entry costs roughly five times its own size in resident
-      memory across one round trip** — measured at +300 MB for a 60 MB entry,
-      `CHANGELOG.md`. `ZipReader` holds a whole archive as `[UInt8]` by
-      design (Sprint 1: every file it was written against was a few
-      megabytes), and this writer builds a whole new `Data` the same way.
-      Not a defect in either — both do exactly what their own documentation
-      says — but a real EPUB with a large embedded video or a comic's issue
-      of images could make this the actual cost of the command Sprint 10 is
-      building towards, and nobody has measured what a book-sized (rather
-      than a 60 MB stress-test-sized) file costs. Worth a real number before
-      that command reaches a real library, not a redesign before then.
+- [x] **The first version stored every entry, always — decompressing a
+      source archive's DEFLATEd text and storing it back uncompressed.**
+      Roughly 2.7× the entry's own size for running text; a 4 MB EPUB became
+      close to 10 MB. Found against a real EPUB, not by this test suite —
+      none of the nine round-trip fixtures above was ever compressed to
+      begin with, since all nine are authored by the writer itself, which
+      only ever stored. Fixed the same day: `.passthrough` carries a
+      source entry's compressed bytes forward unchanged. `CHANGELOG.md`.
+- [ ] **A ~60 MB entry that was already stored now costs *more* memory than
+      before the fix, not less: +420 MB, up from +300 MB.** Re-measured
+      after the fix above, `CHANGELOG.md`. Not a regression — it is the
+      honest cost of `entries(rewriting:)` now decompressing an entry once
+      for the CRC check and separately reading its compressed bytes for the
+      payload, two passes instead of one, for an entry that gained nothing
+      from the fix because it was never compressed. The entry the fix
+      actually helps — something genuinely DEFLATEd — has only been measured
+      small (≈1.8 KB plain, in the test suite); nobody has measured what a
+      book-sized *compressed* entry costs, which is the number that would
+      actually matter once a real command uses this writer. Worth a real
+      number before that command reaches a real library, not a redesign
+      before then.
