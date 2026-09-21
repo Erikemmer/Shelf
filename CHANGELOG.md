@@ -48,27 +48,25 @@ extended to accept the title's deliberately new value) agrees on all six.
 (title, authors and publisher patched, `"[Shelf] "` prefixed onto each so
 the change is unmistakable in a diff):
 
-| Book | OPF before → after | Growth |
-|---|---|---|
-| Die Verwandlung (EPUB2) | 845 → 2 057 bytes | +1 212 B |
-| Alice's Adventures in Wonderland (EPUB2) | 1 099 → 4 457 bytes | +3 358 B |
-| Grimms' Fairy Tales (EPUB2) | 1 740 → 14 159 bytes | +12 419 B |
-| Pride and Prejudice (EPUB3) | 3 719 → 27 339 bytes | +23 620 B |
-| Pride and Prejudice (EPUB2) | 3 666 → 28 330 bytes | +24 664 B |
-| Les Misérables (EPUB3) | 7 249 → 79 861 bytes | +72 612 B |
+| Book | OPF before → after | Absolute | Relative to the *whole file* |
+|---|---|---|---|
+| Die Verwandlung (EPUB2) | 845 → 2 057 bytes | +1 212 B | +1.2 % |
+| Alice's Adventures in Wonderland (EPUB2) | 1 099 → 4 457 bytes | +3 358 B | +2.5 % |
+| Grimms' Fairy Tales (EPUB2) | 1 740 → 14 159 bytes | +12 419 B | +2.3 % |
+| Pride and Prejudice (EPUB3) | 3 719 → 27 339 bytes | +23 620 B | +0.10 % |
+| Pride and Prejudice (EPUB2) | 3 666 → 28 330 bytes | +24 664 B | +0.10 % |
+| Les Misérables (EPUB3) | 7 249 → 79 861 bytes | +72 612 B | +0.72 % |
 
-**Not all in the double-digit kilobyte range predicted — named as asked.**
-Two of six are *below* it: Die Verwandlung (+1.2 KB) and Alice (+3.4 KB),
-the two smallest, simplest OPFs of the six. One is well above it: Les
-Misérables (+70.9 KB) — its own OPF has by far the most metadata of the
-six (429 manifest entries' worth of front matter and structure) and
-therefore the most to lose by going from DEFLATEd to stored. The growth
-tracks the *original* OPF's own size and compressibility, not a fixed
-cost — every one of these bytes is the compression the change gave up, not
-new metadata text (the `"[Shelf] "` prefixes account for a few dozen bytes
-each, not thousands). Writing a DEFLATEd OPF back would need a compressor
-this project does not build; if this range turns out to matter in
-practice, it is `docs/BACKLOG.md`, not a redesign today.
+**A footnote, not a warning — corrected from the first version of this
+entry, which quoted only the absolute column and read as a bigger deal
+than it is.** Put beside the *file* the OPF belongs to, both Pride and
+Prejudice editions grow +0.10 %, Les Misérables (the one with by far the
+largest OPF, 429 manifest entries' worth) grows +0.72 %, and the worst
+case, Alice, is +2.5 %. The growth tracks the *original* OPF's own size
+and compressibility, not a fixed cost: every one of these bytes is the
+compression the OPF entry gave up by going from DEFLATEd to stored, not
+new metadata text. Writing a DEFLATEd OPF back would need a compressor
+this project does not build; not worth one for a fraction of a percent.
 
 ## The size that actually matters: a real 24 MB, 187-entry EPUB · 21 September 2026
 

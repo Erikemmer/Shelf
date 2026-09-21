@@ -819,25 +819,32 @@ that text in the original bytes, never re-rendering.
 
 ### What Sprint 10, part 2 found on the way
 
-- [ ] **The OPF growth from losing DEFLATE compression ranges from ~1 KB to
-      ~71 KB across six real books, not a fixed "tens of KB".** It tracks
-      the *source* OPF's own size — Les Misérables' unusually large OPF
-      (429 manifest entries' worth) lost the most; the two simplest books'
-      OPFs lost the least, below what was predicted rather than above it.
-      `CHANGELOG.md` has the per-book numbers. Writing a DEFLATEd OPF back
-      would need a compressor this project does not have; worth revisiting
-      only if this range turns out to matter in practice.
+- [x] **The OPF growth from losing DEFLATE compression is a footnote, not a
+      warning, once put beside the whole file it belongs to.** Absolute:
+      ~1.2 KB to ~72.6 KB across six real books, tracking the *source*
+      OPF's own size (Les Misérables' unusually large one, 429 manifest
+      entries' worth, lost the most). Relative to the whole EPUB, which is
+      the number that actually matters: **+0.10 % for both Pride and
+      Prejudice editions, +0.72 % for Les Misérables, +2.5 % in the worst
+      case (Alice)**. `CHANGELOG.md` has the per-book table, both ways —
+      corrected there from a first version that quoted absolute bytes alone
+      and read like a bigger deal than it is. Writing a DEFLATEd OPF back
+      would need a compressor this project does not have; not worth one for
+      a fraction of a percent.
+- [ ] **A field with no existing element is never written**, which for a
+      real book most often means `dc:publisher` or `dc:description`: none
+      of the six real Gutenberg books had either, and Shelf cannot give one
+      to a book through this path yet. Adding an element correctly
+      (position, prefix, no `id` collision) is worth doing — `dc:publisher`,
+      `dc:language`, `dc:date` and `dc:description` are the safe four;
+      `dc:title` and `dc:creator` should probably stay refused, the same
+      reason adding an author does.
 - [ ] **Adding or removing an author is refused, not supported.** Doing it
       correctly needs a new `id` nothing else collides with and, in EPUB 3,
       new `refines` metas for role and sort form — real structural work,
       deliberately out of scope here. Today's authors field can only
       replace names one-for-one against however many `dc:creator` elements
       already exist.
-- [ ] **A field with no existing element is never written**, which for a
-      real book most often means `dc:description`: plenty of the real
-      Gutenberg books have none, and Shelf cannot give them one through
-      this path. Adding an element correctly (position, prefix, an `id`
-      that does not collide) is real work this sprint did not do.
 - [ ] **A `dc:creator` written as CDATA, or containing nested markup, is not
       specially handled.** None of the six real books do this; if a future
       book does, the replacement text is written as plain escaped text, not
