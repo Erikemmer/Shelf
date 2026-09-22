@@ -257,14 +257,16 @@ struct ImportSheet: View {
                     dismiss()
                 }
             case .running:
-                SlateSecondaryButton(Loc.string("Cancel")) { importModel.cancel() }
+                // The real, running `Task` — not `importModel.cancel()`,
+                // which cancels nothing: see `LibraryModel.importRunTask`.
+                SlateSecondaryButton(Loc.string("Cancel")) { model.cancelImportRun() }
             case .ready:
                 SlateSecondaryButton(Loc.string("Cancel")) {
                     importModel.reset()
                     dismiss()
                 }
                 SlatePrimaryButton(importModel.plan.isEmpty ? Loc.string("Nothing to Import") : Loc.string("Import")) {
-                    Task { await model.runImport() }
+                    model.beginImportRun()
                 }
                 .disabled(importModel.plan.isEmpty)
             case .idle, .examining:

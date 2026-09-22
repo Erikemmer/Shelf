@@ -318,6 +318,16 @@ final class LibraryModel {
             // Once per open, in the background: a cache over its limit is
             // trimmed oldest first.
             Task.detached(priority: .background) { await loader.trimDiskCache() }
+
+            // A proof script needs to start a real import without driving the
+            // Add Books panel through System Events — the same reason
+            // `Scripts/smoke.sh` hands a library over on the command line
+            // instead of typing into Open Recent. Silent unless
+            // `SHELF_AUTO_IMPORT_SOURCE` names a folder (Sprint 13, Teil B/C).
+            if let sourcePath = ProcessInfo.processInfo.environment["SHELF_AUTO_IMPORT_SOURCE"] {
+                let source = URL(fileURLWithPath: sourcePath, isDirectory: true)
+                Task { await self.autoImportForProof(from: source) }
+            }
         } catch {
             show(error, doing: Loc.string("open %@", url.lastPathComponent))
         }
@@ -834,6 +844,60 @@ final class LibraryModel {
         }
         _ = index
         await reload()
+    }
+
+    // MARK: Stopping a running import cleanly
+
+    /// The `Task` running `runImport()`, while it is going — `nil` whenever
+    /// nothing is copying. Tracked here, rather than left as the bare
+    /// `Task { await model.runImport() }` at the call site it was until
+    /// Sprint 13, so both the sheet's own Cancel button and the app's
+    /// termination handling (`AppDelegate.applicationShouldTerminate`) have a
+    /// real `Task` to cancel — before, `ImportModel.cancel()` cancelled a
+    /// `task` property nothing had ever assigned, silently.
+    @ObservationIgnored private var importRunTask: Task<Void, Never>?
+
+    /// Whether an import is between "Import" and "Done" — the only phase
+    /// worth waiting for before the app quits. `.examining` has written
+    /// nothing to disk yet; `.idle`, `.ready` and `.finished` have nothing
+    /// left to lose either.
+    var isImportRunning: Bool { importRunTask != nil }
+
+    /// Starts the sheet's confirmed plan in its own tracked `Task`.
+    func beginImportRun() {
+        guard importRunTask == nil else { return }
+        importRunTask = Task { [weak self] in
+            await self?.runImport()
+            self?.importRunTask = nil
+        }
+    }
+
+    /// Cancels a running import the tidy way. `ImportRunner` already writes
+    /// its short last batch on a cooperative cancellation
+    /// (`ImportRunner.swift`'s own `saveBatch` doc comment), so everything
+    /// already copied and verified stays exactly as safe as it was; only the
+    /// one file being copied when this is called is not finished.
+    func cancelImportRun() {
+        importRunTask?.cancel()
+    }
+
+    /// Waits for a run in flight to actually stop, cancelled or finished on
+    /// its own. Returns at once when nothing is running — safe to call
+    /// unconditionally.
+    func waitForImportRunToFinish() async {
+        await importRunTask?.value
+    }
+
+    /// Test-only automation hook, the same shape as `SHELF_TIMING` and
+    /// `SMOKE_LIBRARY`: a proof script needs to start a real import in the
+    /// running app without driving the Add Books panel through System
+    /// Events. Silent unless `SHELF_AUTO_IMPORT_SOURCE` named a folder.
+    private func autoImportForProof(from source: URL) async {
+        guard let importModel else { return }
+        isImportSheetPresented = true
+        await importModel.examine([source])
+        guard case .ready = importModel.phase else { return }
+        beginImportRun()
     }
 
     // MARK: Online metadata

@@ -1,3 +1,4 @@
+import Dispatch
 import Foundation
 import Testing
 
@@ -399,6 +400,13 @@ struct ImportPlannerTests {
 /// The runner. This one does touch the disk, because copying and verifying is
 /// the whole point – and because "the copy call returned success" is not the
 /// same as "the file is intact".
+/// What `saveBatch` was actually handed, in call order — an `actor` because
+/// `ImportRunner`'s `saveBatch` closure is `@Sendable`.
+private actor BatchCollector {
+    private(set) var batches: [[LibraryEntry]] = []
+    func add(_ entries: [LibraryEntry]) { batches.append(entries) }
+}
+
 @Suite("Running an import")
 struct ImportRunnerTests {
 
@@ -706,6 +714,79 @@ struct ImportRunnerTests {
         #expect(outcome.report.everythingVerified)
         #expect(outcome.report.warnings.contains { $0.message.contains("cover") })
         #expect(!folder.exists("Lib/A/No Cover (1)/cover.png"))
+    }
+
+    /// The mechanism Sprint 13's fix for the interrupted-import window
+    /// depends on (`LibraryModel.cancelImportRun`,
+    /// `AppDelegate.applicationShouldTerminate`): a `Task` running `run()`
+    /// that is cancelled mid-loop does not throw and does not lose what it
+    /// already finished — it still writes the short last batch, the same
+    /// way a run that simply reaches the end of the plan does. The book
+    /// whose copy is actually in flight when `cancel()` lands is aborted by
+    /// `copy()`'s own `Task.isCancelled` check and counted as a failure, not
+    /// a half-written success — the same guarantee `noPartialsLeft` checks
+    /// for a kill instead of a cancellation.
+    ///
+    /// The runner is blocked, deterministically, inside its own `progress`
+    /// callback until the test has actually called `cancel()` — without
+    /// that, exactly how many books land before the cancellation is
+    /// observed would depend on thread scheduling, and the test would be
+    /// right only by luck.
+    @Test("cancelling the run mid-copy still writes the short last batch")
+    func cancellationFlushesTheShortLastBatch() async throws {
+        let folder = try TemporaryFolder()
+        let (library, _) = try Library.create(at: try folder.folder("Lib"))
+        let candidates = try (1...5).map {
+            try makeSource(folder, name: "\($0).epub", book: Book(title: "Book \($0)", authors: ["A"]))
+        }
+        let plan = ImportPlanner.plan(candidates: candidates, startingNumber: 1)
+
+        let collector = BatchCollector()
+        let releaseGate = DispatchSemaphore(value: 0)
+        let (reachedCheckpoint, signalReached) = AsyncStream<Void>.makeStream()
+
+        let task = Task {
+            try await runner().run(
+                ImportRunner.Options(library: library, plan: plan, sourceDescription: "x"),
+                progress: { progress in
+                    // `filesDone == 2` fires after books 1 and 2 are fully
+                    // written and verified, before book 3's copy starts.
+                    if progress.filesDone == 2 {
+                        signalReached.yield()
+                        releaseGate.wait()
+                    }
+                },
+                saveBatch: { entries in await collector.add(entries) })
+        }
+
+        var iterator = reachedCheckpoint.makeAsyncIterator()
+        _ = await iterator.next()
+        task.cancel()
+        releaseGate.signal()
+
+        let outcome = try await task.value
+
+        // Not thrown, not silently empty: the two books that were fully
+        // verified before cancellation reach `saveBatch`; book 3's own copy,
+        // in flight at the moment of cancellation, is aborted and reported
+        // as a failure rather than left half-written; books 4 and 5 are
+        // never even started.
+        #expect(outcome.entries.count == 2)
+        #expect(Set(outcome.entries.map(\.book.title)) == ["Book 1", "Book 2"])
+        #expect(await Set(collector.batches.flatMap { $0 }.map(\.book.title)) == ["Book 1", "Book 2"])
+        // One failure for book 3's own aborted copy, one summarising the two
+        // books the loop never got to once it saw the cancellation.
+        #expect(outcome.report.failures.count == 2)
+        #expect(!folder.exists("Lib/A/Book 3 (3)/Book 3 - A.epub"))
+        #expect(!folder.exists("Lib/A/Book 4 (4)"))
+        #expect(!folder.exists("Lib/A/Book 5 (5)"))
+
+        let walker = FileManager.default.enumerator(atPath: library.root.path)
+        var partials = 0
+        while let name = walker?.nextObject() as? String {
+            if name.contains(ImportRunner.partialPrefix) { partials += 1 }
+        }
+        #expect(partials == 0)
     }
 }
 

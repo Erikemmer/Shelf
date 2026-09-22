@@ -3,6 +3,68 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 13, Teil B — closing the interrupted-import window for a clean quit and `SIGTERM` · 22 September 2026
+
+Teil A's own finding: `ImportRunner` already writes its short last batch on
+a *cooperative* cancellation — the loop's `if Task.isCancelled { break }`
+falls through to `if !unsaved.isEmpty { try? await saveBatch(unsaved) }` —
+but nothing in the app ever asked for one. A clean ⌘Q and a real `SIGKILL`
+measured the same today for exactly that reason: neither cancelled
+anything, both just let the process end mid-copy. This closes that gap for
+the two abort kinds a process can be *asked*, rather than forced, to leave
+by.
+
+**`LibraryModel.importRunTask`.** The sheet's Import button used to be a
+bare `Task { await model.runImport() }` at the call site
+(`ImportSheet.swift`), with nothing keeping the handle — so
+`ImportModel.cancel()`, called by the sheet's own Cancel button while
+`.running`, cancelled a `task` property nothing had ever assigned. A silent
+no-op since it was written; found while building the mechanism this Teil
+needed anyway. `beginImportRun()` now starts that same work in a `Task`
+`LibraryModel` keeps, `cancelImportRun()` cancels the real one, and
+`waitForImportRunToFinish()` lets a caller wait for the short last batch to
+actually land. The sheet's Cancel button now calls the real one too
+(`docs/BACKLOG.md` has the separate, still-open half of this gap:
+`examine()`'s own dead `task?.cancel()`, which never wrote anything to disk
+and was left as found, per instruction).
+
+**`AppDelegate.applicationShouldTerminate(_:)`.** ⌘Q, Dock ▸ Quit and
+`NSApp.terminate(_:)` all funnel through here. With nothing running it
+returns `.terminateNow` at once, same as before this Teil. With an import
+`.running` it returns `.terminateLater`, cancels it, awaits the flush, then
+replies. `.examining` and every other phase have written nothing to disk
+yet, so only `.running` delays anything.
+
+**`AppDelegate`'s own `SIGTERM` handler.** `SIGTERM`'s default disposition
+ends the process at once — indistinguishable from `SIGKILL` from an
+in-flight import's point of view, which is exactly what Teil A measured.
+`signal(SIGTERM, SIG_IGN)` plus a `DispatchSourceSignal` on `.main`,
+installed in `applicationDidFinishLaunching`, routes the signal into
+`NSApp.terminate(nil)` — the very same path ⌘Q already takes above, so
+there is one answer for both abort kinds rather than two.
+
+**What this does not close, on purpose.** `SIGKILL` cannot be caught by any
+process on any platform — POSIX disallows it outright, not a Shelf
+limitation. That path stays bounded at `ImportRunner.indexBatchSize - 1`
+books, exactly as Teil A measured it, and stays findable by `Library ▸ Find
+Orphaned Folders…`. `indexBatchSize` itself (200) is unchanged: Teil A's
+numbers gave no throughput reason to move it, and moving "a compromise
+with throughput" without one was explicitly not asked for.
+
+**A `ShelfCoreTests` regression test for the mechanism itself,** since
+nothing had ever exercised it: `ImportRunnerTests.cancellationFlushesTheShortLastBatch`
+cancels a real running `Task` mid-loop, deterministically (the runner is
+blocked inside its own `progress` callback until the test has actually
+called `cancel()`, so the result does not depend on thread scheduling), and
+checks that `saveBatch` receives exactly what finished, the in-flight
+book's own copy is aborted rather than left half-written, and nothing later
+in the plan is even attempted. 792 core tests now, up from 791.
+
+**Not testable the same way:** `AppDelegate`'s own two methods are AppKit
+lifecycle code, and `project.yml` has no app-side test target
+(`docs/BACKLOG.md`'s Sprint 12, Teil D pass confirmed that is still true).
+Teil C proves them against the real, running app instead.
+
 ## Sprint 13, Teil A — measuring the interrupted import, before repairing it · 22 September 2026
 
 `docs/BACKLOG.md`'s only open entry that leaves files behind in a real

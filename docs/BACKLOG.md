@@ -220,12 +220,28 @@ change of controls, not of layout.
 
 ### What Sprint 3 found and did not finish
 
-- [ ] **An interrupted import copies up to 200 books twice.** The batch in
-      flight when the process is killed was never indexed, so the resumed run
-      copies those again — 23 of them in the measured run — and their files sit
-      in folders no book points at. Nothing is lost and a rebuild no longer
-      trips over them. The batch size is the whole of the window; a smaller one
-      narrows it, and flushing on `SIGTERM` would close it
+- [ ] **An interrupted import copies up to 200 books twice.** Re-measured in
+      Sprint 13, Teil A: the "copies twice" no longer reproduces — Sprint 4's
+      own `OrphanedFolders` already reclaims a same-source resume with zero
+      duplication, proven again there against a really killed process, not
+      only a simulated one. What is still real: up to `indexBatchSize - 1`
+      books sit verified-but-unindexed until something reclaims them.
+      Sprint 13, Teil B closes that window for a clean quit and `SIGTERM`;
+      `SIGKILL` cannot be caught by any process and stays open, bounded at
+      the batch size, findable by `Find Orphaned Folders…`
+      (`CHANGELOG.md`, Sprint 13)
+- [ ] **`ImportModel`'s own `cancel()` cancels nothing.** Found while wiring
+      Sprint 13's termination-safe cancellation, and left exactly as found,
+      per instruction — not this sprint's task. `ImportModel.task` is
+      declared and read (`task?.cancel()` at the top of `examine()` and
+      `examineCalibre()`) but never once assigned, so those two calls have
+      always been no-ops; only `.running`'s Cancel button was fixed
+      (`LibraryModel.cancelImportRun()`, a separate, real `Task`), because
+      that one writes to disk and this one only reads and hashes candidates.
+      Pressing Cancel while Shelf is still *examining* a large drop or a
+      Calibre library does not actually stop the scan early — harmless
+      today (nothing is written yet), but worth the same fix if `examine()`
+      ever gets slow enough for someone to reach for that button
 - [x] **`Missing Cover` counts every book in a freshly imported library.**
       Fixed in Sprint 7: it is a question about the **folders**, and
       `CoverFile.booksWithACover` asks them. Measured against the 26-book

@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import ShelfCore
 import SlateKit
 import SwiftUI
@@ -362,6 +363,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var pending: URL?
+
+    /// Held for the app's lifetime — a `DispatchSourceSignal` that is
+    /// deallocated stops delivering.
+    private var sigtermSource: DispatchSourceSignal?
+
+    /// `SIGTERM`'s default disposition ends the process at once — the same
+    /// as `SIGKILL` from an in-flight import's point of view, nothing
+    /// flushes. Ignoring the default and routing the signal through
+    /// `NSApp.terminate(nil)` instead means `SIGTERM` takes exactly the path
+    /// ⌘Q already does, in `applicationShouldTerminate(_:)` below — one
+    /// answer for both abort kinds a process can be *asked*, rather than
+    /// forced, to leave by. `SIGKILL` cannot be caught here or anywhere:
+    /// POSIX disallows it, so that one stays open (`docs/BACKLOG.md`).
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        source.setEventHandler { NSApp.terminate(nil) }
+        source.resume()
+        sigtermSource = source
+    }
+
+    /// A quit with an import mid-copy must not just let the process end:
+    /// `ImportRunner` writes its short last batch only when the `Task`
+    /// running it is cancelled and allowed to finish
+    /// (`LibraryModel.importRunTask`), and until Sprint 13 nothing ever
+    /// asked it to — a killed import and a quit import left the same
+    /// orphaned folders (`CHANGELOG.md`, Sprint 13, Teil A). `.examining`
+    /// and every other phase have written nothing yet, so only `.running`
+    /// delays termination at all.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model, model.isImportRunning else { return .terminateNow }
+        Task { @MainActor in
+            model.cancelImportRun()
+            await model.waitForImportRunToFinish()
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
 
     func application(_ application: NSApplication, open urls: [URL]) {
         // One library at a time, so several folders at once take the first and
