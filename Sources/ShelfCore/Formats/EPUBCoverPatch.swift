@@ -39,6 +39,19 @@ public enum EPUBCoverPatch {
         /// own format differs from what the manifest declared — the one
         /// case where the manifest text changes on top of the image itself.
         public var mediaTypeCorrected: (from: String, to: String)?
+        /// `false` only in case a, when `coverData` is already, byte for
+        /// byte, what the manifest's own cover entry holds — nothing was
+        /// touched, `entries` is `archive`'s own entries carried forward
+        /// unchanged, and a caller must not call
+        /// `EPUBArchiveWriter.archive(_:)` and write the result out
+        /// expecting anything to differ. Always `true` in case b: adding a
+        /// cover where none existed is always a change. This is the
+        /// foundation for "Nothing to write" in the window
+        /// (`EPUBWrite.CoverPlan`, Sprint 11) — a cover write that would
+        /// change nothing must never move a book's file to the Trash for
+        /// no difference at all, the same rule Sprint 10 already applies
+        /// to metadata fields.
+        public var changed: Bool
     }
 
     /// `coverData` written into `archive`, alongside every other entry
@@ -68,12 +81,25 @@ public enum EPUBCoverPatch {
         guard let coverIndex = entries.firstIndex(where: { $0.path == resolved }) else {
             throw Failure.notAnOPF("the manifest's own cover \(resolved) is not among the archive's entries")
         }
+
+        // Bit-identical to what is already there: nothing to touch, nothing
+        // to correct — `entries` is handed back exactly as
+        // `EPUBArchiveWriter.entries(rewriting:)` produced it, so a caller
+        // that skips writing when `changed` is `false` truly writes
+        // nothing. Unreadable existing bytes fall through to the ordinary
+        // replacement below rather than being treated as "unchanged" —
+        // silence here would be a write that silently never happens.
+        if let existingEntry = archive.entry(at: resolved), let existingBytes = try? archive.data(for: existingEntry),
+            existingBytes == coverData
+        {
+            return Result(entries: entries, replacedExisting: true, mediaTypeCorrected: nil, changed: false)
+        }
         entries[coverIndex] = .raw(path: resolved, data: coverData)
 
         let mediaTypeCorrected = Self.correctMediaTypeIfNeeded(
             for: coverData, existingHref: existingHref, opfPath: opfPath, opfText: opfText, entries: &entries)
 
-        return Result(entries: entries, replacedExisting: true, mediaTypeCorrected: mediaTypeCorrected)
+        return Result(entries: entries, replacedExisting: true, mediaTypeCorrected: mediaTypeCorrected, changed: true)
     }
 
     // MARK: Case b — adding a cover the manifest does not have yet
@@ -141,7 +167,7 @@ public enum EPUBCoverPatch {
         newEntries[opfIndex] = .raw(path: opfPath, text: newOPFText)
         newEntries.append(.raw(path: newPath, data: coverData))
 
-        return Result(entries: newEntries, replacedExisting: false, mediaTypeCorrected: nil)
+        return Result(entries: newEntries, replacedExisting: false, mediaTypeCorrected: nil, changed: true)
     }
 
     /// Every `id` attribute anywhere in the document — checked globally, not

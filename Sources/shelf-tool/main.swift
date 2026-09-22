@@ -96,6 +96,22 @@ let usage = """
                                     reader (EPUBMetadata) reads the new
                                     cover back from the result. Never
                                     touches <folder> itself (docs/adr/0021-…)
+      epub-cover-real-size <cover source.epub> <folder> <output folder>
+                                    every .epub in <folder>, patched with the
+                                    REAL cover already inside <cover
+                                    source.epub> (via EPUBMetadata, never a
+                                    synthetic few-hundred-byte one) — so the
+                                    size delta is what a real cover
+                                    replacement actually costs, not an
+                                    artifact of a tiny test image. Prints,
+                                    per book, the cover's own byte size and
+                                    the book's size before and after,
+                                    absolute and in percent, and whether the
+                                    cover turned out already identical (case
+                                    b of EPUBCoverPatch.Result.changed) — the
+                                    source book itself, patched with its own
+                                    cover, is expected to land there. Never
+                                    touches <folder> or <cover source.epub>
       epub-file-replace-proof <folder> <working folder>
                                     the whole EPUBFileReplacement path
                                     (docs/adr/0021-…) against copies of
@@ -241,6 +257,7 @@ case "digest": try Commands.digest(Array(arguments.dropFirst()))
 case "epub-roundtrip": try Commands.epubRoundtrip(Array(arguments.dropFirst()))
 case "epub-metadata-patch": try Commands.epubMetadataPatch(Array(arguments.dropFirst()))
 case "epub-cover-patch": try Commands.epubCoverPatch(Array(arguments.dropFirst()))
+case "epub-cover-real-size": try Commands.epubCoverRealSize(Array(arguments.dropFirst()))
 case "epub-file-replace-proof": try Commands.epubFileReplaceProof(Array(arguments.dropFirst()))
 case "epub-write-fixture": try await Commands.epubWriteFixture(Array(arguments.dropFirst()))
 case "online-read": try Commands.onlineRead(Array(arguments.dropFirst()))
@@ -2279,11 +2296,24 @@ enum Commands {
             do {
                 let before = try Data(contentsOf: source)
                 let originalArchive = try ZipReader(data: before)
-                let originalRead = EPUBMetadata.read(originalArchive, fallbackTitle: name)
-                let hadCover = originalRead.cover != nil
 
                 let sameFormat = try EPUBCoverPatch.entries(
                     patchingCover: Self.syntheticJPEGCover, in: originalArchive)
+                // `EPUBCoverPatch.Result.replacedExisting` is the ground
+                // truth for which case a book fell into — not
+                // `EPUBMetadata.read(…).cover != nil`, which was used here
+                // until Sprint 11's own Fall-b proof against real, stripped
+                // books found the two disagree: `EPUBMetadata`'s reader has
+                // its own fallback ("no manifest cover → the first image in
+                // the archive", for a hand-made EPUB or a comic with no
+                // declaration at all), so a book with its cover declaration
+                // removed but *some* other image still inside it read back
+                // as "already has a cover" here while `EPUBCoverPatch`
+                // itself correctly took the case b (add a new one) branch —
+                // this command then checked case a's own entry count against
+                // a case b result and failed for no real reason.
+                let hadCover = sameFormat.replacedExisting
+
                 let after = try EPUBArchiveWriter.archive(sameFormat.entries)
                 try after.write(to: output.appendingPathComponent(name))
                 let reread = try ZipReader(data: after)
@@ -2321,6 +2351,78 @@ enum Commands {
                 line += ", cover read back \(coverOK ? "✓" : "✗")"
                 print(line)
                 allOK = allOK && entryCountOK && coverOK && crossFormatOK
+            } catch {
+                print("\(name): FAILED – \(error)")
+                allOK = false
+            }
+        }
+        if !allOK { exit(1) }
+    }
+
+    // MARK: epub-cover-real-size
+
+    /// Sprint 11's own follow-up to `epubCoverPatch` above: that command's
+    /// own numbers are all measured against `syntheticJPEGCover`, 530-odd
+    /// bytes — so every one of the six real books *shrank*, a number nobody
+    /// would ever see in practice, since a real cover a person actually
+    /// wants written is rarely smaller than what is already there. This
+    /// command patches every book in `<folder>` with a REAL cover — read
+    /// straight out of `<cover source.epub>` with `EPUBMetadata`, the same
+    /// reader everything else in this project trusts — so the size delta
+    /// printed is what a real cover replacement actually costs.
+    static func epubCoverRealSize(_ arguments: [String]) throws {
+        guard arguments.count >= 3 else {
+            print("usage: shelf-tool epub-cover-real-size <cover source.epub> <folder> <output folder>")
+            exit(2)
+        }
+        let coverSource = URL(fileURLWithPath: (arguments[0] as NSString).expandingTildeInPath)
+        let folder = URL(fileURLWithPath: (arguments[1] as NSString).expandingTildeInPath, isDirectory: true)
+        let output = URL(fileURLWithPath: (arguments[2] as NSString).expandingTildeInPath, isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+
+        guard let coverSourceData = try? Data(contentsOf: coverSource),
+            let coverSourceArchive = try? ZipReader(data: coverSourceData),
+            let realCover = EPUBMetadata.read(coverSourceArchive, fallbackTitle: coverSource.lastPathComponent).cover
+        else {
+            print("\(coverSource.path): no cover could be read from it")
+            exit(2)
+        }
+        print("real cover: \(realCover.count) bytes, from \(coverSource.lastPathComponent)")
+
+        let names =
+            (try? FileManager.default.contentsOfDirectory(atPath: folder.path))?
+            .filter { $0.lowercased().hasSuffix(".epub") }.sorted() ?? []
+        guard !names.isEmpty else {
+            print("no .epub files in \(folder.path)")
+            exit(2)
+        }
+
+        var allOK = true
+        for name in names {
+            let source = folder.appendingPathComponent(name)
+            do {
+                let before = try Data(contentsOf: source)
+                let originalArchive = try ZipReader(data: before)
+                let patched = try EPUBCoverPatch.entries(patchingCover: realCover, in: originalArchive)
+                let after = try EPUBArchiveWriter.archive(patched.entries)
+                try after.write(to: output.appendingPathComponent(name))
+                let reread = try ZipReader(data: after)
+                let readBack = EPUBMetadata.read(reread, fallbackTitle: name)
+                let coverOK = !patched.changed || readBack.cover == realCover
+
+                let sizeDelta = after.count - before.count
+                let sign = sizeDelta >= 0 ? "+" : ""
+                let percent = before.isEmpty ? 0 : Double(sizeDelta) / Double(before.count) * 100
+                var line = "\(name): "
+                if patched.changed {
+                    line += "\(before.count) bytes before, \(after.count) bytes after (\(sign)\(sizeDelta), "
+                    line += String(format: "%+.2f%%)", percent)
+                } else {
+                    line += "already had this exact cover — no change, nothing written (\(before.count) bytes)"
+                }
+                line += ", cover read back \(coverOK ? "✓" : "✗")"
+                print(line)
+                allOK = allOK && coverOK
             } catch {
                 print("\(name): FAILED – \(error)")
                 allOK = false

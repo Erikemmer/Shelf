@@ -53,6 +53,25 @@ struct EPUBCoverPatchTests {
         #expect(try reread.text(at: "OEBPS/content.opf") == archive.text(at: "OEBPS/content.opf"))
     }
 
+    // MARK: Case a, the same bytes — nothing to change
+
+    @Test("a cover bit-identical to what the book already has changes nothing")
+    func identicalCoverIsNoChange() throws {
+        let archive = try Self.archive(
+            packageAttributes: #" version="3.0""#,
+            manifestExtra: #"<item id="cover" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>"#,
+            coverPath: "OEBPS/cover.jpg", coverBytes: Self.jpegBytes)
+
+        let result = try EPUBCoverPatch.entries(patchingCover: Self.jpegBytes, in: archive)
+        #expect(!result.changed)
+        #expect(result.replacedExisting)
+        #expect(result.mediaTypeCorrected == nil)
+
+        let after = try EPUBArchiveWriter.archive(result.entries)
+        let reread = try ZipReader(data: after)
+        #expect(Self.differingPaths(archive, reread).isEmpty)
+    }
+
     // MARK: Case a, a format mismatch — the path stays, the media-type is corrected
 
     @Test("a new image in a different format is still written at the old path, with media-type corrected")

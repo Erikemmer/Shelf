@@ -3,6 +3,98 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 11, Schritt 2 — three gaps in Schritt 1's own proof, closed · 22 September 2026
+
+Schritt 1 below shipped `EPUBCoverPatch` proven against six real Gutenberg
+books — but every one of them already had a cover, so its case b (adding a
+cover where the manifest names none) had only ever run against synthetic
+archives this project builds itself: the riskier half of the two cases, and
+the one nobody had actually tried against a real book. Three gaps, each
+closed with a test or a real measurement rather than a guess.
+
+**Fall b, against real books.** `Scripts/strip-epub-cover.py` — a tool that
+is not Shelf's own code, the same reason `Scripts/epub-crosscheck.py`
+exists — removes a real book's cover image, its manifest `<item>`, and
+every cover declaration (EPUB 2's `<meta name="cover">`, EPUB 3's
+`properties="cover-image"`, or both) from a copy of a real EPUB, as a
+text-level edit rather than a full XML round-trip, so nothing else in the
+OPF changes. Run against copies of all six real books, then
+`shelf-tool epub-cover-patch` against the six stripped copies: every one
+now reports case b, and `EPUBMetadata` reads the new cover back correctly
+in every one. Sizes, machine: this Mac, synthetic ~530-byte cover (the same
+one Schritt 1 measures with) — alice-in-wonderland 82 956 → 86 979 bytes
+(+4.85 %, EPUB 2 `<meta>` form), die-verwandlung 63 410 → 65 291 (+2.97 %,
+EPUB 2 form — its own cover file is named `..._title-page.jpg`, not
+`..._cover.jpg`, so this is a real case of a cover found by the manifest's
+own declaration rather than by guessing from a file name), grimms-fairy-
+tales 275 962 → 289 040 (+4.74 %, EPUB 2 form), les-miserables 9 872 668 →
+9 945 915 (+0.74 %, both EPUB 2 and EPUB 3 forms — its own OPF still keeps
+an NCX for backward compatibility, the same signal ADR 0021 already
+documents), pride-and-prejudice EPUB2 and EPUB3 24 206 819 → 24 232 111 and
+24 196 305 → 24 220 564 (+0.10 % each, EPUB 2 form for the EPUB2 file, both
+forms for the EPUB3 one). `Scripts/real-epub-proof.sh` section 10.
+
+Trying this against real books found a real defect in the *proof tooling*
+itself, not in `EPUBCoverPatch`: `shelf-tool epub-cover-patch` decided its
+printed "case a" / "case b" label from `EPUBMetadata.read(…).cover != nil`
+— but `EPUBMetadata`'s own reader has a fallback ("no manifest cover → the
+first image in the archive", built for a hand-made EPUB or a comic with no
+declaration at all) that `EPUBCoverPatch`'s manifest-only decision does not
+share. A stripped book with its declared cover gone but *some* other image
+still inside it (les-miserables' own cover-page SVG wrapper; pride-and-
+prejudice's illustrations) read back as "already has a cover" under the old
+label while `EPUBCoverPatch` correctly took the case b branch — the tool
+then checked case b's own result against case a's own expectations and
+failed for no real reason. Fixed by reading the case from
+`EPUBCoverPatch.Result.replacedExisting` itself, the ground truth of which
+branch actually ran, rather than recomputing a second, disagreeing opinion.
+
+Also asked: whether Gutenberg has an "EPUB (no images)" edition with no
+cover at all, to add alongside the stripped copies. It does not — checked
+against `74.epub.noimages` (Gutenberg book 74): "no images" still means an
+illustration-free *text*, and Gutenberg's own EPUB generator adds a cover
+image to every edition regardless, so a real, natively cover-less EPUB does
+not appear to exist in Gutenberg's catalogue. `Scripts/real-epubs.sh` is
+unchanged; the six stripped copies above are the only real-book proof of
+Fall b there is.
+
+**A real cover's actual size.** Schritt 1's own numbers below are all
+measured against a synthetic ~530-byte cover, so every one of the six books
+*shrank* — a number nobody replacing a cover for real would ever see. A new
+`shelf-tool epub-cover-real-size` command patches a whole folder of books
+with a REAL cover, read straight out of another EPUB with `EPUBMetadata`
+rather than re-encoded. Run with the cover already inside
+`pride-and-prejudice-epub3-images.epub` (229 591 bytes, JPEG) against all
+six books: alice-in-wonderland 136 519 → 312 532 bytes (+128.93 %),
+die-verwandlung 99 693 → 293 151 (+194.05 %), grimms-fairy-tales 531 353 →
+504 251 (−5.10 % — its own existing cover happened to already be larger
+than the real cover used here), les-miserables 10 123 259 → 10 132 626
+(+0.09 %), and both pride-and-prejudice EPUB2 and EPUB3 — patched with
+*their own* cover — reported "already had this exact cover, nothing
+written", the first real-book proof of the third gap below.
+`Scripts/real-epub-proof.sh` section 11. Schritt 1's own shrinking numbers
+above stay in this file as they were measured; they are an artifact of the
+tiny synthetic test cover, not of what a real cover replacement costs — the
+numbers in this paragraph are that cost.
+
+**The same cover is not a change.** `EPUBCoverPatch.Result` gains
+`changed: Bool` — `false` only in case a, when the new cover is already,
+byte for byte, what the manifest's own cover entry holds; `entries` is then
+`archive`'s own entries carried forward completely untouched, so a caller
+that skips writing when `changed` is `false` truly writes nothing. Always
+`true` in case b: adding a cover where none exists is always a change. One
+new core test, `identicalCoverIsNoChange`, proves zero entries differ
+either way; the pride-and-prejudice self-application above is the same
+claim proven against a real book. This is the foundation Schritt 3 (Erik's
+word required first) would build "Nothing to write" in the window on, the
+same rule Sprint 10 already gives metadata fields — a cover write that
+would change nothing must never move a book's file to the Trash for no
+difference at all.
+
+787 core tests (1 new), `make lint`, `make app` and `make smoke` clean. One
+commit. `docs/adr/0021-…`, `docs/ARCHITECTURE.md` and the window are
+untouched — no window changes here either.
+
 ## Sprint 11, Schritt 1 — a cover into an EPUB's own archive, in the core · 22 September 2026
 
 `docs/adr/0021-…` promised a cover as well as metadata; Sprint 10 built only
