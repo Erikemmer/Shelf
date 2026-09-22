@@ -57,11 +57,18 @@ enum CoverImage {
     }
 
     /// A short description for the "Write into the Book File" sheet's cover
-    /// row: format and pixel size, in words rather than a picture, because
-    /// the row compares two images without showing either of them
-    /// (`docs/adr/0021-…`, `EPUBWrite.CoverPlan` — the core knows only
-    /// bytes, never a pixel size, so this is the app-layer half of that
-    /// row, the same split `CoverImageRule`/`CoverImage` already has).
+    /// row: format, pixel size and byte size, in words rather than a
+    /// picture, because the row compares two images without showing either
+    /// of them (`docs/adr/0021-…`, `EPUBWrite.CoverPlan` — the core knows
+    /// only bytes, never a pixel size, so this is the app-layer half of
+    /// that row, the same split `CoverImageRule`/`CoverImage` already has).
+    ///
+    /// The byte size is the number the row used to leave out — a cover can
+    /// **triple** in size on its way in (a photograph re-encoded at
+    /// `CoverImageRule`'s own ceiling), which "JPG, 300 × 450" alone never
+    /// said. `Loc.size`, the same reader-language byte formatting every
+    /// other size in the window already uses, never the core's own
+    /// `ByteCount.format` (C-locale, for reports scripts grep).
     static func describe(_ data: Data) -> String {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0
         else {
@@ -70,7 +77,8 @@ enum CoverImage {
         let width = pixels(of: source, kCGImagePropertyPixelWidth)
         let height = pixels(of: source, kCGImagePropertyPixelHeight)
         let format = CoverFile.fileExtension(for: data)?.uppercased() ?? "?"
-        return "\(format), \(width) × \(height)"
+        let size = Loc.size(Int64(data.count))
+        return "\(format), \(width) × \(height), \(size)"
     }
 
     // MARK: ImageIO

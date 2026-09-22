@@ -65,12 +65,18 @@ every run.
 ## `1-cover-changed.jpg` — a cover Shelf would replace, beside a field that also changes
 
 "The Glass Almanac": a publisher edit (`Not set → Erik & Erik Press`) and a
-cover row in the very same list — `Cover  JPG, 300 × 450 → JPG, 400 × 600`
-— one sheet, one confirmation, exactly as `docs/adr/0021-…` asks for. No
-second command, no second sheet: the cover is one more row, in the same
-"label, then old → new" shape every text field already has, described in
-words because the core never decodes a pixel and this sheet does not
-either.
+cover row in the very same list — `Cover  JPG, 300 × 450, 17 kB → JPG,
+400 × 600, 25 kB` — one sheet, one confirmation, exactly as
+`docs/adr/0021-…` asks for. No second command, no second sheet: the cover
+is one more row, in the same "label, then old → new" shape every text
+field already has, described in words because the core never decodes a
+pixel and this sheet does not either.
+
+The byte size joined the row in the follow-up session that took this
+picture again (Sprint 11, Nachsitzung, Teil B) — a cover can **triple** in
+size going in (measured elsewhere: 194 % for one real book, 129 % for
+another), which "JPG, 300 × 450" alone never said. `Loc.size`, the same
+reader-language formatting every other size in the window already uses.
 
 *Judgement:* right. The row sits last, after every text field — the order
 `bookSection` already lists fields in, with the cover appended once.
@@ -79,7 +85,7 @@ either.
 
 "Cinders and Salt": every text field already matches ("schon gleich" /
 "already the same" down the list), and the cover row reads `Cover  No
-cover in the book → JPG, 350 × 525`. Nothing else about this book would
+cover in the book → JPG, 350 × 525, 21 kB`. Nothing else about this book would
 change — the cover alone is why "1 book will have its EPUB file replaced"
 is offered at all, and the checkbox and write button are enabled on that
 one row's own account.
@@ -94,7 +100,7 @@ never has to say "no cover" on both sides at once.
 "The Quiet Harbour": untouched since import, so its `cover.jpg` is exactly
 what import extracted from its own file. **Nothing to write** / *"This
 EPUB file would not change."*, the button disabled — and the cover row
-still shows, single-valued (`JPG, 300 × 450`), tagged **"already the
+still shows, single-valued (`JPG, 300 × 450, 17 kB`), tagged **"already the
 same"** off to the side, the identical treatment a text field gets in this
 state (Sprint 10, Schritt E2). The row does not disappear just because
 nothing would change; it says so, the same lesson that sprint already

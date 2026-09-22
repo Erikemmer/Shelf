@@ -1198,3 +1198,21 @@ candidate found and what each was built from, rather than aborting on the
 first (possibly stale) one discovery happened to pick; more than one match
 takes the newest and says so in one line. All twenty-one scripts call it.
 `docs/CHANGELOG.md`, Sprint 11, Aufräum-Sitzung Teil A.
+
+## Follow-up — the size the cover row left out · done
+
+Sprint 11, Schritt 3's own cover row (above) described a cover as "JPG,
+W × H" — format and pixel size, never the number that actually matters: a
+cover written into a book can **triple** in size on the way in (194 % for
+one real book, 129 % for another, measured in the Sprint 11 run itself),
+and the row said nothing about it. `CoverImage.describe(_:)` now appends
+the byte size to both sides of the arrow — `"JPG, 300 × 450, 17 kB → JPG,
+400 × 600, 25 kB"` — through `Loc.size`, the same reader-language byte
+formatting every other size in the window already uses (never the core's
+own `ByteCount.format`, which is for reports scripts grep). No new
+catalogue entries: the row was never routed through `Loc.string` as a
+sentence, only format code and numbers glued together, and stays that way.
+
+Screenshots re-taken through `Scripts/write-into-book-cover-shot.sh` (not
+by hand), both languages; `docs/screenshots/sprint-11/README.md` updated
+to quote the new row. `docs/CHANGELOG.md`, Sprint 11, Nachsitzung, Teil B.

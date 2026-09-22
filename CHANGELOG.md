@@ -3,6 +3,37 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 11, Nachsitzung, Teil B — the size the cover row left out · 22 September 2026
+
+Sprint 11, Schritt 3's cover row said "JPG, 300 × 450" and nothing about
+the number that actually matters: a cover written into a book can
+**triple** in size (194 % for *Die Verwandlung*, 129 % for *Alice*,
+measured in that same sprint's run) — deliberate, and staying that way, but
+the row never said so.
+
+`CoverImage.describe(_:)` (`App/Shelf/Services/CoverImage.swift`) now
+appends the byte size to both sides: `"JPG, 300 × 450, 17 kB → JPG,
+400 × 600, 25 kB"`. `Loc.size`, the same reader-language byte formatting
+`OrphanSheet`, `ExportSheet`, `SendToDeviceSheet` and `Summaries` already
+use for a size sentence in a sheet — never the core's own `ByteCount
+.format`, which is C-locale on purpose, for reports scripts grep. No new
+catalogue entries: the row is format code and numbers glued together, never
+routed through `Loc.string` as a sentence, and stays that way — checked by
+reading the row in both languages, not merely by reasoning about it: the
+"kB"/"×" punctuation is identical in both, only the surrounding sentences
+translate.
+
+Screenshots re-taken through `Scripts/write-into-book-cover-shot.sh`
+(never by hand), both languages, against the fixture's own three real
+JPEGs — the same three-book library Schritt 3 built. Every value shown
+(`17 kB → 25 kB`, `21 kB`, `17 kB`) read directly off the sheet in the
+screenshot, not computed separately and merely trusted to match.
+`docs/screenshots/sprint-11/README.md` quotes the new row under all three
+relevant pictures.
+
+790 core tests (unchanged — no core code touched), `make lint`, `make app`
+and `make smoke` clean. One commit.
+
 ## Sprint 11, Nachsitzung, Teil A — the search itself, not only the check · 22 September 2026
 
 The previous session's own entry below left one thing open on purpose:
