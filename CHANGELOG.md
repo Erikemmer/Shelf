@@ -3,6 +3,62 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 11, Nachsitzung, Teil A — the search itself, not only the check · 22 September 2026
+
+The previous session's own entry below left one thing open on purpose:
+`verify_shelf_app_is_current` can only refuse the candidate discovery
+*picked*, and discovery still picked by the bundle directory's own mtime —
+the exact thing this file's earlier entry found unreliable — so a stray old
+build could still win that sort and then be correctly, but needlessly,
+refused. Erik's own read: choosing the candidate whose `SHELF_BUILD_COMMIT`
+stamp equals HEAD is not a guess among several candidates, it is exact —
+the stamp exists precisely to say which commit a bundle was built from.
+
+`find_current_shelf_app` (`Scripts/current-shelf-app.sh`) replaces the
+twenty-one scripts' shared "newest built `Shelf.app`" snippet outright: it
+collects every candidate under DerivedData, keeps only the ones stamped
+with the repository's current HEAD, and returns the newest of those. No
+match names every candidate found and the commit each was built from,
+rather than silently using the first (possibly stale) one discovery used
+to pick, or aborting without saying what was actually on disk. More than
+one match — two builds of the same commit in different DerivedData roots —
+takes the newest and says so in one line, never silently. `SHOT_APP=<path>`
+is unchanged: it still bypasses the search entirely and still gets
+verified.
+
+Demonstrated by hand rather than only argued: a copy of the freshly built
+`Shelf.app`, stamped with a fabricated commit and touched to be the newest
+by mtime — exactly the shape of the bug the previous session's entry
+found — placed beside the real build. `find_current_shelf_app` skipped the
+newer-but-wrong copy and returned the one actually stamped with HEAD. The
+"more than one match" and "no match" paths were checked the same way: two
+copies both stamped with HEAD (one older by mtime) picked the newer one
+with the one-line note; three copies stamped with three different
+non-HEAD commits aborted, naming all three paths and stamps. The
+fabricated copy was made under a throwaway DerivedData project folder
+(`Shelf-oldtest…`) and removed afterward; the real build's `Info.plist`
+was restamped correctly by a second `make app`, checked against
+`git rev-parse HEAD` before continuing.
+
+All twenty-one scripts (the twenty already using
+`verify_shelf_app_is_current`, unchanged in that list) now call
+`find_current_shelf_app` instead of the inline snippet;
+`Scripts/check-current-app-guard.sh` (`make lint`) is unchanged — it
+already checks for `verify_shelf_app_is_current`, which `find_current_
+shelf_app`'s callers still call afterward (redundant for a bundle this
+function already picked, and still the only check `SHOT_APP` gets).
+`runbook-proof.sh`'s own soft-check section (a Shelf already open, or no
+build matching HEAD, should skip that one section rather than take the
+rest of the runbook proof down) keeps its shape: the search's own stderr
+is silenced there the same way `verify_shelf_app_is_current`'s already
+was.
+
+`docs/BACKLOG.md`'s "One practical cost, worth knowing" paragraph — the
+one this Teil closes — is removed, not merely marked done, per instruction.
+
+790 core tests (unchanged — no core code touched), `make lint` (both
+checks), `make app` and `make smoke` clean. One commit.
+
 ## Sprint 11, Aufräum-Sitzung, Teil A — which Shelf.app did we actually photograph? · 22 September 2026
 
 Schritt 3's own finding: the "find the newest built `Shelf.app`" snippet

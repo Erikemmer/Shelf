@@ -1187,13 +1187,14 @@ wrong build photographed at the time. Not fixed here, per instruction —
 only reported. `Scripts/current-shelf-app.sh`'s own doc comment has the
 full reasoning.
 
-**One practical cost, worth knowing**: verification can only check the
-candidate discovery *picked* — it does not fix discovery's own use of the
-same unreliable directory mtime to choose which bundle to check in the
-first place. A stray old build (Debug or Release) left over from earlier
-work can still win that sort and then get correctly refused, where before
-it would have been silently used. `SHOT_APP=<path>` remains the way round
-it. Teaching discovery itself to pick correctly rather than merely refuse
-incorrectly would mean picking among several candidates by their own
-stamps — which starts to look like exactly the guessing this fix was
-asked not to do, so it was left alone.
+**The practical cost this entry used to name here — discovery itself still
+picking by the same unreliable directory mtime, so a stray old build could
+win the sort and only then get correctly refused — is closed.**
+`find_current_shelf_app` (`Scripts/current-shelf-app.sh`) replaced
+discovery itself: it collects every built candidate, keeps only the ones
+stamped with HEAD, and picks the newest of those — never a guess, since the
+stamp already says which commit a candidate is. No match names every
+candidate found and what each was built from, rather than aborting on the
+first (possibly stale) one discovery happened to pick; more than one match
+takes the newest and says so in one line. All twenty-one scripts call it.
+`docs/CHANGELOG.md`, Sprint 11, Aufräum-Sitzung Teil A.

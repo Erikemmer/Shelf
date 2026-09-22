@@ -83,3 +83,84 @@ verify_shelf_app_is_current() {
     fi
     return 0
 }
+
+# ## The search itself, not only the check on what it hands back
+#
+# `verify_shelf_app_is_current` above can only refuse a candidate that
+# discovery already picked — and every caller's own discovery picked by the
+# bundle *directory's* mtime, the exact thing this file's own history
+# (above) found unreliable. A stray old build could win that sort and then
+# be correctly refused, where taking the one actually stamped with HEAD in
+# the first place is not a guess: `SHELF_BUILD_COMMIT` exists precisely to
+# say which commit a candidate was built from, so choosing the candidate
+# whose stamp reads `HEAD` is exact, not a preference among equals.
+#
+# ## Use
+#
+#     . "$HERE/current-shelf-app.sh"
+#     APP="${SHOT_APP:-}"
+#     if [ -z "$APP" ]; then
+#         APP="$(find_current_shelf_app)" || exit 1
+#     fi
+#
+# Prints the chosen bundle's path to stdout and returns 0. If more than one
+# candidate is stamped with HEAD (two builds of the same commit in
+# different DerivedData roots), the newest of those wins by mtime and a
+# single line to stderr says so — never silently, since two identical
+# stamps still means two different files were considered.
+#
+# If no candidate under DerivedData is stamped with HEAD, nothing is
+# printed to stdout, every candidate that *was* found is named on stderr
+# together with the commit each carries (or "no build-commit stamp at all"
+# for one built before this check existed), and this returns 1. It never
+# rebuilds anything and never falls back to a guess.
+find_current_shelf_app() {
+    local repo_root
+    repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    local expected
+    expected="$(git -C "$repo_root" rev-parse HEAD 2>/dev/null)" || {
+        echo "find_current_shelf_app: could not read $repo_root's own HEAD" >&2
+        return 1
+    }
+    local best="" best_mtime=-1 matches=0
+    local report=""
+    while IFS= read -r line; do
+        local mtime="${line%% *}"
+        local candidate="${line#* }"
+        [ -x "$candidate/Contents/MacOS/Shelf" ] || continue
+        local plist="$candidate/Contents/Info.plist"
+        local stamped=""
+        if [ -f "$plist" ]; then
+            stamped="$(/usr/libexec/PlistBuddy -c "Print :ShelfBuildCommit" "$plist" 2>/dev/null || true)"
+        fi
+        report="${report}  ${stamped:-<no build-commit stamp>}  $candidate"$'\n'
+        if [ "$stamped" = "$expected" ]; then
+            matches=$((matches + 1))
+            if [ "$mtime" -gt "$best_mtime" ]; then
+                best="$candidate"
+                best_mtime="$mtime"
+            fi
+        fi
+    done < <(find ~/Library/Developer/Xcode/DerivedData -name "Shelf.app" -path "*/Build/Products/*" \
+        -not -path "*Index.noindex*" -maxdepth 6 -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn)
+
+    if [ -z "$best" ]; then
+        echo "find_current_shelf_app: FAILED – no built Shelf.app under DerivedData is stamped with" >&2
+        echo "  this repository's current HEAD ($expected)." >&2
+        if [ -n "$report" ]; then
+            echo "  Every candidate found, and what commit each was built from:" >&2
+            printf '%s' "$report" >&2
+        else
+            echo "  No Shelf.app at all was found under DerivedData." >&2
+        fi
+        echo "  Run 'make app' (or 'make app-debug') to build one from HEAD, or pass" >&2
+        echo "  SHOT_APP=<path> to name a bundle directly and skip this search." >&2
+        return 1
+    fi
+    if [ "$matches" -gt 1 ]; then
+        echo "find_current_shelf_app: $matches built candidates are stamped with HEAD ($expected);" >&2
+        echo "  using the newest: $best" >&2
+    fi
+    echo "$best"
+    return 0
+}

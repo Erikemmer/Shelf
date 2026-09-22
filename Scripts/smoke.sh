@@ -32,18 +32,13 @@ fail() {
 . "$HERE/current-shelf-app.sh"
 
 # ── The app bundle ────────────────────────────────────────────────────────────
+# Both configurations are candidates: `make app` builds Release (that is what
+# Erik starts), `make app-debug` builds Debug. `find_current_shelf_app`
+# (Scripts/current-shelf-app.sh) is what chooses among them — the one
+# stamped with this repository's own HEAD, never merely the newest by a
+# bundle folder's own mtime.
 if [ -z "$APP" ]; then
-    # Both configurations, newest first: `make app` builds Release (that is what
-    # Erik starts), `make app-debug` builds Debug. Measuring whichever happens
-    # to be older would report a build nobody is running.
-    # Xcode keeps a second, executable-less copy under Index.noindex; skip it.
-    while IFS= read -r candidate; do
-        candidate="${candidate#* }"
-        [ -x "$candidate/Contents/MacOS/Shelf" ] || continue
-        APP="$candidate"
-        break
-    done < <(find ~/Library/Developer/Xcode/DerivedData -name "Shelf.app" -path "*/Build/Products/*" \
-        -not -path "*Index.noindex*" -maxdepth 6 -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn)
+    APP="$(find_current_shelf_app)" || exit 1
 fi
 [ -n "$APP" ] && [ -x "$APP/Contents/MacOS/Shelf" ] || fail "no runnable Shelf.app found – run 'make app' first"
 verify_shelf_app_is_current "$APP" || exit 1

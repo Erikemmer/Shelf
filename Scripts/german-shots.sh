@@ -53,13 +53,7 @@ rm -f "$PROBE"
 
 APP="${SHOT_APP:-}"
 if [ -z "$APP" ]; then
-    while IFS= read -r candidate; do
-        candidate="${candidate#* }"
-        [ -x "$candidate/Contents/MacOS/Shelf" ] || continue
-        APP="$candidate"
-        break
-    done < <(find ~/Library/Developer/Xcode/DerivedData -name "Shelf.app" -path "*/Build/Products/*" \
-        -not -path "*Index.noindex*" -maxdepth 6 -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn)
+    APP="$(find_current_shelf_app)" || exit 1
 fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
 verify_shelf_app_is_current "$APP" || exit 1

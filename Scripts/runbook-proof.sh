@@ -177,20 +177,18 @@ echo "this makes happen, by opening a folder that is not a library:"
 # is refused rather than opened, because writing such a library back could drop
 # fields it does not know about (DATA-MODEL §2).
 APP="${RUNBOOK_APP:-}"
-if [ -z "$APP" ]; then
-    while IFS= read -r candidate; do
-        candidate="${candidate#* }"
-        [ -x "$candidate/Contents/MacOS/Shelf" ] || continue
-        APP="$candidate"; break
-    done < <(find ~/Library/Developer/Xcode/DerivedData -name "Shelf.app" -path "*/Build/Products/*" \
-        -not -path "*Index.noindex*" -maxdepth 6 -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn)
-fi
 # A soft check, not the hard refusal require_no_foreign_shelf gives every
-# other caller: this is one section of a much longer proof run, and a Shelf
-# already open (Erik's, or a leftover) should make this section skip itself
-# rather than take the rest of the runbook proof down with it. The subshell
-# keeps the guard's own `exit` from doing that while still asking the one
-# question that matters: is a foreign Shelf running right now.
+# other caller: this is one section of a much longer proof run, and no
+# candidate stamped with HEAD (or a Shelf already open — Erik's, or a
+# leftover) should make this section skip itself rather than take the rest
+# of the runbook proof down with it. `find_current_shelf_app`'s own stderr
+# is silenced here for the same reason: this section fails quietly, it does
+# not name candidates the way a hard refusal does. The subshell keeps
+# require_no_foreign_shelf's own `exit` from doing that while still asking
+# the one question that matters: is a foreign Shelf running right now.
+if [ -z "$APP" ]; then
+    APP="$(find_current_shelf_app 2>/dev/null)"
+fi
 if [ -n "$APP" ] && verify_shelf_app_is_current "$APP" >/dev/null 2>&1 && (require_no_foreign_shelf) >/dev/null 2>&1; then
     SINCE=$(date "+%Y-%m-%d %H:%M:%S")
     FROM_THE_FUTURE="$WORK/from-the-future"
