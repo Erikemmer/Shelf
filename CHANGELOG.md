@@ -3,6 +3,62 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 11, Nachsitzung, Teil C — the 907 ms question, on a quiet disk · 22 September 2026
+
+Free space checked first, as instructed: **16–18 GiB free, 53 % of the
+disk used** — not the 98–100 % full disk Sprint 9's own 907–1 028 ms was
+measured on. Above the 15 GiB line below which this was to be skipped
+outright, so it went ahead.
+
+`make proof` ran clean against a freshly generated 4 996-book synthetic
+library: every section reported `Failed: 0`, no `FAILED` line anywhere in
+the run. Then the window itself, `SHELF_TIMING=1`, three runs in a row
+against that same library — `open -a Shelf -o <log> --env SHELF_TIMING=1`,
+quit between each run, never a Shelf this session did not itself start:
+
+| run | index read |
+|---|---|
+| 1 (first launch after `make proof`) | 986 ms |
+| 2 | 774 ms |
+| 3 | 811 ms |
+
+Mean 857 ms, spread 212 ms (774–986 ms). Against Sprint 8's 738 ms and
+Sprint 9's sustained 907–1 028 ms (both cold *and* warm): two of three runs
+here land within 5–10 % of Sprint 8's own number, and none reach Sprint
+9's range on both readings the way Sprint 9's own pair did. Read together
+with the free-space numbers above, **this points at the disk, the same
+conclusion Sprint 9's own entry already suspected and could not confirm**
+for want of a quiet one to re-measure against.
+
+**Assumed, not verified**: the first run's own 986 ms — the one reading
+that does sit inside Sprint 9's range — was taken immediately after
+`make proof` itself had just written and deleted several gigabytes across
+its own sections (export, Calibre presets, hard-link dedup), which is
+disk traffic of the same shape Sprint 9's entry named as the likely cause,
+even on a disk that is otherwise quiet. It was not re-isolated with a
+longer pause first, because the instruction was three runs in a row, not
+four. Runs 2 and 3, with no such traffic in between beyond Shelf's own
+quit and relaunch, are the cleaner pair and are the ones that read close
+to Sprint 8's 738 ms.
+
+**The "over 900 ms → drop `cover_generation` from the `SELECT`" branch was
+not taken.** Two of three runs read under 900 ms and the disk-fullness
+explanation already accounts for the one that did not; pulling the column
+without a genuine over-900-ms signal across the board would have been
+testing a hypothesis the numbers do not support.
+
+`docs/HANDOFF.md`'s "907 ms question" entry is closed, not merely marked
+done — removed from the still-open list, with these numbers in its place.
+
+**Cleanup, named**: `~/Library/Caches/Shelf/synthetic/` (5.2 GB), created
+by `make proof` for this Teil alone, removed afterward with
+`make synthetic-clean`. Nothing else under `~/Library/Caches/Shelf/` was
+touched.
+
+No core code changed, so 790 core tests are unaffected (not re-run for
+this Teil — nothing here alters `Sources/` or `Tests/`); `make lint`,
+`make app` and `make smoke` clean. One commit, docs only.
+
 ## Sprint 11, Nachsitzung, Teil B — the size the cover row left out · 22 September 2026
 
 Sprint 11, Schritt 3's cover row said "JPG, 300 × 450" and nothing about

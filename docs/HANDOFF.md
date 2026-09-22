@@ -21,13 +21,22 @@ once the command that replaces it exists.
 
 **Still open:**
 
-1. **The 907 ms question.** Sprint 9's own measurement — 907–1 028 ms
-   against Sprint 8's 738 ms — is still unexplained. Every session since has
-   had too little free disk space to re-measure it cleanly.
-2. **A Developer ID certificate and a notarytool profile.** Nothing has ever
+1. **A Developer ID certificate and a notarytool profile.** Nothing has ever
    been notarised. `docs/RELEASE.md` says how; both are Erik's to make.
-3. **The four judgement calls about covers**, listed below.
-4. **Everything only real hardware and real books can answer**, listed below.
+2. **The four judgement calls about covers**, listed below.
+3. **Everything only real hardware and real books can answer**, listed below.
+
+**The 907 ms question is closed, on a quiet disk.** Sprint 9's own
+907–1 028 ms against Sprint 8's 738 ms was measured on a disk at 98–100 %
+capacity, right after `make proof` itself had written and deleted several
+gigabytes — exactly the condition APFS is known to slow down under.
+Re-measured 22 September 2026 with 16–18 GiB free (53 % used, not 98–100 %):
+**index read 986 ms, 774 ms, 811 ms** across three runs in a row against
+the same 4 996-book synthetic library — two of three within 5–10 % of
+Sprint 8's own number, none near Sprint 9's sustained 907–1 028 ms.
+`CHANGELOG.md`, Sprint 11, Nachsitzung, Teil C, has the full numbers and
+what is only assumed (the first run's own 986 ms, taken immediately after
+`make proof`'s own heavy disk traffic, was not re-isolated from that).
 
 ---
 
