@@ -3,6 +3,50 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 12, Nachtrag — the ⌘Z menu title was never broken, only wrongly measured · 22 September 2026
+
+A second and, per instruction, last look at `docs/BACKLOG.md`'s Sprint 6/7
+entry ("SwiftUI's own Undo item never carries the action name"), following
+the order the instruction set: measure step (a) again before touching
+anything. Step (a) — three letters typed into the inspector's title field,
+⌘Z — reproduced exactly as Sprint 12, Teil B recorded it: the Edit menu
+reads "Undo Typing". The next step was to reproduce the actual defect —
+the bare "Undo" after a *committed* edit — before writing a line of code,
+and that is where this stopped: it does not reproduce.
+
+**Every measurement in this project's own `Scripts/` reads a menu by a
+real `CGEvent` click** (`Scripts/click-at.swift`, at a position read off
+the accessibility tree), never System Events' own `click menu bar item …`
+verb. A committed Publisher edit, Edit menu opened with a real click,
+reads **"Undo Publisher"** — in English and, with the correct German
+grammar ("Verlag widerrufen", not "Widerrufen Verlag"), in German too.
+`docs/screenshots/sprint-12-undo-naming/` has the four pictures and the
+full account, English and German.
+
+**Why three earlier sessions (Sprint 6, Sprint 7's carry-forward, Sprint
+12 Teil B) read a bare "Undo" where this one reads "Undo Publisher":**
+AppKit updates the standard Edit ▸ Undo/Redo item's title and enabled
+state on its own — action `undo:`/`redo:`, target `nil` — from whichever
+`UndoManager` answers the responder chain, with no application code
+required, but only when the menu is genuinely opened and validated.
+Reading a menu item's name through System Events without a real click
+first — or opening it through `AXPress` rather than a physical click, as
+several of this project's own AppleScript-driven measurements did before
+today — answers with whatever title AppKit last computed, which for an
+item nobody has looked at is the unnamed default. Sprint 12, Teil B's own
+`CommandGroup(replacing: .undoRedo)` experiment is a separate, correct
+finding and stands as written: *that* custom implementation genuinely
+never updates its title, because replacing the standard item throws away
+the automatic AppKit behaviour described above. The two findings are not
+in conflict — one is about the default, unreplaced menu (never broken),
+the other about a custom replacement of it (broken by construction, and
+rightly reverted).
+
+**No source file changed.** `App/Shelf/ShelfApp.swift` is exactly what
+Sprint 12, Teil B's revert left it. `docs/BACKLOG.md`'s Sprint 6 entry is
+closed as a measurement artefact, not fixed, and not reopened for a third
+attempt.
+
 ## Sprint 12, Teil C — the locked screen gets the same guard the stale build got · 22 September 2026
 
 `docs/BACKLOG.md`'s Sprint 2c entry ("The Mac's screen lock silently

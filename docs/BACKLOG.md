@@ -429,7 +429,20 @@ is currently assumed.
 - [ ] **A real disagreement between the two services has never been seen**, so
       the proof run's "where the two disagree" table is one column of dashes.
       That is the same 429
-- [ ] **The Edit menu reads a bare "Undo" — after anything, not only a fetch.**
+- [x] **The Edit menu reads a bare "Undo" — after anything, not only a fetch.**
+      **Closed in Sprint 12, Nachtrag (22 September 2026): a measurement
+      artefact, not a defect.** A fresh remeasurement, ordered to check
+      step (a) before writing any code, found that the *default* Edit ▸
+      Undo item — never replaced — already reads "Undo Publisher" (English)
+      and "Verlag widerrufen" (German, correct grammar) after a committed
+      edit, when the menu is opened with a real click. Every earlier
+      reading of a bare "Undo" traces to menus read without a genuine
+      click — AppKit only updates the standard Undo/Redo item's title when
+      the menu is truly opened and validated. `docs/screenshots/sprint-12-undo-naming/`
+      has the pictures; `CHANGELOG.md`, Sprint 12, Nachtrag, has the full
+      account, including why this does not contradict Sprint 12, Teil B's
+      own finding that its *replacement* `CommandGroup` never worked (a
+      different, and correctly abandoned, implementation).
       Sprint 6 wrote this down as a fetch's defect and added "an edit made in
       the inspector still names itself". **That second half is wrong**, measured
       on 19 September 2026 with the menu opened before it was read (macOS
