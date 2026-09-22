@@ -220,16 +220,32 @@ change of controls, not of layout.
 
 ### What Sprint 3 found and did not finish
 
-- [ ] **An interrupted import copies up to 200 books twice.** Re-measured in
-      Sprint 13, Teil A: the "copies twice" no longer reproduces — Sprint 4's
-      own `OrphanedFolders` already reclaims a same-source resume with zero
-      duplication, proven again there against a really killed process, not
-      only a simulated one. What is still real: up to `indexBatchSize - 1`
-      books sit verified-but-unindexed until something reclaims them.
-      Sprint 13, Teil B closes that window for a clean quit and `SIGTERM`;
-      `SIGKILL` cannot be caught by any process and stays open, bounded at
-      the batch size, findable by `Find Orphaned Folders…`
-      (`CHANGELOG.md`, Sprint 13)
+- [x] **An interrupted import copies up to 200 books twice.** Re-measured in
+      Sprint 13, Teil A: the "copies twice" no longer reproduced — Sprint 4's
+      own `OrphanedFolders` already reclaimed a same-source resume with zero
+      duplication, proven there against a really killed process, not only a
+      simulated one. What was real: up to `indexBatchSize - 1` books sat
+      verified-but-unindexed until something reclaimed them. Sprint 13,
+      Teil B/C closed that window for a clean quit (⌘Q, File ▸ Quit) and
+      `SIGTERM` — proven twelve times in a row against a real, running,
+      8 000-book import, real `SIGTERM`, real mid-copy — after finding and
+      fixing three more bugs the fix's own first cut had (a presented sheet
+      blocking `NSApp.terminate` from reaching the delegate at all, a
+      `Task`-based wait deadlocking GCD's serial main queue, and the flush's
+      own write being refused by GRDB because the very cancellation that
+      triggered it also marked the write cancelled). `SIGKILL` cannot be
+      caught by any process and stays open, bounded at the batch size,
+      findable by `Find Orphaned Folders…`; **`Dock ▸ Quit` stays open too**
+      — see the next entry (`CHANGELOG.md`, Sprint 13)
+- [ ] **`Dock ▸ Quit` still hangs like every quit did before Sprint 13.** It
+      sends the terminate Apple Event straight to `NSApp`, bypassing the one
+      `NSMenuItem` (`Ablage ▸ Shelf beenden`) Sprint 13's fix retargets —
+      ⌘Q and the menu click both go through that item and are covered;
+      right-clicking the Dock icon and choosing Quit is not. Closing it
+      would need `applicationShouldTerminate(_:)` itself to be reachable
+      while a sheet is presented, which Sprint 13, Teil C measured it is
+      not, for a reason still unidentified rather than merely unfixed
+      (`CHANGELOG.md`, Sprint 13, Teil C)
 - [ ] **`ImportModel`'s own `cancel()` cancels nothing.** Found while wiring
       Sprint 13's termination-safe cancellation, and left exactly as found,
       per instruction — not this sprint's task. `ImportModel.task` is

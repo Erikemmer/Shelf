@@ -1,4 +1,5 @@
 import AppKit
+import Dispatch
 import Observation
 import ShelfCore
 import os
@@ -862,6 +863,11 @@ final class LibraryModel {
     /// nothing to disk yet; `.idle`, `.ready` and `.finished` have nothing
     /// left to lose either.
     var isImportRunning: Bool { importRunTask != nil }
+
+    /// `ImportModel.copyFinishedSemaphore`, reached through here because
+    /// `AppDelegate` only ever holds a `LibraryModel`. See that property's
+    /// own comment for why a plain `Task` wait cannot stand in for this.
+    var importCopyFinishedSemaphore: DispatchSemaphore? { importModel?.copyFinishedSemaphore }
 
     /// Starts the sheet's confirmed plan in its own tracked `Task`.
     func beginImportRun() {

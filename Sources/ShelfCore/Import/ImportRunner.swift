@@ -122,7 +122,7 @@ public struct ImportRunner: Sendable {
     public func run(
         _ options: Options,
         progress: @Sendable @escaping (Progress) -> Void = { _ in },
-        saveBatch: @Sendable (_ entries: [LibraryEntry]) async throws -> Void = { _ in },
+        saveBatch: @Sendable @escaping (_ entries: [LibraryEntry]) async throws -> Void = { _ in },
         existingEntry: @Sendable (UUID) -> LibraryEntry? = { _ in nil }
     ) async throws -> Outcome {
         let started = Date()
@@ -196,8 +196,22 @@ public struct ImportRunner: Sendable {
         // The last, short batch. Before the cancellation bookkeeping below, so a
         // run that was cut off still hands over everything it did finish — which
         // is the whole of what makes the next run a resume rather than a repeat.
+        //
+        // `.detached`, not a plain `await`: this is reached most often
+        // *because* the surrounding `Task` was just cancelled, and
+        // `saveBatch` for the real `LibraryIndex` writes through GRDB, which
+        // itself checks `Task.isCancelled` and refuses to write — silently,
+        // under the `try?` below, which exists for an unrelated reason (a
+        // batch write failing must not make the whole run look like a
+        // failure). Measured against the real app: a cancelled run reached
+        // this line every time and the batch never landed, because the very
+        // cancellation that got it here also poisoned the write meant to
+        // save what the cancellation should not have cost
+        // (`CHANGELOG.md`, Sprint 13, Teil C). A `.detached` task starts
+        // uncancelled regardless of what cancelled the one asking for it.
         if !unsaved.isEmpty {
-            try? await saveBatch(unsaved)
+            let batch = unsaved
+            try? await Task.detached { try await saveBatch(batch) }.value
             unsaved.removeAll()
         }
 

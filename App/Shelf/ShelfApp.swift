@@ -3,6 +3,7 @@ import Darwin
 import ShelfCore
 import SlateKit
 import SwiftUI
+import os
 
 /// App entry point. One window per library; dark appearance like Final Cut Pro.
 @main
@@ -377,29 +378,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// forced, to leave by. `SIGKILL` cannot be caught here or anywhere:
     /// POSIX disallows it, so that one stays open (`docs/BACKLOG.md`).
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Self.terminationLogger.notice("applicationDidFinishLaunching: installing SIGTERM handler")
         signal(SIGTERM, SIG_IGN)
         let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
-        source.setEventHandler { NSApp.terminate(nil) }
+        source.setEventHandler { [weak self] in
+            Self.terminationLogger.notice("SIGTERM received")
+            self?.requestTermination()
+        }
         source.resume()
         sigtermSource = source
+
+        // ⌘Q and File ▸ Quit both fire this one `NSMenuItem`, whatever its
+        // localised title — repointing its action rather than replacing the
+        // command with `CommandGroup(replacing: .appTermination)` needs no
+        // catalogue entry of its own and keeps AppKit's own wording exactly
+        // as it is. Dock ▸ Quit sends the terminate Apple Event straight to
+        // `NSApp`, bypassing this item entirely, and stays outside what this
+        // reaches (`docs/BACKLOG.md`).
+        if let quitItem = NSApp.mainMenu?.items.first?.submenu?.items.first(where: {
+            $0.action == #selector(NSApplication.terminate(_:))
+        }) {
+            quitItem.target = self
+            quitItem.action = #selector(requestTermination)
+        }
     }
+
+    /// The one place both ⌘Q/File ▸ Quit and `SIGTERM` end up. Three steps,
+    /// in this order, each measured against the real, running app with `log
+    /// stream` — not assumed:
+    ///
+    /// 1. Cancel the import *first*, before anything else. Every one of its
+    ///    progress updates is its own `Task { @MainActor in … }`, one per
+    ///    file, throttled but still frequent for a large import — enough of
+    ///    them queued ahead of a block asked for later that this whole
+    ///    method, called after them, sometimes never got a turn until the
+    ///    run finished on its own. Cancelling here, synchronously, stops the
+    ///    flood at its source within one file's processing time, which nothing
+    ///    later in this method needs to wait behind.
+    /// 2. Dismiss any presented sheet. Not cosmetic: `applicationShouldTerminate(_:)`
+    ///    was never reached at all — not merely delayed — while the import
+    ///    sheet was still on screen.
+    /// 3. Ask `NSApp` to terminate, `.async` rather than directly: calling it
+    ///    synchronously and reentrantly, from a block already running on
+    ///    `DispatchQueue.main` (this one), also measurably kept it from being
+    ///    reached, whatever the exact AppKit mechanism behind that is.
+    @objc private func requestTermination() {
+        model?.cancelImportRun()
+        model?.isImportSheetPresented = false
+        DispatchQueue.main.async { NSApp.terminate(nil) }
+    }
+
+    private static let terminationLogger = Logger(subsystem: "de.erikemmer.shelf", category: "termination")
 
     /// A quit with an import mid-copy must not just let the process end:
     /// `ImportRunner` writes its short last batch only when the `Task`
-    /// running it is cancelled and allowed to finish
-    /// (`LibraryModel.importRunTask`), and until Sprint 13 nothing ever
-    /// asked it to — a killed import and a quit import left the same
-    /// orphaned folders (`CHANGELOG.md`, Sprint 13, Teil A). `.examining`
+    /// running it is cancelled and allowed to finish, and until Sprint 13
+    /// nothing ever asked it to — a killed import and a quit import left the
+    /// same orphaned folders (`CHANGELOG.md`, Sprint 13, Teil A). `.examining`
     /// and every other phase have written nothing yet, so only `.running`
     /// delays termination at all.
+    ///
+    /// Two things tried here and abandoned, both measured against the real,
+    /// running app with `log stream`, neither assumed: `.terminateLater` with
+    /// an async `Task { @MainActor in … await … }` replying once the run
+    /// finished — the reply never came, because AppKit's own wait for it is
+    /// a nested loop on the main thread that a `Task` hop onto the main actor
+    /// never got a turn inside. Answering that by pumping `.default` mode by
+    /// hand instead of returning `.terminateLater` at all — same result,
+    /// because the real obstacle is GCD's main queue being serial: this
+    /// callback is already *running* as one block on it, and nothing else
+    /// scheduled on that same queue starts until this one returns, however
+    /// the waiting is spelled. `ImportModel.copyFinishedSemaphore` exists
+    /// because of exactly this: signalled from a `Task.detached` that never
+    /// needed the main queue to make progress, so waiting on it here does
+    /// not have the problem above.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let model, model.isImportRunning else { return .terminateNow }
-        Task { @MainActor in
-            model.cancelImportRun()
-            await model.waitForImportRunToFinish()
-            NSApp.reply(toApplicationShouldTerminate: true)
+        Self.terminationLogger.notice(
+            "applicationShouldTerminate: model=\(self.model != nil), isImportRunning=\(self.model?.isImportRunning ?? false)"
+        )
+        guard let model, model.isImportRunning, let semaphore = model.importCopyFinishedSemaphore else {
+            return .terminateNow
         }
-        return .terminateLater
+        model.cancelImportRun()
+        Self.terminationLogger.notice("waiting for the import's copy to finish")
+        // A bound in case the semaphore is somehow never signalled — quitting
+        // late is a much smaller problem than never quitting at all.
+        if semaphore.wait(timeout: .now() + 30) == .timedOut {
+            Self.terminationLogger.error("the import's copy did not finish within 30 s, terminating anyway")
+        } else {
+            Self.terminationLogger.notice("the import's copy finished, terminating")
+        }
+        return .terminateNow
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

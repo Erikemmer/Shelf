@@ -1,6 +1,8 @@
 import AppKit
+import Dispatch
 import Observation
 import ShelfCore
+import os
 
 /// The state of the import sheet: what was found, what the plan is, and how far
 /// a run has got.
@@ -270,6 +272,23 @@ final class ImportModel {
 
     // MARK: Running
 
+    /// Signalled the instant the copy itself returns — cancelled, finished or
+    /// failed, on its own background thread, independent of the main actor.
+    /// `nil` whenever nothing is copying.
+    ///
+    /// This exists for `AppDelegate.applicationShouldTerminate(_:)`, and for
+    /// one specific, measured reason: a `Task { @MainActor in … }` scheduled
+    /// from inside that delegate callback never got a turn, in testing
+    /// against the real, running app. AppKit's own `.terminateLater` wait,
+    /// and a hand-rolled `RunLoop.run(mode:before:)` poll tried in its place,
+    /// both block the main thread from *within* a block already running on
+    /// GCD's main queue — and that queue is serial, so a second block
+    /// enqueued on it (which is what a `Task` hop onto the main actor comes
+    /// down to) simply never starts until the first one returns. A plain
+    /// `DispatchSemaphore`, signalled from a `Task.detached` that never
+    /// needed the main queue in the first place, is not caught by that.
+    @ObservationIgnored private(set) var copyFinishedSemaphore: DispatchSemaphore?
+
     /// Copies the files the plan names, verifying each one.
     func run() async {
         guard case .ready = phase, !plan.isEmpty else { return }
@@ -293,18 +312,52 @@ final class ImportModel {
         // `let`, so the runner's `@Sendable` closure captures a value rather
         // than a variable it could race with.
         let known = collectedKnown
+        // `index` itself is a `let` already; named again so the `.detached`
+        // closure below captures it explicitly, crossing the actor boundary.
+        let index = index
 
-        do {
-            // The handle is kept because cancellation does not otherwise reach
-            // a detached task.
+        // The copy itself runs `.detached`, off the main actor, on purpose —
+        // see `copyFinishedSemaphore`'s own comment for the failure this
+        // closes. `withTaskCancellationHandler` is what makes a cancellation
+        // of *this* function (the ambient, main-actor task `runImport()` is
+        // itself running on) reach the detached one, which a plain
+        // `Task.detached` handle would not do on its own.
+        let semaphore = DispatchSemaphore(value: 0)
+        copyFinishedSemaphore = semaphore
+        defer { copyFinishedSemaphore = nil }
+        let lastProgressUpdate = OSAllocatedUnfairLock(initialState: Date.distantPast)
+
+        let copyTask = Task.detached(priority: .userInitiated) {
+            defer { semaphore.signal() }
             // The index is written in batches **while the run goes on**: one
-            // transaction for thousands of books holds a lot of memory, one per
-            // book would be as many fsyncs, and writing it only at the end
-            // meant an import stopped halfway left files on disk that nothing
-            // knew about — so the next run copied every one of them again.
-            let outcome = try await runner.run(
+            // transaction for thousands of books holds a lot of memory, one
+            // per book would be as many fsyncs, and writing it only at the
+            // end meant an import stopped halfway left files on disk that
+            // nothing knew about — so the next run copied every one of them
+            // again.
+            return try await runner.run(
                 options,
                 progress: { progress in
+                    // Throttled to ~30 updates a second, not one `Task {
+                    // @MainActor in … }` per file: a fast synthetic import
+                    // calls this thousands of times a second, and every one
+                    // of those was a block queued ahead of anything else
+                    // asked of the main actor — measured to include
+                    // `AppDelegate`'s own termination handling, which could
+                    // end up waiting behind the entire rest of the run
+                    // before getting a turn (`CHANGELOG.md`, Sprint 13,
+                    // Teil C). The first update is never throttled, so the
+                    // sheet does not sit blank while a small import finishes
+                    // inside one throttle window.
+                    let shouldUpdate = lastProgressUpdate.withLock { last -> Bool in
+                        let now = Date()
+                        guard progress.filesDone == 0 || now.timeIntervalSince(last) > 1.0 / 30 else {
+                            return false
+                        }
+                        last = now
+                        return true
+                    }
+                    guard shouldUpdate else { return }
                     Task { @MainActor [weak self] in
                         guard let self, case .running = self.phase else { return }
                         self.phase = .running(progress)
@@ -316,6 +369,14 @@ final class ImportModel {
                 // it: the runner's closure is synchronous, and a book being
                 // added to is one the planner already named.
                 existingEntry: { known[$0] })
+        }
+
+        do {
+            let outcome = try await withTaskCancellationHandler {
+                try await copyTask.value
+            } onCancel: {
+                copyTask.cancel()
+            }
             imported = outcome.entries
             nextBookNumber = outcome.nextBookNumber
             var report = outcome.report

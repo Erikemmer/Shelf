@@ -23,6 +23,17 @@ earlier run apart from a window Erik has open on purpose, and it is not its
 call to guess. `make lint` checks every script under `Scripts/` for this
 rather than trusting that the next one remembers it (`Scripts/check-shelf-guard.sh`).
 
+**A claim about what a window *shows* is measured the same way a person
+would see it — a real click, posted with `Scripts/click-at.swift` at a
+position read off the accessibility tree, never `AXPress` or a System
+Events verb standing in for one — and whichever picture backs the claim
+says which path was used.** Cost of not saying this sooner: the ⌘Z menu
+item was measured broken three times across two sessions, because reading
+its title through the accessibility tree without a real click first answers
+with whatever AppKit last computed for an item nobody had opened — the
+unnamed default — not what a person clicking Edit actually sees
+(`CHANGELOG.md`, Sprint 12, Nachtrag).
+
 ---
 
 ## 1. What is the truth, and what is only a cache

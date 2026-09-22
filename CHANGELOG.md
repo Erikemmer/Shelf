@@ -3,6 +3,136 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 13, Teil C — the proof, and three more bugs Teil B's own first cut had · 22 September 2026
+
+Teil B's design worked in `ShelfCoreTests` and did not work against the real,
+running app — proof was the whole point of this Teil, and it earned its
+keep. Everything below was found by actually launching `Shelf.app`,
+driving a real import through it, and sending it a real `SIGTERM` mid-copy,
+not by reading the code again.
+
+**A test hook, first, because none of the rest was possible without it.**
+`LibraryModel.load(_:)` now starts a real import on its own, through the
+very same `examine`/`beginImportRun` path the sheet's own buttons call, when
+`SHELF_AUTO_IMPORT_SOURCE` names a folder — the same shape as `SHELF_TIMING`
+and `SMOKE_LIBRARY`. It needed one thing neither of those did: Shelf is
+sandboxed, and a folder handed over only through an environment variable is
+one the sandbox never granted read access to — `Bücher hinzufügen` reported
+"no books in your selection" against a real, 8 000-file folder,
+correctly, because it truly could not read it. The fix is not in the app:
+`open --env SHELF_AUTO_IMPORT_SOURCE=<source> -a Shelf <library> <source>`
+hands the source over through the same Open Documents mechanism the library
+argument already used, which is what grants a sandboxed process access at
+all without an Open panel.
+
+**Bug 1 — a presented sheet keeps `NSApp.terminate(_:)` from ever reaching
+the delegate.** Not delayed: over 30 seconds of `log stream`, `SIGTERM
+received` printed and `applicationShouldTerminate` never did, whether
+`terminate(nil)` was called by a signal handler or by `osascript … quit`.
+Dismissing `isImportSheetPresented` before asking to terminate is what
+lets the delegate be reached at all — cosmetic-looking, and not cosmetic.
+
+**Bug 2 — `.terminateLater` deadlocks the moment it is reached, and so does
+a hand-rolled replacement.** A `Task { @MainActor in … await … }` scheduled
+from inside `applicationShouldTerminate` to reply once the run finished
+never got a turn — nor did the same wait spelled as a manual
+`RunLoop.run(mode: .default, before:)` poll instead of returning
+`.terminateLater` at all. Both fail for the same reason: this delegate
+callback is already running as one block on GCD's main queue, which is
+serial, and nothing else scheduled on it — which is what a `Task` hop onto
+the main actor comes down to — starts before this one returns, however the
+waiting inside it is spelled. `ImportModel.copyFinishedSemaphore`, a plain
+`DispatchSemaphore` signalled from a `Task.detached` that never needed the
+main queue to make progress, is not caught by that — `sem.wait(timeout:)`
+blocks the very thread already blocked, which is exactly what is wanted.
+
+**Bug 3 — the short last batch's own flush was silently losing itself to
+the cancellation that triggered it.** `ImportRunner`'s final
+`try? await saveBatch(unsaved)` runs *because* the surrounding `Task` was
+just cancelled — and `LibraryIndex.save`, through GRDB, checks
+`Task.isCancelled` and refuses to write, under the very `try?` that exists
+for an unrelated reason (a batch write failing must not make the whole run
+look like a failure). Measured against the real library: a cancelled run
+reached that line every time and the batch never landed — files on disk,
+correctly verified, simply never indexed. `Tests/ShelfCoreTests` never
+caught it because its own `saveBatch` in that test is a plain in-memory
+append, not a real `GRDB` write — it does not check cancellation and never
+had anything to refuse. `ImportRunner.swift` now runs that one flush inside
+its own `Task.detached`, which starts uncancelled regardless of what
+cancelled the caller.
+
+**Bug 4 — thousands of tiny `Task { @MainActor in … }` progress updates
+starve the termination request of a turn on the very same queue.** Before
+Bug 3's fix was in place to reveal it cleanly, cancelling a large,
+fast-copying synthetic import (8 000 books) sometimes let the whole run
+finish anyway, uncancelled, minutes' worth of files later — the termination
+request, enqueued after thousands of per-file progress hops, some of which
+cost real SwiftUI layout work each, simply never got its turn until the
+queue emptied on its own. Two changes, together: `ImportModel.run()`'s
+`progress` closure now throttles to ~30 updates a second rather than one
+per file (`OSAllocatedUnfairLock` guarding the last-update timestamp,
+`@Sendable`-safe), and `AppDelegate.requestTermination()` now cancels the
+import **first**, before touching the sheet or calling `terminate` at all —
+stopping the flood at its source, within one file's processing time,
+rather than waiting behind everything already queued.
+
+**The proof itself, against the real app, `gui-source` a synthetic 8 000-book
+library** (`~/Library/Caches/Shelf/interrupted-import-2026-09-22/gui-source`,
+1.0 GB): a real `SIGTERM`, sent while the destination held between 500 and
+7 500 folders (genuinely mid-copy, not simulated), **twelve times in a row.**
+Every one of the twelve: folders on disk and books indexed matched exactly
+(off by at most the one file that was physically mid-copy at the moment of
+cancellation, correctly aborted rather than left half-written), zero doubled
+titles, and the process always terminated — most within a second or two,
+the slowest around fifteen to twenty seconds against the largest in-flight
+backlog. Not one of the twelve left an orphan behind. The one earlier run
+that never terminated at all traced to Bug 4, above, and does not reproduce
+after its fix.
+
+`SIGKILL`, once more for the record, through the same real app and the same
+kind of library rather than the CLI this time: killed with 505 folders on
+disk, **400 indexed, 106 orphaned — bounded, exactly as Teil A measured, and
+every one of the 106 found and named by `shelf-tool orphans`, the command
+line's `Library ▸ Find Orphaned Folders…`.** This path is unchanged by
+design; POSIX does not offer a way to change it.
+
+`Scripts/current-shelf-app.sh`'s own guard flagged the binary used for the
+mid-copy runs as one commit behind HEAD, because `make app` ran before the
+Teil B commit that HEAD then advanced past — the binary's contents were
+correct (it held every Teil B and Teil C fix already made at build time);
+only the stamp was one commit stale. Re-verified after the fact: `make app`
+run again against the final HEAD, `make smoke` green.
+
+**The ⌘Z-menu-title runbook rule, folded in here rather than its own
+commit, per instruction:** `docs/RUNBOOK.md` now says, in one place, that a
+claim about what a window *shows* is measured the way a person would see
+it — a real click — never an Accessibility-tree read, with the picture
+saying which. Sprint 12's own ⌘Z finding (`CHANGELOG.md`, Sprint 12,
+Nachtrag) is the cost of not having said that sooner: three sessions
+across two sprints measured a menu title as broken because a script read it
+before AppKit had ever drawn it, never having been clicked.
+
+**Measured, assumed, unchecked:**
+- **Measured**: the four bugs above, the twelve-run clean-quit proof, the
+  SIGKILL boundary proof — all against the real, running, `-c release`
+  `Shelf.app`, most with `log stream` open on `de.erikemmer.shelf:termination`
+  at the same time.
+- **Assumed**: that a *literal* ⌘Q keystroke and a literal click on
+  `Ablage ▸ Shelf beenden` behave the same as the `SIGTERM`-driven
+  `requestTermination()` path measured above — they share the exact same
+  method from the exact same `NSMenuItem`, retargeted in
+  `applicationDidFinishLaunching`, which is why this is assumed and not
+  unchecked, but no accessibility-permission-gated keystroke was actually
+  posted this session.
+- **Unchecked, and said so rather than silently left off**:
+  **`Dock ▸ Quit` still hangs exactly as before this Teil**, because it sends
+  the terminate Apple Event straight to `NSApp`, bypassing the one
+  `NSMenuItem` this fix retargets — `docs/BACKLOG.md` carries this forward
+  as its own open item. A slower quit — the fifteen-to-twenty-second tail
+  the proof run above measured for the largest in-flight backlog — was
+  never separately judged against what a person waiting for their Mac to
+  quit would call acceptable; only that it always finishes.
+
 ## Sprint 13, Teil B — closing the interrupted-import window for a clean quit and `SIGTERM` · 22 September 2026
 
 Teil A's own finding: `ImportRunner` already writes its short last batch on
