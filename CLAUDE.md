@@ -7,8 +7,9 @@ project-specific part.
 macOS-only eBook manager in the look and feel of **Selector**: a modern-looking
 Calibre. Library, metadata, Calibre import, devices – **no reader, no format
 conversion** in v1.0. Core logic in the Swift package `ShelfCore` (UI-free,
-builds on Linux), UI in `App/Shelf` (SwiftUI + AppKit) on top of the shared
-`SlateKit` package. Concept: `docs/CONCEPT.md`. Architecture:
+builds on Linux), UI in `App/Shelf` (SwiftUI + AppKit) on top of the
+`SlateKit` package — Shelf's own since 22 September 2026, no longer shared
+with Selector. Concept: `docs/CONCEPT.md`. Architecture:
 `docs/ARCHITECTURE.md`.
 
 ## The rules that are not negotiable
@@ -109,41 +110,48 @@ builds on Linux), UI in `App/Shelf` (SwiftUI + AppKit) on top of the shared
 
 ## Working on SlateKit
 
-The package is shared with Selector and has two sessions working on it. Three
-rules, all of them paid for.
+**SlateKit belongs to Shelf alone now.** Erik said so on 22 September 2026:
+Selector pulled its own copy and no longer builds against this package, so
+the section below, which held until that date, is retired — kept here,
+struck through in spirit rather than deleted, because the reasons it
+existed are worth remembering if a package is ever shared again.
 
-- **Never work in `~/Documents/SlateKit`.** That is the Selector session's
-  working copy. Commit `6e4f2ec` was made there and swept up a change of
-  Selector's that happened to be lying uncommitted in the same tree
-  (`SlateShortcuts.swift`, +8 lines: the shortcut sheet's VoiceOver column
-  order). `git add -A` cannot tell whose work it is looking at.
+- ~~**Never work in `~/Documents/SlateKit`.**~~ That was the Selector
+  session's working copy, and commit `6e4f2ec` made there once swept up a
+  change of Selector's lying uncommitted in the same tree
+  (`SlateShortcuts.swift`, +8 lines) — `git add -A` cannot tell whose work
+  it is looking at. Work in `~/Documents/SlateKit` directly now; the
+  worktree at `~/Documents/SlateKit-shelf` (branch `shelf/work`) is fully
+  merged into `main` and no longer needed, kept only until Erik confirms it
+  can go. Still good practice regardless of who else is or is not sharing
+  the tree: `git status --short` and `git diff --stat` before a commit,
+  and stage **files by name** rather than `git add -A`.
 
-  This session works in its own worktree:
+- ~~**An existing component keeps its previous look in the default.**~~
+  That existed because two apps were pinned to different versions on
+  purpose, and raising a pin for one fix must not redraw a second thing.
+  With one app left, breaking a component's look or its API outright is
+  Erik's own words — "brich, was du willst" — no longer gated behind an
+  opt-in default. Still worth a `CHANGELOG.md` entry under **Breaking**
+  when it happens, so the reason survives the commit that made it. A tag
+  is still never moved — 0.3.0 stays where it is, a correction is 0.3.1.
 
-      git -C ~/Documents/SlateKit worktree add ~/Documents/SlateKit-shelf -b shelf/work
+- ~~**The package is bilingual, whatever this app is.**~~ That was for
+  Selector's German while Shelf was still English. Shelf carries its own
+  German now (`App/Shelf/Resources/Localizable.xcstrings`), so whether
+  SlateKit's own strings still need both languages is Shelf's call alone —
+  not decided here, since nothing has asked to drop either yet.
 
-  If that fails because of somebody else's uncommitted changes, touch nothing
-  there and `git clone https://github.com/Erikemmer/SlateKit ~/Documents/SlateKit-shelf`
-  instead. Before every SlateKit commit: `git status --short` and
-  `git diff --stat`, and stage **files by name** — never `git add -A`.
+**Erik's own suggestion, not yet done:** fold SlateKit into this repo as a
+local target (`ShelfUI`), so Shelf needs no second repo, then archive
+`Erikemmer/SlateKit` on GitHub. A real restructuring — imports everywhere
+SlateKit is used, `Package.swift`, `project.yml`, a decision on how (or
+whether) to carry the package's own history across — worth its own plan
+when Erik asks for it, not a side effect of an unrelated change.
 
-- **An existing component keeps its previous look in the default.** What is new
-  arrives as an option the host asks for (`SlateChip(style:)`,
-  `SlateStarRating(label:)`). The two apps are pinned to different versions on
-  purpose; raising a pin for one fix must not redraw a second thing. What cannot
-  be made compatible goes in SlateKit's `CHANGELOG.md` under **Breaking**, with
-  the reason. A tag is never moved — 0.3.0 stays where it is and the correction
-  is 0.3.1.
-
-- **The package is bilingual, whatever this app is.** Selector ships German;
-  Shelf is English until Sprint 7. Every string SlateKit draws *itself* has an
-  English and a German entry in `Localizable.xcstrings`, and a test fails if one
-  is missing. Strings Shelf hands in as parameters ("Mixed", "Add series…") are
-  Shelf's own and are translated when Shelf is.
-
-The route for a change: work in the worktree, `make test && make lint &&
-make contrast`, commit, tag, push the branch to `main` and push the tag, then
-raise `exactVersion` in `project.yml` here and run the four checks.
+The route for a change, tag pinning included: `make test && make lint &&
+make contrast`, commit, tag, push `main` and the tag, then raise
+`exactVersion` in `project.yml` here and run the four checks.
 
 
 ## Environment notes
