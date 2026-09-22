@@ -135,6 +135,23 @@ let usage = """
                                     edited in Shelf so its publisher,
                                     language, date and description differ
                                     from its own file. Synthetic only
+      epub-cover-write-fixture <library folder> <old.jpg> <new.jpg> <added.jpg>
+                                    a small library for
+                                    Scripts/write-into-book-cover-shot.sh
+                                    (Sprint 11): "The Glass Almanac" has its
+                                    own cover.<ext> changed to <new.jpg>
+                                    since import (was <old.jpg>) plus a
+                                    publisher edit, in the same sheet;
+                                    "Cinders and Salt" has no cover in its
+                                    EPUB at all but Shelf offers <added.jpg>;
+                                    "The Quiet Harbour" is untouched since
+                                    import, so its cover already matches.
+                                    The three cover files are read from
+                                    disk, never generated here — real,
+                                    decodable images the caller supplies
+                                    (Scripts/write-into-book-cover-shot.sh
+                                    makes them from Shelf's own app icon
+                                    with sips). Synthetic library only
       online-read <file>…           read stored answers from Open Library or
                                     Google Books the way the app does, and print
                                     the candidates with their match scores.
@@ -260,6 +277,7 @@ case "epub-cover-patch": try Commands.epubCoverPatch(Array(arguments.dropFirst()
 case "epub-cover-real-size": try Commands.epubCoverRealSize(Array(arguments.dropFirst()))
 case "epub-file-replace-proof": try Commands.epubFileReplaceProof(Array(arguments.dropFirst()))
 case "epub-write-fixture": try await Commands.epubWriteFixture(Array(arguments.dropFirst()))
+case "epub-cover-write-fixture": try await Commands.epubCoverWriteFixture(Array(arguments.dropFirst()))
 case "online-read": try Commands.onlineRead(Array(arguments.dropFirst()))
 case "devices": Commands.devices()
 case "device-contents": try await Commands.deviceContents(Array(arguments.dropFirst()))
@@ -2865,6 +2883,81 @@ enum Commands {
         print("  edited book, publisher now differs: “\(updatedHarbour.book.title)”")
         print("  DRM book, refused before anything is written: “A Protected Book”")
         print("  no-title book, title cannot be written: “\(noTitleEntry.book.title)”")
+    }
+
+    /// A small library for Sprint 11's own cover screenshots
+    /// (`Scripts/write-into-book-cover-shot.sh`) — the three cover states
+    /// "Write into the Book File" has to show: a cover Shelf would replace,
+    /// a book with none of its own that Shelf could add one to, and a
+    /// cover that already matches.
+    static func epubCoverWriteFixture(_ arguments: [String]) async throws {
+        guard arguments.count >= 4 else {
+            print(
+                "usage: shelf-tool epub-cover-write-fixture <library folder> <old.jpg> <new.jpg> <added.jpg>")
+            exit(2)
+        }
+        let libraryURL = URL(fileURLWithPath: (arguments[0] as NSString).expandingTildeInPath, isDirectory: true)
+        let coverOld = try Data(contentsOf: URL(fileURLWithPath: (arguments[1] as NSString).expandingTildeInPath))
+        let coverNew = try Data(contentsOf: URL(fileURLWithPath: (arguments[2] as NSString).expandingTildeInPath))
+        let coverAdded = try Data(
+            contentsOf: URL(fileURLWithPath: (arguments[3] as NSString).expandingTildeInPath))
+
+        let source = libraryURL.deletingLastPathComponent()
+            .appendingPathComponent("epub-cover-write-fixture-source", isDirectory: true)
+        try? FileManager.default.removeItem(at: source)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+
+        let almanac = Book(title: "The Glass Almanac", authors: ["Rosa Feldmann"])
+        try SyntheticEPUB(book: almanac, cover: coverOld).data()
+            .write(to: source.appendingPathComponent("The Glass Almanac.epub"))
+
+        // No cover at all in this one's own file.
+        let cinders = Book(title: "Cinders and Salt", authors: ["Tomas Okafor"])
+        try SyntheticEPUB(book: cinders).data()
+            .write(to: source.appendingPathComponent("Cinders and Salt.epub"))
+
+        let harbour = Book(title: "The Quiet Harbour", authors: ["Ingrid Solberg"])
+        try SyntheticEPUB(book: harbour, cover: coverOld).data()
+            .write(to: source.appendingPathComponent("The Quiet Harbour.epub"))
+
+        try await Self.importFolder([source.path, libraryURL.path])
+        try? FileManager.default.removeItem(at: source)
+
+        let (library, index) = try Self.openLibrary(libraryURL.path)
+
+        // "The Glass Almanac": a publisher edit, and its own cover.<ext> is
+        // swapped for a different image after import — exactly what
+        // `Replace Cover…` (ADR 0020) would leave behind, never written
+        // into the book's own file until this command exists to ask for
+        // it. The sheet's cover row and its publisher row show old → new
+        // side by side, in the one sheet.
+        let almanacEntry = try await Self.findBook("The Glass Almanac", in: index)
+        let almanacChange = MetadataChange.make(from: almanacEntry.book) {
+            $0.publisher = "Erik & Erik Press"
+        }
+        _ = try await MetadataEditor(library: library).apply(almanacChange, to: almanacEntry, in: index)
+        let almanacFolder = library.root.appendingPathComponent(almanacEntry.folder, isDirectory: true)
+        for existing in CoverFile.urls(in: almanacFolder) {
+            try? FileManager.default.removeItem(at: existing)
+        }
+        try coverNew.write(to: almanacFolder.appendingPathComponent(CoverFile.name(for: coverNew)))
+
+        // "Cinders and Salt": no cover in the book, but Shelf has one to
+        // offer — added beside it exactly as `Download Cover…` would leave
+        // one, never written into the book itself (Sprint 9's own rule).
+        let cindersEntry = try await Self.findBook("Cinders and Salt", in: index)
+        let cindersFolder = library.root.appendingPathComponent(cindersEntry.folder, isDirectory: true)
+        try coverAdded.write(to: cindersFolder.appendingPathComponent(CoverFile.name(for: coverAdded)))
+
+        // "The Quiet Harbour": untouched since import — its own cover.<ext>
+        // is exactly what import extracted from the book, so the sheet's
+        // cover row reads "already the same", and nothing else about this
+        // book changed either.
+
+        print("epub-cover-write-fixture: \(libraryURL.path)")
+        print("  cover changed, alongside a field: “The Glass Almanac”")
+        print("  no cover in the book, Shelf has one to offer: “Cinders and Salt”")
+        print("  cover already the same, nothing else changed: “The Quiet Harbour”")
     }
 
     /// A minimal, valid EPUB with a `dc:creator` but no `dc:title` at all —

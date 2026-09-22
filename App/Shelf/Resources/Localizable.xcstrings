@@ -5938,6 +5938,23 @@
         }
       }
     },
+    "No cover in the book": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Cover im Buch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No cover in the book"
+          }
+        }
+      }
+    },
     "No device is connected.": {
       "extractionState": "manual",
       "localizations": {
@@ -10803,6 +10820,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "two books want this same folder"
+          }
+        }
+      }
+    },
+    "unreadable image": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unlesbares Bild"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unreadable image"
           }
         }
       }

@@ -1,6 +1,9 @@
 # ADR 0021 – Metadata and a cover may be written into an EPUB, on request
 
-Date: 2026-09-21 · Status: accepted, not yet implemented in the window
+Date: 2026-09-21 · Status: accepted and implemented — metadata in the
+window since Sprint 10, Schritt E2 (21 September 2026), the cover since
+Sprint 11, Schritt 3 (22 September 2026): both now live behind one command,
+"Write into the Book File", one confirmation, one plan
 
 ## Context
 
@@ -66,6 +69,14 @@ archives this project generates itself, never against a book in a library.
 No command exists yet. No confirmation, no swap, no Trash disposal of a real
 book file happens until a later sprint builds the window part and Erik has
 seen the bytes it produces.
+
+**That command exists now.** "Write into the Book File" shipped for
+metadata in Sprint 10, Schritt E2, and for the cover in Sprint 11, Schritt
+3 — the confirmation naming every file and every field old → new, the new
+file written and read back before anything is displaced, the original to
+the Trash, no ⌘Z. Everything this paragraph describes as not yet built has
+been built, against real EPUBs (`Scripts/real-epub-proof.sh`) as well as
+synthetic ones.
 
 ## What is explicitly not decided here
 

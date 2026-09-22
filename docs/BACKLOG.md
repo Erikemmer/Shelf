@@ -1065,13 +1065,13 @@ window yet — see Schritt 2 below.
 
 ### What Schritt 1 found on the way
 
-- [ ] **All six real Gutenberg books already have a cover.** The "no
-      cover at all" branch of `EPUBCoverPatch` — a new manifest item, a
-      fresh cover declaration — is proven only by the ten synthetic
-      tests, never against a real book; nothing in the six offered the
-      chance. Worth remembering if a seventh, cover-less book is ever
-      added to `Scripts/real-epubs.sh`: it would be the first real proof
-      of that branch.
+- [x] **All six real Gutenberg books already have a cover.** Closed in
+      Schritt 2: `Scripts/strip-epub-cover.py` removes a real book's
+      cover, its manifest `<item>` and every cover declaration from a
+      copy, so Fall b now runs against six real, cover-stripped books.
+      No genuinely cover-less real EPUB was found to add to
+      `Scripts/real-epubs.sh` instead — checked against a Gutenberg
+      "no images" edition, which still carries a generated cover.
 - [ ] **The "both forms" rule for a new cover declaration (`<spine
       toc="…">` naming an NCX, alongside `version="3.…"`) is grounded in
       exactly one real book**, `pride-and-prejudice-epub3-images.epub` —
@@ -1088,3 +1088,60 @@ window yet — see Schritt 2 below.
       entirely) falls back to the EPUB 2 form rather than refusing, which
       is the same "harmless over-cautious default" choice `OPFDocument`
       already makes elsewhere in this file, not a gap found and left.
+
+## Sprint 11, Schritt 2 – three gaps in Schritt 1's own proof, closed · done
+
+- [x] Fall b against six real, cover-stripped books
+      (`Scripts/strip-epub-cover.py`, `Scripts/real-epub-proof.sh`
+      section 10) — see the closed item above
+- [x] A real cover's own size measured against all six books
+      (`shelf-tool epub-cover-real-size`, section 11), beside Schritt 1's
+      own numbers, which stay in `CHANGELOG.md` marked as an artifact of
+      the tiny synthetic test cover
+- [x] `EPUBCoverPatch.Result.changed` — a cover bit-identical to what the
+      manifest already holds touches nothing; one new core test, and the
+      pride-and-prejudice self-application in section 11 is the same
+      claim against a real book
+
+### What Schritt 2 found on the way
+
+- [x] **`shelf-tool epub-cover-patch`'s own case a/b label used
+      `EPUBMetadata.read(…).cover != nil`**, which has a "no manifest
+      cover → first image in the archive" fallback `EPUBCoverPatch`'s own
+      manifest-only decision does not share. A stripped book with some
+      other image still inside it (an SVG-wrapped cover page, an
+      illustration) read back as "already has a cover" under the old
+      label while `EPUBCoverPatch` correctly took the case b branch —
+      found only because Fall b finally ran against real books. Fixed by
+      reading `EPUBCoverPatch.Result.replacedExisting` itself.
+
+## Sprint 11, Schritt 3 – the cover in the "Write into the Book File" sheet · done
+
+- [x] `EPUBWrite.CoverPlan` (`beforeBytes`, `afterBytes`, `changed`) on
+      `BookPlan`; `plan(for:library:)` patches the cover into the same
+      archive the metadata patch already produced, so one book gets one
+      consistent `newContent`
+- [x] `hasChange` counts a changed cover the same as a changed field —
+      "Nothing to write" and the disabled button both already follow
+      from it, no window code needed beyond the row itself
+- [x] The sheet's cover row: `CoverImage.describe(_:)` (app layer,
+      `CGImageSource`, never in the core) turns bytes into "JPG,
+      W × H"; "No cover in the book" on the left when the book has none;
+      no row at all when Shelf has nothing of its own to offer
+- [x] Screenshots in both languages, `docs/screenshots/sprint-11/`,
+      against real, decodable JPEGs made from Shelf's own app icon —
+      README has the judgement under each
+
+### What Schritt 3 found on the way
+
+- [ ] **The shared "find the newest built `Shelf.app`" snippet** (in
+      `write-into-book-shot.sh` and copied into
+      `write-into-book-cover-shot.sh`) compares the app bundle
+      *directory's* own mtime, which an incremental Xcode build does not
+      always bump when it only rewrites files nested inside an existing
+      bundle. A build from five days earlier was picked over one from a
+      minute ago, and the symptom looked exactly like a missing German
+      translation. `SHOT_APP=<path>` sidesteps it; the snippet itself is
+      unchanged — worth a real fix (stat the binary inside `Contents/
+      MacOS`, not the bundle directory) before it costs someone else the
+      same half hour.

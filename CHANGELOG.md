@@ -3,6 +3,65 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 11, Schritt 3 — the cover in "Write into the Book File" · 22 September 2026
+
+Schritt 1 and 2 below built and proved `EPUBCoverPatch`; this is the window
+half Schritt 1's own entry said was still open — the cover as one more row
+in the confirmation sheet ADR 0021 and Sprint 10 already built for text
+fields, never a second command or a second sheet.
+
+`EPUBWrite.BookPlan` gains `cover: CoverPlan` (`beforeBytes`, `afterBytes`,
+`changed`). `plan(for:library:)` reads the book's own cover
+(`EPUBMetadata`) and the `cover.<ext>` file beside it (`CoverFile.url`,
+exactly what `Download Cover…` and `Replace Cover…` already leave there,
+per ADR 0020) and, when they differ, patches the cover into the very same
+archive the metadata patch already produced — one book, one consistent
+`newContent`, never two patches that could each discard the other's work.
+`hasChange` now counts a changed cover the same as a changed field, so
+"Nothing to write" and the disabled write button both already followed
+from it with no further window code. No cover row at all when Shelf has
+nothing of its own to offer for a book (`afterBytes == nil`) — a judgement
+call, not asked for explicitly: a book Shelf never generated or received a
+cover for is not a field this sheet tracks the way title or author always
+are.
+
+The sheet describes a cover in words, never a picture: `CoverImage
+.describe(_:)` (app layer, `CGImageSource`, never in the core — the core
+still never decodes a pixel) turns bytes into `"JPG, 600 × 900"`; the
+book's own current cover shows `"No cover in the book"` when it has none.
+A cover already the same as what Shelf would write is tagged "already the
+same", identically to an unchanged text field. Two new catalogue entries
+("No cover in the book", "unreadable image"), both languages; "Cover"
+itself already existed in the catalogue from elsewhere and is reused as-is.
+
+3 new core tests (`EPUBWriteTests`): a cover that changes and is actually
+written (read back from the rewritten file afterward), a cover already the
+same (no change, `hasChange` false), and no cover file beside the book at
+all (nothing to offer, no change). 790 core tests total, `make lint`,
+`make app` and `make smoke` clean.
+
+Screenshots in both languages, `docs/screenshots/sprint-11/`: a cover
+Shelf would replace beside a field that also changes, a book with no cover
+of its own that Shelf can add one to, a cover already the same, and the
+state afterward — checked against the book's own file with `unzip` and
+`cmp`, not against the picture. The three cover images are real, decodable
+JPEGs made from Shelf's own app icon with `sips` (`Scripts/write-into-book-
+cover-shot.sh`), never a borrowed image, so the sheet's own size
+descriptions ("JPG, 300 × 450") are real numbers a real `CGImageSource`
+decoded, not a made-up string. `docs/screenshots/sprint-11/README.md` has
+the judgement under each picture, including two things found taking them
+rather than before: a stale, five-day-old app build silently outranking a
+freshly built one in the shared "newest `Shelf.app`" script snippet (looked
+exactly like a missing German translation; `docs/BACKLOG.md` has it), and
+the sheet's own "planning" state sometimes outlasting a fixed sleep once a
+real cover's tens of KB are actually being hashed and re-archived.
+
+`docs/adr/0021-…`'s status line now says what is actually built — metadata
+since Sprint 10, and the cover since this Schritt — rather than "not yet
+implemented in the window".
+
+One commit.
+
 ## Sprint 11, Schritt 2 — three gaps in Schritt 1's own proof, closed · 22 September 2026
 
 Schritt 1 below shipped `EPUBCoverPatch` proven against six real Gutenberg

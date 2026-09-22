@@ -41,6 +41,35 @@ public enum EPUBWrite {
         }
     }
 
+    /// What Shelf would do to a book's cover — beside `FieldChange` rather
+    /// than one more case of it, because a cover is not text `EPUBOPFPatch`
+    /// places into `<metadata>`; it is a whole other file, patched by
+    /// `EPUBCoverPatch`, and its "before" and "after" are image bytes a
+    /// caller must describe in words, not values a sheet can print as-is.
+    public struct CoverPlan: Equatable, Sendable {
+        /// The book's own current cover image, read from its file — `nil`
+        /// when the EPUB has none.
+        public var beforeBytes: Data?
+        /// What Shelf would write: the `cover.<ext>` file beside the book —
+        /// `nil` when Shelf has no cover of its own to offer for this book,
+        /// in which case there is nothing to compare or write and the sheet
+        /// shows no cover row at all, the same way a book with no EPUB
+        /// format is never shown a "format" row.
+        public var afterBytes: Data?
+        /// `true` only when `afterBytes` exists and differs, byte for byte,
+        /// from what the book's file already holds —
+        /// `EPUBCoverPatch.Result.changed`, read back rather than
+        /// recomputed, so the sheet's "already the same" tag can never
+        /// disagree with what `run` actually decides to write.
+        public var changed: Bool
+
+        public init(beforeBytes: Data?, afterBytes: Data?, changed: Bool) {
+            self.beforeBytes = beforeBytes
+            self.afterBytes = afterBytes
+            self.changed = changed
+        }
+    }
+
     /// What replacing one book's EPUB would do — computed once, from the
     /// file as it stands right now, and handed unchanged to `run`.
     public struct BookPlan: Identifiable, Equatable, Sendable {
@@ -52,6 +81,7 @@ public enum EPUBWrite {
         /// Fields `EPUBOPFPatch` could not place, by name — `["title"]`
         /// when the book had none and none is ever invented, and so on.
         public var unwritten: [String]
+        public var cover: CoverPlan
         /// The finished bytes `run` writes if this plan is confirmed —
         /// computed here so what was shown and what gets written can never
         /// drift apart.
@@ -59,13 +89,16 @@ public enum EPUBWrite {
 
         /// Whether writing this plan would actually change anything in the
         /// file. `false` when every field is either already the same as
-        /// Shelf's own value or one `EPUBOPFPatch` cannot place — the sheet's
-        /// own "already the same" / "cannot be written" tags, read back. A
-        /// book like this offered the command anyway, before this existed:
-        /// its file still went to the Trash and got rewritten, for no
+        /// Shelf's own value or one `EPUBOPFPatch` cannot place, and the
+        /// cover is either the same or has none to offer — the sheet's own
+        /// "already the same" / "cannot be written" tags, read back. A book
+        /// like this offered the command anyway, before this existed: its
+        /// file still went to the Trash and got rewritten, for no
         /// difference at all — exactly the accidental write ADR 0021 exists
         /// to prevent. `run` never touches a plan where this is `false`.
-        public var hasChange: Bool { changes.contains { $0.willBeWritten && $0.changed } }
+        public var hasChange: Bool {
+            changes.contains { $0.willBeWritten && $0.changed } || cover.changed
+        }
     }
 
     /// Why a book has no plan at all — decided before a sheet is ever shown
@@ -124,20 +157,49 @@ public enum EPUBWrite {
             // Shelf would write, nothing here is ever guessed — guessing
             // belongs only to import, where a guessed title is better than
             // none at all.
-            let before = EPUBMetadata.read(archive, fallbackTitle: "").book
+            let beforeRead = EPUBMetadata.read(archive, fallbackTitle: "")
+            let before = beforeRead.book
             let after = entry.book
 
             let fields = EPUBOPFPatch.Fields(
                 title: after.title, authors: after.authors.isEmpty ? nil : after.authors,
                 language: after.language, publisher: after.publisher, published: after.published,
                 description: after.description)
-            let patched = try EPUBOPFPatch.entries(patching: fields, in: archive, now: Date())
-            let newContent = try EPUBArchiveWriter.archive(patched.entries)
+            let opfPatched = try EPUBOPFPatch.entries(patching: fields, in: archive, now: Date())
+
+            // The cover Shelf would offer: `cover.<ext>` beside the book,
+            // the same file `CoverFile` already treats as this book's
+            // cover everywhere else in the app. `nil` when there is none —
+            // nothing to compare, nothing to write, no cover row at all
+            // (Sprint 11, Schritt 3).
+            let afterCoverBytes = CoverFile.url(in: folder).flatMap { try? Data(contentsOf: $0) }
+
+            var finalEntries = opfPatched.entries
+            var coverChanged = false
+            if let afterCoverBytes {
+                // Read from the metadata-patched archive, not the original:
+                // `EPUBOPFPatch` only ever touches `<metadata>`, never
+                // `<manifest>`, so this sees the same cover declarations the
+                // original did — but building on `finalEntries` means a
+                // cover change lands in the one archive the field changes
+                // already did, so `newContent` below is a single consistent
+                // result rather than two patches that would each discard
+                // the other's work.
+                let intermediate = try ZipReader(data: try EPUBArchiveWriter.archive(finalEntries))
+                let coverResult = try EPUBCoverPatch.entries(patchingCover: afterCoverBytes, in: intermediate)
+                if coverResult.changed {
+                    finalEntries = coverResult.entries
+                    coverChanged = true
+                }
+            }
+            let newContent = try EPUBArchiveWriter.archive(finalEntries)
 
             let plan = BookPlan(
                 entryID: entry.book.id, title: after.title, fileName: epub.fileName,
-                changes: Self.changes(before: before, after: after, unwritten: patched.unwritten),
-                unwritten: patched.unwritten, newContent: newContent)
+                changes: Self.changes(before: before, after: after, unwritten: opfPatched.unwritten),
+                unwritten: opfPatched.unwritten,
+                cover: CoverPlan(beforeBytes: beforeRead.cover, afterBytes: afterCoverBytes, changed: coverChanged),
+                newContent: newContent)
             return .success(plan)
         } catch EPUBOPFPatch.Failure.authorCountMismatch(let existing, let new) {
             return .failure(.authorCountMismatch(existing: existing, new: new))

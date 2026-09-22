@@ -288,6 +288,104 @@ struct EPUBWriteTests {
         #expect(!EPUBWrite.isEligible(none))
     }
 
+    // MARK: The cover, in the plan (Sprint 11, Schritt 3)
+
+    @Test("a cover on disk that differs from the book's own is planned, written, and shows as a change")
+    func planWritesADifferentCover() async throws {
+        let folder = try TemporaryFolder()
+        let libraryRoot = try folder.folder("library")
+        _ = try folder.write(
+            "library/Author/Book (1)/book.epub",
+            data: Self.bookWithCover(title: "A Book", author: "An Author", coverBytes: Self.jpegA))
+        _ = try folder.write("library/Author/Book (1)/cover.jpg", data: Self.jpegB)
+
+        let library = Library(root: libraryRoot)
+        let bookID = UUID()
+        let format = BookFormat(
+            bookID: bookID, format: .epub, fileName: "book.epub", byteSize: 1, sha256: "old", modifiedAt: Date())
+        let entry = LibraryEntry(
+            book: Book(id: bookID, title: "A Book", authors: ["An Author"]), number: 1,
+            folder: "Author/Book (1)", formats: [format])
+
+        guard case .success(let plan) = EPUBWrite.plan(for: entry, library: library) else {
+            Issue.record("expected a plan")
+            return
+        }
+        #expect(plan.cover.beforeBytes == Self.jpegA)
+        #expect(plan.cover.afterBytes == Self.jpegB)
+        #expect(plan.cover.changed)
+        // No field changed — title and author already match — so the cover
+        // alone is what makes this plan worth confirming.
+        #expect(plan.changes.allSatisfy { !$0.changed })
+        #expect(plan.hasChange)
+
+        let bin = try Bin(in: folder.url)
+        let index = try LibraryIndex(inMemory: "epub-write-cover-test")
+        try await index.save(entry)
+        let report = await EPUBWrite.run(
+            [plan], entries: [bookID: entry], library: library, index: index, disposal: bin.disposal)
+        #expect(report.succeeded == 1)
+
+        let written = try Data(contentsOf: libraryRoot.appendingPathComponent("Author/Book (1)/book.epub"))
+        let read = EPUBMetadata.read(try ZipReader(data: written), fallbackTitle: "ignored")
+        #expect(read.cover == Self.jpegB)
+    }
+
+    @Test("a cover on disk identical to the book's own is not a change")
+    func identicalCoverOnDiskIsNoChange() throws {
+        let folder = try TemporaryFolder()
+        let libraryRoot = try folder.folder("library")
+        _ = try folder.write(
+            "library/Author/Book (1)/book.epub",
+            data: Self.bookWithCover(title: "A Book", author: "An Author", coverBytes: Self.jpegA))
+        _ = try folder.write("library/Author/Book (1)/cover.jpg", data: Self.jpegA)
+
+        let library = Library(root: libraryRoot)
+        let bookID = UUID()
+        let format = BookFormat(
+            bookID: bookID, format: .epub, fileName: "book.epub", byteSize: 1, sha256: "old", modifiedAt: Date())
+        let entry = LibraryEntry(
+            book: Book(id: bookID, title: "A Book", authors: ["An Author"]), number: 1,
+            folder: "Author/Book (1)", formats: [format])
+
+        guard case .success(let plan) = EPUBWrite.plan(for: entry, library: library) else {
+            Issue.record("expected a plan")
+            return
+        }
+        #expect(plan.cover.beforeBytes == Self.jpegA)
+        #expect(plan.cover.afterBytes == Self.jpegA)
+        #expect(!plan.cover.changed)
+        #expect(!plan.hasChange)
+    }
+
+    @Test("no cover file beside the book means nothing to offer, and no change from the cover")
+    func noCoverFileBesideTheBookIsNothingToOffer() throws {
+        let folder = try TemporaryFolder()
+        let libraryRoot = try folder.folder("library")
+        _ = try folder.write(
+            "library/Author/Book (1)/book.epub",
+            data: Self.bookWithCover(title: "A Book", author: "An Author", coverBytes: Self.jpegA))
+        // No cover.jpg written beside the book — Shelf has nothing of its
+        // own to offer, whatever the book's own file already carries.
+
+        let library = Library(root: libraryRoot)
+        let bookID = UUID()
+        let format = BookFormat(
+            bookID: bookID, format: .epub, fileName: "book.epub", byteSize: 1, sha256: "old", modifiedAt: Date())
+        let entry = LibraryEntry(
+            book: Book(id: bookID, title: "A Book", authors: ["An Author"]), number: 1,
+            folder: "Author/Book (1)", formats: [format])
+
+        guard case .success(let plan) = EPUBWrite.plan(for: entry, library: library) else {
+            Issue.record("expected a plan")
+            return
+        }
+        #expect(plan.cover.beforeBytes == Self.jpegA)
+        #expect(plan.cover.afterBytes == nil)
+        #expect(!plan.cover.changed)
+        #expect(!plan.hasChange)
+    }
+
     // MARK: Running the plan
 
     @Test("several books are written one at a time, and the index follows")
@@ -453,6 +551,54 @@ struct EPUBWriteTests {
         if drm {
             entries.append(.raw(path: "META-INF/encryption.xml", text: "<encryption/>"))
         }
+        return (try? EPUBArchiveWriter.archive(entries)) ?? Data()
+    }
+
+    /// Two distinct, minimal JPEGs — the same magic-number-plus-padding
+    /// shape `EPUBCoverPatchTests` uses, so `CoverFile.fileExtension` reads
+    /// both as JPEG and no media-type correction is ever triggered by
+    /// these tests by accident.
+    static let jpegA = Data([0xFF, 0xD8, 0xFF, 0xE0] + Array(repeating: UInt8(0xA0), count: 16))
+    static let jpegB = Data([0xFF, 0xD8, 0xFF, 0xE1] + Array(repeating: UInt8(0xB0), count: 24))
+
+    /// A minimal, valid EPUB with a manifest cover — the same declaration
+    /// shape `EPUBCoverPatch`'s own case a expects (an EPUB 2 `<meta
+    /// name="cover">` alongside the `<item>` it names) — for Sprint 11,
+    /// Schritt 3's cover-in-the-plan tests.
+    static func bookWithCover(title: String, author: String, coverBytes: Data) -> Data {
+        let opf = """
+            <?xml version='1.0' encoding='utf-8'?>
+            <package xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf" \
+            version="2.0" unique-identifier="id">
+              <metadata>
+                <dc:identifier id="id">urn:uuid:\(UUID().uuidString)</dc:identifier>
+                <dc:title>\(title)</dc:title>
+                <dc:creator opf:role="aut">\(author)</dc:creator>
+                <meta name="cover" content="cover-image"/>
+              </metadata>
+              <manifest>
+                <item id="text" href="text.xhtml" media-type="application/xhtml+xml"/>
+                <item id="cover-image" href="cover.jpg" media-type="image/jpeg"/>
+              </manifest>
+              <spine><itemref idref="text"/></spine>
+            </package>
+            """
+        let entries: [ZipArchiveWriter.Entry] = [
+            .raw(path: "mimetype", text: "application/epub+zip"),
+            .raw(
+                path: "META-INF/container.xml",
+                text: """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                      <rootfiles>
+                        <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+                      </rootfiles>
+                    </container>
+                    """),
+            .raw(path: "OEBPS/content.opf", text: opf),
+            .raw(path: "OEBPS/text.xhtml", text: "<html><body><p>\(title)</p></body></html>"),
+            .raw(path: "OEBPS/cover.jpg", data: coverBytes),
+        ]
         return (try? EPUBArchiveWriter.archive(entries)) ?? Data()
     }
 

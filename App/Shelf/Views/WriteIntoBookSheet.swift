@@ -196,8 +196,67 @@ struct WriteIntoBookSheet: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             ForEach(plan.changes, id: \.field) { fieldRow($0) }
+            coverRow(plan.cover)
         }
         .textSelection(.enabled)
+    }
+
+    /// The cover, in the same "label, then old → new" shape every field row
+    /// has — described in words rather than shown as a picture, since a
+    /// sheet comparing two images without showing either one is what
+    /// `docs/adr/0021-…` asks for. No row at all when Shelf has no cover of
+    /// its own to offer (`plan.cover.afterBytes == nil`): there is nothing
+    /// to compare and nothing that could be written, the same way a field
+    /// this book's format cannot hold is simply not on the list.
+    @ViewBuilder
+    private func coverRow(_ cover: EPUBWrite.CoverPlan) -> some View {
+        if let afterBytes = cover.afterBytes {
+            HStack(alignment: .top, spacing: 6) {
+                Text(Loc.string("Cover"))
+                    .font(.caption)
+                    .foregroundStyle(Slate.textSecondary)
+                    .frame(width: 78, alignment: .leading)
+                Self.coverValueText(before: cover.beforeBytes, after: afterBytes, changed: cover.changed)
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                if !cover.changed {
+                    Text(Loc.string("already the same"))
+                        .font(.caption2)
+                        .foregroundStyle(Slate.textSecondary)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Self.coverAccessibilityLabel(cover))
+        }
+    }
+
+    /// The cover's own "old value → new value" text: a description of what
+    /// is already in the book (`"Kein Cover im Buch"` when it has none) and,
+    /// when it would change, an arrow to a description of what would be
+    /// written — the same shape `valueText(for:)` gives a text field, with
+    /// image bytes described in words (`CoverImage.describe`) rather than
+    /// shown, since the core never decodes a pixel and this sheet does not
+    /// either.
+    private static func coverValueText(before: Data?, after: Data, changed: Bool) -> Text {
+        let afterText = CoverImage.describe(after)
+        guard changed else {
+            return Text(afterText).foregroundStyle(Slate.textSecondary)
+        }
+        let beforeText = before.map(CoverImage.describe) ?? Loc.string("No cover in the book")
+        return Text(beforeText).foregroundStyle(Slate.textSecondary)
+            + Text(Self.arrowToNewValue).foregroundStyle(Slate.textSecondary)
+            + Text(afterText).foregroundStyle(Slate.textPrimary)
+    }
+
+    private static func coverAccessibilityLabel(_ cover: EPUBWrite.CoverPlan) -> String {
+        let field = Loc.string("Cover")
+        guard let afterBytes = cover.afterBytes else { return "" }
+        if !cover.changed {
+            return Loc.string("%@ is already the same", field)
+        }
+        let before = cover.beforeBytes.map(CoverImage.describe) ?? Loc.string("No cover in the book")
+        return Loc.string("%1$@ changes from %2$@ to %3$@", field, before, CoverImage.describe(afterBytes))
     }
 
     private func fieldRow(_ change: EPUBWrite.FieldChange) -> some View {

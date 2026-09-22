@@ -56,6 +56,23 @@ enum CoverImage {
         }
     }
 
+    /// A short description for the "Write into the Book File" sheet's cover
+    /// row: format and pixel size, in words rather than a picture, because
+    /// the row compares two images without showing either of them
+    /// (`docs/adr/0021-…`, `EPUBWrite.CoverPlan` — the core knows only
+    /// bytes, never a pixel size, so this is the app-layer half of that
+    /// row, the same split `CoverImageRule`/`CoverImage` already has).
+    static func describe(_ data: Data) -> String {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0
+        else {
+            return Loc.string("unreadable image")
+        }
+        let width = pixels(of: source, kCGImagePropertyPixelWidth)
+        let height = pixels(of: source, kCGImagePropertyPixelHeight)
+        let format = CoverFile.fileExtension(for: data)?.uppercased() ?? "?"
+        return "\(format), \(width) × \(height)"
+    }
+
     // MARK: ImageIO
 
     private static func pixels(of source: CGImageSource, _ key: CFString) -> Int {
