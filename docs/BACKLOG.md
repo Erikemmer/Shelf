@@ -155,7 +155,7 @@ change of controls, not of layout.
 
 ### Not a Shelf defect, but it wastes a sprint's evidence
 
-- [ ] **The Mac's screen lock silently breaks every window-driven script.**
+- [x] **The Mac's screen lock silently breaks every window-driven script.**
       Confirmed with `ioreg` (`CGSSessionScreenIsLocked = Yes`) in the middle of
       the Sprint 2c screenshot run. While the screen is locked:
       `screencapture -l <window id>` keeps working and returns the window's
@@ -169,11 +169,28 @@ change of controls, not of layout.
       happened twice more during 2c. The app is fine: it still creates and shows
       its window, and `make smoke` passes while locked.
 
-      All four scripts have the guard now, and it asks *again* whenever one of
-      them is about to blame the app — the version that only asked at the start
-      let a run pass the guard and then lose the screen underneath it.
-      `caffeinate -di` was not enough on this Mac either; it is `-dimsu`, since
-      `-u` is what the screen saver watches
+      All four scripts had the guard (`Scripts/screen-awake.sh`) by the end of
+      2c, and it asks *again* whenever one of them is about to blame the app —
+      the version that only asked at the start let a run pass the guard and
+      then lose the screen underneath it. `caffeinate -di` was not enough on
+      this Mac either; it is `-dimsu`, since `-u` is what the screen saver
+      watches.
+
+      **What "the four scripts" left open, closed in Sprint 12, Teil C:**
+      that sentence was already the twin of the stale-build finding
+      (`current-shelf-app.sh`'s own "Follow-up") and had the same gap —
+      calling the guard was a convention every script since 2c happened to
+      follow, with nothing making a twenty-second script follow it too.
+      `Scripts/check-screen-awake-guard.sh`, in `make lint` beside the other
+      two guard checks, greps every script under `Scripts/` for
+      `screencapture`, `ax-dump.swift`, `cell-point.swift` or
+      `menu-point.swift` and fails, naming the file and the line, if
+      `require_awake_screen` was never called first. All twenty(-odd)
+      scripts that already needed it already called it — the check found
+      nothing to fix, which is what a rule that was actually being followed
+      should look like; demonstrated red (the call in `cover-shot.sh`
+      commented out, in a copy) and green again (the file put back
+      unchanged, `git diff` empty) rather than only run once and trusted.
 
 ## Sprint 3 – Calibre import · done, except against a real library
 

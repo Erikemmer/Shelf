@@ -3,6 +3,37 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 12, Teil C — the locked screen gets the same guard the stale build got · 22 September 2026
+
+`docs/BACKLOG.md`'s Sprint 2c entry ("The Mac's screen lock silently
+breaks every window-driven script") already has its fix,
+`Scripts/screen-awake.sh`'s `require_awake_screen`/`fail_if_locked_now` —
+built that sprint, and every screenshot/proof script since has called it.
+What that entry never closed is the same gap
+`current-shelf-app.sh`'s own "Follow-up" found and fixed for the stale-
+build check: calling a guard is a convention, and a convention is exactly
+what stops protecting anyone the day a new script does not follow it.
+
+`Scripts/check-screen-awake-guard.sh`, the same shape
+`check-shelf-guard.sh` and `check-current-app-guard.sh` already have, now
+runs in `make lint` beside them: it greps every script under `Scripts/`
+for `screencapture`, `ax-dump.swift`, `cell-point.swift` or
+`menu-point.swift` — a window captured, or the accessibility tree read —
+and fails, naming the file and the line, if `require_awake_screen` was
+never called first, or was called only after.
+
+**Nothing needed fixing.** All twenty-odd scripts that capture a window or
+read the accessibility tree already called the guard, correctly, before
+doing either — the check's first real run was green. Demonstrated red
+too, not only trusted: `require_awake_screen "$@"` commented out in a
+throwaway copy of `cover-shot.sh` made the check fail, naming the file and
+line exactly; the real file was never touched, confirmed with an empty
+`git diff` afterward.
+
+`make lint` now runs `check-shelf-guard.sh`, `check-current-app-guard.sh`
+*and* `check-screen-awake-guard.sh` — three guards, three checks, all
+inside the one pre-commit step this project already runs on everything.
+
 ## Sprint 12, Teil B — ⌘Z naming itself, attempted and abandoned · 22 September 2026
 
 `docs/BACKLOG.md`'s own Sprint 6/7 entry, tried and reverted, on
