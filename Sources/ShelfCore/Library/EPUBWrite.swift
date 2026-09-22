@@ -56,6 +56,16 @@ public enum EPUBWrite {
         /// computed here so what was shown and what gets written can never
         /// drift apart.
         let newContent: Data
+
+        /// Whether writing this plan would actually change anything in the
+        /// file. `false` when every field is either already the same as
+        /// Shelf's own value or one `EPUBOPFPatch` cannot place — the sheet's
+        /// own "already the same" / "cannot be written" tags, read back. A
+        /// book like this offered the command anyway, before this existed:
+        /// its file still went to the Trash and got rewritten, for no
+        /// difference at all — exactly the accidental write ADR 0021 exists
+        /// to prevent. `run` never touches a plan where this is `false`.
+        public var hasChange: Bool { changes.contains { $0.willBeWritten && $0.changed } }
     }
 
     /// Why a book has no plan at all — decided before a sheet is ever shown
@@ -98,7 +108,15 @@ public enum EPUBWrite {
         do {
             let data = try Data(contentsOf: url)
             let archive = try ZipReader(data: data)
-            let before = EPUBMetadata.read(archive, fallbackTitle: epub.fileName).book
+            // No fallback here, on purpose: `EPUBMetadata.read`'s fallback
+            // title exists for import, where a book must end up with
+            // *something*. This "before" is shown next to what Shelf
+            // already holds, as what the file itself has right now — a
+            // fallback guessed from the very same file name as Shelf's own
+            // import once used would make an absent title read back as a
+            // value that happens to match, which is a file that has no
+            // title at all pretending to already agree.
+            let before = EPUBMetadata.read(archive, fallbackTitle: "").book
             let after = entry.book
 
             let fields = EPUBOPFPatch.Fields(
@@ -203,6 +221,10 @@ public enum EPUBWrite {
         public enum Result: Equatable, Sendable {
             case wrote
             case failed(String)
+            /// `plan.hasChange` was `false` — nothing was written, nothing
+            /// went to the Trash, the index is untouched. Not a failure:
+            /// the book was left exactly as it was, on purpose.
+            case noChange
         }
         public var entryID: UUID
         public var title: String
@@ -233,6 +255,10 @@ public enum EPUBWrite {
         var outcomes: [BookOutcome] = []
         for (offset, plan) in plans.enumerated() {
             progress(Progress(done: offset, total: plans.count, currentTitle: plan.title))
+            guard plan.hasChange else {
+                outcomes.append(BookOutcome(entryID: plan.entryID, title: plan.title, result: .noChange))
+                continue
+            }
             guard let entry = entries[plan.entryID] else {
                 outcomes.append(
                     BookOutcome(entryID: plan.entryID, title: plan.title, result: .failed("no longer in the library")))

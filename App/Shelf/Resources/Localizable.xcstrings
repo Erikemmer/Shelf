@@ -1098,6 +1098,47 @@
         }
       }
     },
+    "%lld books would not get a new EPUB file.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Buch bekäme keine neue EPUB-Datei."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Bücher bekämen keine neue EPUB-Datei."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld book would not get a new EPUB file."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld books would not get a new EPUB file."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld cannot be": {
       "extractionState": "manual",
       "localizations": {
@@ -5057,6 +5098,23 @@
         }
       }
     },
+    "Left alone — nothing would change": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unangetastet – keine Änderung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left alone — nothing would change"
+          }
+        }
+      }
+    },
     "Library": {
       "extractionState": "manual",
       "localizations": {
@@ -6339,6 +6397,23 @@
         }
       }
     },
+    "Nothing to write": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts zu schreiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing to write"
+          }
+        }
+      }
+    },
     "Nothing to Import": {
       "extractionState": "manual",
       "localizations": {
@@ -6594,19 +6669,19 @@
         }
       }
     },
-    "Only the EPUB is written into — PDF, MOBI and AZW3 are left exactly as they are. Each book's current file goes to the Trash, not away for good, but there is no ⌘Z for this: look in the Trash if you need one back.": {
+    "Only the EPUB file is written to. PDF, MOBI and AZW3 stay exactly as they are. Each book's current EPUB file moves to the Trash — not gone for good, but ⌘Z will not bring it back. Anyone who needs it can get it back from the Trash themselves.": {
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nur die EPUB-Datei wird beschrieben – PDF, MOBI und AZW3 bleiben genau, wie sie sind. Die bisherige Datei jedes Buchs geht in den Papierkorb, nicht endgültig weg, aber dafür gibt es kein ⌘Z: Wer eine Datei zurückbraucht, findet sie im Papierkorb."
+            "value": "Geschrieben wird nur in die EPUB-Datei. PDF, MOBI und AZW3 bleiben genau, wie sie sind. Die bisherige EPUB-Datei jedes Buchs wandert in den Papierkorb – sie ist also nicht endgültig weg, aber ⌘Z holt sie nicht zurück. Wer sie braucht, holt sie selbst aus dem Papierkorb."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Only the EPUB is written into — PDF, MOBI and AZW3 are left exactly as they are. Each book's current file goes to the Trash, not away for good, but there is no ⌘Z for this: look in the Trash if you need one back."
+            "value": "Only the EPUB file is written to. PDF, MOBI and AZW3 stay exactly as they are. Each book's current EPUB file moves to the Trash — not gone for good, but ⌘Z will not bring it back. Anyone who needs it can get it back from the Trash themselves."
           }
         }
       }
@@ -9079,6 +9154,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "They go to the Trash, not away: you can put any of them back from there."
+          }
+        }
+      }
+    },
+    "This EPUB file would not change.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An dieser EPUB-Datei würde sich nichts ändern."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This EPUB file would not change."
           }
         }
       }

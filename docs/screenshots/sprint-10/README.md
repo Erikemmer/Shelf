@@ -6,6 +6,16 @@ Taken by `Scripts/write-into-book-shot.sh` against the five-book library
 twice, with `SHELF_SHOT_LANGUAGE=de` picking the German names out of one
 table (`Scripts/app-language.sh`), the way Sprint 9's cover screenshots do.
 
+**Re-shot 22 September 2026** after a review of these very pictures found
+four things wrong with the sheet itself, not the screenshots: a write that
+would change nothing was still offered; the title row on `3-unwritten-field`
+showed the same value twice with no explanation; two lines per field said
+nothing about which was old and which was new; and two sentences in the
+explanation read wrong ("beschrieben" reads as "described" in German, and
+the Trash sentence sounded like a consolation rather than a limit). All four
+are fixed in `WriteIntoBookSheet.swift` and `EPUBWrite.swift`, with tests, and
+every picture below reflects the fix. Details in `CHANGELOG.md`.
+
 **Every claim under a picture was checked against the disk, not against
 the picture.** The run reads the book's own EPUB after the write and
 fails if the field it asked for is not actually there — a screenshot of a
@@ -21,8 +31,14 @@ Adobe DRM (`SyntheticEPUB.withAdobeDRM`), and one hand-built EPUB with a
 `dc:creator` but no `dc:title` element at all — the one real case
 `EPUBOPFPatch` never invents a title for. One ordinary book, "The Glass
 Almanac", is then edited in Shelf: a publisher, a language, a published
-date and a description its own file does not have yet. Synthetic only, and
-built fresh on every run — no borrowed book, ever (`CLAUDE.md`).
+date and a description its own file does not have yet. A second book, "The
+Quiet Harbour", gets one field of its own — a publisher — for a reason the
+22 September fix itself created: once a book with nothing to write is
+correctly left alone, "The Quiet Harbour" being *un*edited would have had
+nothing to write either, and the DRM screenshot needs one book in the
+selection that actually gets written next to the one that is refused.
+Synthetic only, and built fresh on every run — no borrowed book, ever
+(`CLAUDE.md`).
 
 **Found taking these, not before**: the inspector's `ScrollView` does not
 answer `AXScrollToVisible` — tried, on the theory that a control found by
@@ -49,49 +65,91 @@ an EPUB, no DRM — and nowhere else does that check happen twice.
 
 ## `2-confirmation.jpg` — the confirmation, old beside new
 
-Every field `EPUBOPFPatch` can change, title to description, each with the
-book's own file's current value struck through above the value Shelf
-would write, or **"already the same"** when nothing would change. Title
-and author are unchanged and say so; publisher, published date and
-description are new and are set in bold. The explanation states plainly
-what will *not* happen (PDF, MOBI and AZW3 untouched) beside what will
-(the original to the Trash, no ⌘Z) — the same shape `DeleteFromDeviceSheet`
-uses for the one other irreversible thing in this app.
+Every field `EPUBOPFPatch` can change, title to description, one line each:
+"Not set → Erik & Erik Press", the old value, an arrow, the new value in
+bold — never two stacked lines with nothing to say which is which. A field
+that would not change shows one value only and says **"already the same"**,
+off to the side, rather than repeating that value in a second, pointless
+line. The explanation states plainly what will *not* happen (PDF, MOBI and
+AZW3 untouched) beside what will (the current EPUB file to the Trash, no
+⌘Z, and that getting it back afterwards is on whoever needs it) — the same
+shape `DeleteFromDeviceSheet` uses for the one other irreversible thing in
+this app.
 
 *Judgement:* right, and the "I have read the list above" checkbox earns
 its place here the same way it does there: this is Shelf's second
 operation with no ⌘Z, and asking twice for one deliberate click is cheap
 next to a book file that cannot be put back by pressing a key.
 
-## `3-unwritten-field.jpg` — a field the sheet marks, not drops
+**Corrected 22 September 2026:** the two-line "old above new" layout was
+replaced with one line and an arrow, because it never said which value was
+which — somebody had to infer "top is old" from position alone. The
+explanation's two sentences were also reworded: "written into" reads as
+"beschrieben" in German, which is genuinely ambiguous with "described"; and
+"not away for good, but there is no ⌘Z for this" read as a consolation
+where a limit was meant. Both are named findings in this same review, not
+separate bugs.
+
+## `3-unwritten-field.jpg` — nothing to write, and the one field that shows why
 
 "Nameless" — the one EPUB with no `<dc:title>` element in its own file at
-all. Title is marked **"cannot be written"**, in the accent colour, on the
-very list that shows every other field going through cleanly. This is the
-one field `EPUBOPFPatch` never invents on principle (a book without a
-title does not happen, in the ordinary case) meeting the one book where
-that principle actually bites.
+all, and, in this fixture, a book Shelf never edited either: every field it
+holds matches the file, except the title, which the file does not have and
+`EPUBOPFPatch` will never invent. Nothing in this plan would actually
+change, so the sheet says **"Nothing to write"** / **"This EPUB file would
+not change."** instead of offering a write that does nothing, and the
+button is disabled. The list is still shown in full underneath — title
+marked **"cannot be written"**, in the accent colour, everything else
+**"already the same"** — because a field nobody can write into must never
+just be absent from the list; the row is there, it is coloured differently,
+it says why. That is the sprint's own lesson from Sprint 10 part 2, and it
+still holds.
 
-*Judgement:* right, and this is the picture the sprint's own lesson from
-Sprint 10 part 2 hangs on: a field nobody can write into must never just
-be absent from the list. The row is there. It is coloured differently. It
-says why.
+*Judgement:* right.
+
+**Corrected 22 September 2026, two findings:**
+- **Before:** this exact selection still showed "1 book will have its EPUB
+  file replaced." and left the write button enabled, even though nothing in
+  the plan would actually change anything. Confirming it would still have
+  moved the original to the Trash and rewritten it — for no difference at
+  all, the one accidental write ADR 0021 exists to prevent. A plan is now
+  checked for at least one field that would really be written before the
+  sheet offers to write it at all (`EPUBWrite.BookPlan.hasChange`,
+  `EPUBWrite.run`).
+- **Before:** the title row read "Nameless" above "Nameless" — the same
+  value twice, marked unwritable, with nothing to explain the
+  contradiction. The top value was never the file's own: `EPUBWrite.plan`
+  read it with the same file-name fallback import uses when a title is
+  missing, so it silently reproduced Shelf's own guess instead of showing
+  that the file has no title at all. Fixed by reading "before" with no
+  fallback, so a title the file genuinely lacks now shows as nothing, not
+  as a guess that happens to agree.
 
 ## `4-drm-refused.jpg` — the DRM refusal, in a mixed selection
 
 A DRM-protected book offers no command **on its own** — `isEligible` says
 no, and the inspector's button for it never appears at all, which is why
 this is a two-book selection ("The Quiet Harbour" and "A Protected Book"),
-opened from the grid's own context menu rather than the inspector. The
-plan writes into the one that qualifies and lists the other under **"Left
-alone"**, with the DRM message named — the fact that this book has no
-individual button never mattered, because a selection is still allowed to
-include it, and the sheet is where its exclusion actually gets said out
-loud rather than silently skipped.
+opened from the grid's own context menu rather than the inspector. "The
+Quiet Harbour" carries a publisher Shelf knows and its own file does not
+("Not set → Harbour House") — the one field this fixture gives it, so the
+plan has something real to write. The plan writes into the one that
+qualifies and lists the other under **"Left alone"**, with the DRM message
+named — the fact that this book has no individual button never mattered,
+because a selection is still allowed to include it, and the sheet is where
+its exclusion actually gets said out loud rather than silently skipped.
 
 *Judgement:* right. The DRM badge is visible on the format row in the
 inspector too (`Adobe DRM`), so the same fact is said twice, in two
 different controls, and agrees with itself.
+
+**Corrected 22 September 2026:** "The Quiet Harbour" used to be one of the
+three plain, unedited synthetic books — which meant every field in its plan
+already matched the file, and after the "nothing to write" fix above, this
+whole selection would have shown "Nothing to write" with neither book
+getting anything, defeating the point of the picture. The fixture now gives
+"The Quiet Harbour" one field of its own, so the screenshot still shows what
+it always meant to: a real write next to a real refusal.
 
 ## `5-after.jpg` — written, the original in the Trash
 

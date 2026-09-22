@@ -2618,9 +2618,23 @@ enum Commands {
         }
         let updated = try await MetadataEditor(library: library).apply(change, to: entry, in: index)
 
+        // "The Quiet Harbour" is the book the DRM screenshot pairs with "A
+        // Protected Book" — it needs one real difference of its own, or a
+        // mixed selection has nothing left to write at all once a plan with
+        // no actual change is correctly left alone (Sprint 10, Schritt E2
+        // fix): a DRM refusal beside a book that would not change either is
+        // not a mixed selection any screenshot can show as one.
+        let harbourEntry = try await Self.findBook("The Quiet Harbour", in: index)
+        let harbourChange = MetadataChange.make(from: harbourEntry.book) {
+            $0.publisher = "Harbour House"
+        }
+        let updatedHarbour = try await MetadataEditor(library: library)
+            .apply(harbourChange, to: harbourEntry, in: index)
+
         let noTitleEntry = try await Self.findBook("Nameless", in: index)
         print("epub-write-fixture: \(libraryURL.path)")
         print("  edited book, publisher/language/date/description now differ: “\(updated.book.title)”")
+        print("  edited book, publisher now differs: “\(updatedHarbour.book.title)”")
         print("  DRM book, refused before anything is written: “A Protected Book”")
         print("  no-title book, title cannot be written: “\(noTitleEntry.book.title)”")
     }

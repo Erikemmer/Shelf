@@ -57,6 +57,88 @@ struct EPUBWriteTests {
         #expect(plan.unwritten.isEmpty)
     }
 
+    @Test("a title the file does not have shows as not set, never guessed from the file name")
+    func planShowsAMissingTitleAsNotSetRatherThanGuessed() throws {
+        // The file's own name and Shelf's own title are the *same* guess on
+        // purpose — the one real case that hid this bug: a book imported
+        // from a title-less EPUB gets its title guessed from the file name,
+        // and re-reading the file with that same guess as a fallback made
+        // "before" and "after" agree by coincidence, not because the file
+        // actually holds a title.
+        let folder = try TemporaryFolder()
+        let libraryRoot = try folder.folder("library")
+        _ = try folder.write(
+            "library/Author/Nameless (1)/Nameless.epub", data: Self.bookWithNoTitle(author: "Some Author"))
+
+        let library = Library(root: libraryRoot)
+        let bookID = UUID()
+        let format = BookFormat(
+            bookID: bookID, format: .epub, fileName: "Nameless.epub", byteSize: 1, sha256: "old", modifiedAt: Date())
+        let entry = LibraryEntry(
+            book: Book(id: bookID, title: "Nameless", authors: ["Some Author"]), number: 1,
+            folder: "Author/Nameless (1)", formats: [format])
+
+        guard case .success(let plan) = EPUBWrite.plan(for: entry, library: library) else {
+            Issue.record("expected a plan")
+            return
+        }
+
+        let title = try #require(plan.changes.first { $0.field == .title })
+        #expect(title.before == "")
+        #expect(!title.willBeWritten)
+    }
+
+    @Test("a book where every field is already the same or unwritable has no real change")
+    func planWithNothingToWriteHasNoChange() throws {
+        let folder = try TemporaryFolder()
+        let libraryRoot = try folder.folder("library")
+        _ = try folder.write(
+            "library/Author/Nameless (1)/Nameless.epub", data: Self.bookWithNoTitle(author: "Some Author"))
+
+        let library = Library(root: libraryRoot)
+        let bookID = UUID()
+        let format = BookFormat(
+            bookID: bookID, format: .epub, fileName: "Nameless.epub", byteSize: 1, sha256: "old", modifiedAt: Date())
+        // Shelf agrees with the file on everything it can compare, and the
+        // one field that differs (title) is the one field the file has no
+        // element for — so nothing this plan lists would actually be
+        // written if it ran.
+        let entry = LibraryEntry(
+            book: Book(id: bookID, title: "Nameless", authors: ["Some Author"]), number: 1,
+            folder: "Author/Nameless (1)", formats: [format])
+
+        guard case .success(let plan) = EPUBWrite.plan(for: entry, library: library) else {
+            Issue.record("expected a plan")
+            return
+        }
+
+        #expect(!plan.hasChange)
+    }
+
+    @Test("a book with a real change has one")
+    func planWithARealChangeHasChange() throws {
+        let folder = try TemporaryFolder()
+        let libraryRoot = try folder.folder("library")
+        _ = try folder.write(
+            "library/Author/Book (1)/book.epub",
+            data: Self.book(title: "Old Title", author: "Old Author"))
+
+        let library = Library(root: libraryRoot)
+        let bookID = UUID()
+        let format = BookFormat(
+            bookID: bookID, format: .epub, fileName: "book.epub", byteSize: 1, sha256: "old", modifiedAt: Date())
+        let entry = LibraryEntry(
+            book: Book(id: bookID, title: "New Title", authors: ["Old Author"]), number: 1,
+            folder: "Author/Book (1)", formats: [format])
+
+        guard case .success(let plan) = EPUBWrite.plan(for: entry, library: library) else {
+            Issue.record("expected a plan")
+            return
+        }
+
+        #expect(plan.hasChange)
+    }
+
     @Test("a book with no EPUB has no plan")
     func planRefusesWhenThereIsNoEPUB() throws {
         let folder = try TemporaryFolder()
@@ -195,6 +277,42 @@ struct EPUBWriteTests {
         #expect(bin.taken.count == 2)
     }
 
+    @Test("run never touches a book with no real change — no Trash, no index update")
+    func runLeavesANoChangeBookAlone() async throws {
+        let folder = try TemporaryFolder()
+        let libraryRoot = try folder.folder("library")
+        _ = try folder.write(
+            "library/Author/Nameless (1)/Nameless.epub", data: Self.bookWithNoTitle(author: "Some Author"))
+
+        let library = Library(root: libraryRoot)
+        let index = try LibraryIndex(inMemory: "epub-write-no-change-test")
+        let bin = try Bin(in: folder.url)
+
+        let bookID = UUID()
+        let format = BookFormat(
+            bookID: bookID, format: .epub, fileName: "Nameless.epub", byteSize: 1, sha256: "unchanged",
+            modifiedAt: Date())
+        let entry = LibraryEntry(
+            book: Book(id: bookID, title: "Nameless", authors: ["Some Author"]), number: 1,
+            folder: "Author/Nameless (1)", formats: [format])
+        try await index.save(entry)
+
+        guard case .success(let plan) = EPUBWrite.plan(for: entry, library: library) else {
+            Issue.record("expected a plan")
+            return
+        }
+        #expect(!plan.hasChange)
+
+        let report = await EPUBWrite.run(
+            [plan], entries: [bookID: entry], library: library, index: index, disposal: bin.disposal)
+
+        #expect(report.succeeded == 0)
+        #expect(report.outcomes == [EPUBWrite.BookOutcome(entryID: bookID, title: "Nameless", result: .noChange)])
+        #expect(bin.taken.isEmpty)
+        let reloaded = try await index.entries(ids: [bookID]).first
+        #expect(reloaded?.formats.first?.sha256 == "unchanged")
+    }
+
     // MARK: Fixtures
 
     /// Collects `run`'s progress callbacks, in the order they arrive — a
@@ -267,5 +385,42 @@ struct EPUBWriteTests {
             entries.append(.raw(path: "META-INF/encryption.xml", text: "<encryption/>"))
         }
         return (try? EPUBArchiveWriter.archive(entries)) ?? Data()
+    }
+
+    /// A minimal, valid EPUB with a `dc:creator` but no `dc:title` element at
+    /// all — `shelf-tool`'s own `noTitleEPUB`, built by hand for the same
+    /// reason: `SyntheticEPUB` always writes a title, so the one real case
+    /// `EPUBOPFPatch` never invents a title for needs its own fixture.
+    static func bookWithNoTitle(author: String) throws -> Data {
+        let opf = """
+            <?xml version='1.0' encoding='utf-8'?>
+            <package xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf" \
+            version="2.0" unique-identifier="id">
+              <metadata>
+                <dc:identifier id="id">urn:uuid:\(UUID().uuidString)</dc:identifier>
+                <dc:creator opf:role="aut">\(author)</dc:creator>
+              </metadata>
+              <manifest>
+                <item id="text" href="text.xhtml" media-type="application/xhtml+xml"/>
+              </manifest>
+              <spine><itemref idref="text"/></spine>
+            </package>
+            """
+        let entries: [ZipArchiveWriter.Entry] = [
+            .raw(path: "mimetype", text: "application/epub+zip"),
+            .raw(
+                path: "META-INF/container.xml",
+                text: """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                      <rootfiles>
+                        <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+                      </rootfiles>
+                    </container>
+                    """),
+            .raw(path: "OEBPS/content.opf", text: opf),
+            .raw(path: "OEBPS/text.xhtml", text: "<html><body><p>A nameless book.</p></body></html>"),
+        ]
+        return try EPUBArchiveWriter.archive(entries)
     }
 }

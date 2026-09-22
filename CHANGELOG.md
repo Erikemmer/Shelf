@@ -3,6 +3,82 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 10, Schritt E2 — four corrections found by looking at its own screenshots · 22 September 2026
+
+Erik looked at Schritt E2's own screenshots (`docs/screenshots/sprint-10/`)
+and found four things wrong with the sheet, not the pictures.
+
+**A write that would change nothing was still offered.** In
+`3-unwritten-field.jpg`, all six fields of "Nameless" are either "already
+the same" or "cannot be written" — nothing would actually change — and the
+sheet still said "1 book will have its EPUB file replaced." with the button
+enabled. Confirming it would have moved a hashed, verified original to the
+Trash and rewritten it, for no difference at all: exactly the accidental
+write ADR 0021 exists to prevent. `EPUBWrite.BookPlan` now has `hasChange`
+— true only when at least one field is both `willBeWritten` and `changed`,
+the sheet's own two tags read back rather than a separate count that could
+disagree with the list — and `EPUBWrite.run` never touches a plan where it
+is `false`, recording a new `BookOutcome.Result.noChange` instead. The sheet
+shows **"Nothing to write" / "This EPUB file would not change."** and
+disables the button when every book in the plan is like this; in a mixed
+selection, a book with nothing to change stays in the list, marked **"Left
+alone — nothing would change"**, and is the one book `run` leaves alone.
+
+**The title row on that same screenshot read "Nameless" above "Nameless"**
+— marked unwritable, with nothing to say why the two lines agreed. They
+were never both real: `EPUBWrite.plan` read the file's own "before" title
+with `fallbackTitle: epub.fileName`, the same fallback import uses so a
+title-less book still gets *something* — which meant a file with no title
+element at all read back as Shelf's own guess, because it is the same
+guess, guessed from the same file name. Fixed by reading "before" with no
+fallback (`fallbackTitle: ""`): a title the file genuinely does not have
+now shows as nothing, never as a value that happens to match.
+
+**Two lines per field became one, with an arrow.** "Old above new, neither
+labelled" asked a reader to infer which was which from position. Every
+field row is now one line: `Not set → Erik & Erik Press`, the old value,
+an arrow, the new value in bold — collapsing to a single, unstruck value
+when the field is already the same or cannot be written, never two
+identical lines. The arrow is glued to the new value with a non-breaking
+space, so a wrap can only fall inside the old value or the new one.
+
+**Two sentences in the explanation were reworded.** "Only the EPUB is
+written into" reads as "beschrieben" in German, genuinely ambiguous with
+"described". "Not away for good, but there is no ⌘Z for this" read as a
+consolation where a limit was meant. Both are now:
+
+> Only the EPUB file is written to. PDF, MOBI and AZW3 stay exactly as they
+> are. Each book's current EPUB file moves to the Trash — not gone for
+> good, but ⌘Z will not bring it back. Anyone who needs it can get it back
+> from the Trash themselves.
+
+German: *"Geschrieben wird nur in die EPUB-Datei. PDF, MOBI und AZW3 bleiben
+genau, wie sie sind. Die bisherige EPUB-Datei jedes Buchs wandert in den
+Papierkorb – sie ist also nicht endgültig weg, aber ⌘Z holt sie nicht
+zurück. Wer sie braucht, holt sie selbst aus dem Papierkorb."*
+
+**One side question, answered, nothing changed:** the description "Added in
+Shelf, not yet in the book's own file." in `2-confirmation.jpg` is sample
+content the fixture writes into a synthetic book (`shelf-tool
+epub-write-fixture`), the same way "The Glass Almanac" is a title and "Erik
+& Erik Press" is a publisher — English on purpose, like every other piece
+of sample content in this fixture, not a Shelf UI string that missed
+translation. It never goes through `Loc`.
+
+`shelf-tool epub-write-fixture` now also gives "The Quiet Harbour" a
+publisher of its own ("Harbour House") — a consequence of the first fix
+above: that book was never edited, so once a plan with nothing to change is
+correctly left alone, the DRM screenshot's two-book selection would have
+had nothing left to write at all. Tests: `EPUBWriteTests` — a title the
+file lacks reads back as not set rather than guessed, a plan with nothing
+real to change has `hasChange == false`, one with a real field does not,
+and `run` leaves a no-change plan's file, Trash and index untouched. 774
+core tests, all green. `make lint` clean, `make smoke` clean, one commit.
+
+**Proof:** all five screenshots retaken in English and German, all five
+still pass the same on-disk checks `write-into-book-shot.sh` always ran —
+none were loosened to make this pass.
+
 ## Sprint 10, Schritt E2 — "Write into the Book File", in the window · 21 September 2026
 
 The rule that a book file is never written falls here for the first time

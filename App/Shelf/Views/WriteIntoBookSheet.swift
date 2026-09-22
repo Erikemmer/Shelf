@@ -63,35 +63,70 @@ struct WriteIntoBookSheet: View {
         } else if plan.books.isEmpty {
             Text(Loc.string("None of this can be written into.")).foregroundStyle(Slate.textPrimary)
             skippedSection(plan.skipped)
+        } else if Self.changingCount(plan) == 0 {
+            // Every book in the plan is eligible, but none of them would
+            // actually change — every field is either already the same or
+            // one `EPUBOPFPatch` cannot place. Offering the write anyway
+            // would still move a hashed, verified original to the Trash and
+            // rewrite it for no difference at all: the one accidental write
+            // ADR 0021 exists to prevent, so this state says so instead of
+            // pretending there is something to confirm.
+            Text(Loc.string("Nothing to write")).foregroundStyle(Slate.textPrimary)
+            Text(Self.nothingToWriteSentence(bookCount: plan.books.count))
+                .font(.caption)
+                .foregroundStyle(Slate.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            bookList(plan)
         } else {
-            Text(Loc.count("%lld books will have their EPUB file replaced.", plan.books.count))
+            Text(Loc.count("%lld books will have their EPUB file replaced.", Self.changingCount(plan)))
                 .foregroundStyle(Slate.textPrimary)
             Text(
                 Loc.string(
-                    "Only the EPUB is written into — PDF, MOBI and AZW3 are left exactly as they are. "
-                        + "Each book's current file goes to the Trash, not away for good, but there is "
-                        + "no ⌘Z for this: look in the Trash if you need one back.")
+                    "Only the EPUB file is written to. PDF, MOBI and AZW3 stay exactly as they are. "
+                        + "Each book's current EPUB file moves to the Trash — not gone for good, but "
+                        + "⌘Z will not bring it back. Anyone who needs it can get it back from the "
+                        + "Trash themselves.")
             )
             .font(.caption)
             .foregroundStyle(Slate.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    // Every book, in full — a list that only shows the first
-                    // few is a list somebody agrees to without having read.
-                    ForEach(plan.books) { bookSection($0) }
-                    if !plan.skipped.isEmpty { skippedSection(plan.skipped) }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxHeight: 320)
-            .accessibilityLabel(Loc.string("Books that will be written into"))
+            bookList(plan)
 
             Toggle(Loc.string("I have read the list above"), isOn: $hasUnderstood)
                 .font(.caption)
                 .foregroundStyle(Slate.textSecondary)
         }
+    }
+
+    /// Every book, in full — a list that only shows the first few is a list
+    /// somebody agrees to without having read.
+    private func bookList(_ plan: EPUBWrite.Plan) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(plan.books) { bookSection($0) }
+                if !plan.skipped.isEmpty { skippedSection(plan.skipped) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxHeight: 320)
+        .accessibilityLabel(Loc.string("Books that will be written into"))
+    }
+
+    /// How many of `plan.books` would actually be written — the sheet's own
+    /// "already the same" / "cannot be written" tags, read back, never a
+    /// separate count that could disagree with what the list shows.
+    private static func changingCount(_ plan: EPUBWrite.Plan) -> Int {
+        plan.books.filter(\.hasChange).count
+    }
+
+    /// One sentence, singular for the common case (one book selected, one
+    /// book that would not change) and counted otherwise — the same "%lld"
+    /// shape every other counted sentence in this sheet uses.
+    private static func nothingToWriteSentence(bookCount: Int) -> String {
+        bookCount == 1
+            ? Loc.string("This EPUB file would not change.")
+            : Loc.count("%lld books would not get a new EPUB file.", bookCount)
     }
 
     private func running(_ progress: EPUBWrite.Progress) -> some View {
@@ -141,9 +176,20 @@ struct WriteIntoBookSheet: View {
 
     private func bookSection(_ plan: EPUBWrite.BookPlan) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(plan.title)
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(Slate.textPrimary)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(plan.title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(Slate.textPrimary)
+                // Shown in the same list rather than moved to "Left alone":
+                // this book has a plan, and every field in it is readable —
+                // it is only that none of them would actually change
+                // anything, so `run` never touches it either.
+                if !plan.hasChange {
+                    Text(Loc.string("Left alone — nothing would change"))
+                        .font(.caption2)
+                        .foregroundStyle(Slate.accent)
+                }
+            }
             Text(plan.fileName)
                 .font(.caption2)
                 .foregroundStyle(Slate.textSecondary)
@@ -160,21 +206,9 @@ struct WriteIntoBookSheet: View {
                 .font(.caption)
                 .foregroundStyle(Slate.textSecondary)
                 .frame(width: 78, alignment: .leading)
-            VStack(alignment: .leading, spacing: 1) {
-                // Old above new, struck through only when it would actually
-                // be replaced — the same shape `FetchMetadataSheet` uses.
-                if !change.before.isEmpty {
-                    Text(change.before)
-                        .font(.caption2)
-                        .foregroundStyle(Slate.textSecondary)
-                        .strikethrough(change.changed && change.willBeWritten)
-                        .lineLimit(2)
-                }
-                Text(change.after.isEmpty ? Loc.string("Not set") : change.after)
-                    .font(.caption)
-                    .foregroundStyle(change.changed ? Slate.textPrimary : Slate.textSecondary)
-                    .lineLimit(2)
-            }
+            Self.valueText(for: change)
+                .font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 4)
             // Marked here, never dropped: a field Shelf cannot place still
             // belongs on this list (Sprint 10 part 2's own lesson).
@@ -191,6 +225,33 @@ struct WriteIntoBookSheet: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Self.accessibilityLabel(for: change))
     }
+
+    /// One field, one line: `old → new` when it would actually be written,
+    /// a single value when it would not — "already the same" and "cannot be
+    /// written" never show two lines with nothing to tell them apart, which
+    /// is what a field the file has no element for used to look like: its
+    /// "old" value came from the same file-name guess Shelf's own import
+    /// uses, so it read back identical to Shelf's value with nothing to
+    /// explain why the row was marked unwritable at all.
+    private static func valueText(for change: EPUBWrite.FieldChange) -> Text {
+        guard change.willBeWritten, change.changed else {
+            let value = change.after.isEmpty ? Loc.string("Not set") : change.after
+            return Text(value).foregroundStyle(Slate.textSecondary)
+        }
+        let before = change.before.isEmpty ? Loc.string("Not set") : change.before
+        return Text(before).foregroundStyle(Slate.textSecondary)
+            + Text(Self.arrowToNewValue).foregroundStyle(Slate.textSecondary)
+            + Text(change.after).foregroundStyle(Slate.textPrimary)
+    }
+
+    /// The arrow between an old value and a new one, with a non-breaking
+    /// space glued to the new value so a wrap only ever falls inside the old
+    /// value or the new one — never between the arrow and what it points
+    /// at. Built from `Unicode.Scalar` rather than a `"→\u{00A0}"` literal:
+    /// `LocalisationTests` reads an escape's own hex digits as English
+    /// prose (they are letters), and this is punctuation, not a sentence.
+    private static let arrowToNewValue =
+        " " + String(Unicode.Scalar(0x2192)!) + String(Unicode.Scalar(0x00A0)!)
 
     private static func accessibilityLabel(for change: EPUBWrite.FieldChange) -> String {
         let field = Loc.label(for: change.field)
@@ -235,7 +296,10 @@ struct WriteIntoBookSheet: View {
             if case .ready(let plan) = model.epubWritePhase, !plan.books.isEmpty {
                 Button(Loc.string("Write into the Book File")) { model.runEPUBWrite(plan) }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(!hasUnderstood)
+                    // Dimmed, not hidden, when nothing in the plan would
+                    // actually change — the same button the mixed case
+                    // uses, just with nothing it is allowed to do yet.
+                    .disabled(!hasUnderstood || Self.changingCount(plan) == 0)
             }
         }
     }
