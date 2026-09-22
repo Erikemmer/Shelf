@@ -294,12 +294,17 @@ struct WriteIntoBookSheet: View {
             }
             .keyboardShortcut(.cancelAction)
             if case .ready(let plan) = model.epubWritePhase, !plan.books.isEmpty {
+                let cannotWriteYet = !hasUnderstood || Self.changingCount(plan) == 0
                 Button(Loc.string("Write into the Book File")) { model.runEPUBWrite(plan) }
                     .keyboardShortcut(.defaultAction)
-                    // Dimmed, not hidden, when nothing in the plan would
-                    // actually change — the same button the mixed case
-                    // uses, just with nothing it is allowed to do yet.
-                    .disabled(!hasUnderstood || Self.changingCount(plan) == 0)
+                    .disabled(cannotWriteYet)
+                    // `.disabled` alone does not visibly dim this button
+                    // against Slate's own colours — checked against a
+                    // screenshot, not assumed: side by side with the
+                    // enabled state, the two were the same blue. The
+                    // opacity drop is what actually tells a reader the
+                    // button does nothing right now.
+                    .opacity(cannotWriteYet ? 0.4 : 1)
             }
         }
     }

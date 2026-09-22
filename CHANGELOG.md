@@ -3,6 +3,50 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 10, Schritt E2 — three follow-up questions about the last fix · 22 September 2026
+
+Erik asked three questions about the correction below, each with a test or a
+screenshot deciding it rather than a guess.
+
+**Did the title fallback bug have a twin at the author field?** It did, in
+the code (`EPUBMetadata.read` guesses an author from the file name the same
+way it guesses a title, a few lines below), but not in the fix: the
+correction's one `fallbackTitle: ""` already silences both guesses at once,
+because both read the same parameter. A new test —
+`EPUBWriteTests.planShowsAMissingAuthorAsNotSetRatherThanGuessed` — builds
+an EPUB whose OPF has neither `<dc:title>` nor `<dc:creator>`, named so a
+guess would have found "Author" *and* "Title" in it, and passed on the
+first run, no production change needed. A comment now marks the fix site
+with the general rule: a read comparing a file's current state against
+what Shelf would write never guesses; guessing belongs to import alone,
+where a guessed title is better than none. `MobiMetadata.read` has the
+same fallback and was left alone — noted in `docs/BACKLOG.md`, not fixed,
+since nothing in v1.0 writes into a MOBI or compares one against anything.
+
+**Did the disabled write button actually look disabled?** No. Checked
+against `3-unwritten-field.jpg` next to `2-confirmation.jpg`'s enabled
+button: same solid blue, `.disabled` alone having no visible effect
+against Slate's own colours. `WriteIntoBookSheet`'s button now carries an
+explicit `.opacity(0.4)` alongside `.disabled`, confirmed by re-shooting
+the same picture in both languages. `docs/BACKLOG.md` notes that
+`DeleteFromDeviceSheet`'s own confirm button may have the same gap —
+not checked this time, since it was not asked for.
+
+**Did the plural "several books would not get a new EPUB file" sentence
+actually render right?** Nobody had ever driven it through `Loc.count`
+before today — no test, no screenshot. A new screenshot,
+`6-several-unchanged.jpg`, selects "Cinders and Salt" (never edited) and
+"Nameless" (nothing left to change once its title is set aside) together;
+the sheet reads "2 books would not get a new EPUB file." in English and
+"2 Bücher bekämen keine neue EPUB-Datei." in German — the plural ("other")
+category, correctly distinct from the singular "1 Buch bekäme…" a bare
+`%lld` string cannot produce on its own in German. A new core test,
+`planForSeveralUnchangedBooksHasNoneWithChange`, proves the same count at
+the `EPUBWrite.Plan` level, across a selection rather than one book alone.
+
+776 core tests (2 new), `make lint` and `make smoke` clean, `make app`
+built. One commit.
+
 ## Sprint 10, Schritt E2 — four corrections found by looking at its own screenshots · 22 September 2026
 
 Erik looked at Schritt E2's own screenshots (`docs/screenshots/sprint-10/`)

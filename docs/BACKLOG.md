@@ -1026,3 +1026,21 @@ the core in Schritt E1: on explicit instruction only.
       extending a selection) — needed to demonstrate the DRM refusal
       inside a mixed selection from the grid, and general enough that any
       future script needing a multi-select can use it too.
+
+### What the 22 September correction found on the way
+
+- [ ] **`MobiMetadata.read` guesses a title and an author from the file
+      name the same way `EPUBMetadata.read` did** — the read that turned
+      out to be the whole bug once "Write into the Book File" started
+      comparing a file's own value against Shelf's. Not reachable today:
+      v1.0 writes only into EPUBs, and nothing yet reads a MOBI to compare
+      it against anything. Worth remembering if a MOBI write is ever
+      proposed, so the same fallback is not carried over into a place that
+      compares rather than imports.
+- [ ] **`DeleteFromDeviceSheet`'s own confirm button may have the same
+      "`.disabled` alone is not visibly dimmed" gap** — it is a plain
+      `Button` disabled by the same unticked-checkbox pattern this sheet
+      used, and every use of that sheet starts with the button disabled.
+      Not checked against a screenshot this time; `WriteIntoBookSheet`'s
+      own button now gets an explicit `.opacity` alongside `.disabled`
+      because the ambient style did not dim it on its own.

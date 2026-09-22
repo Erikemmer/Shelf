@@ -16,6 +16,19 @@ the Trash sentence sounded like a consolation rather than a limit). All four
 are fixed in `WriteIntoBookSheet.swift` and `EPUBWrite.swift`, with tests, and
 every picture below reflects the fix. Details in `CHANGELOG.md`.
 
+**Re-shot again, same day**, after Erik asked three follow-up questions about
+that first correction. Whether the title fix's fallback bug had a twin at
+the author field: it did not need a second fix — `EPUBMetadata.read` guesses
+an author from the file name the same way it guesses a title, a few lines
+below, and the one `fallbackTitle: ""` already silenced both; a new test
+(`EPUBWriteTests`) proves it rather than assuming it. Whether the "Nothing
+to write" button actually looks disabled: it did not — `.disabled` alone
+left it the same blue as the enabled button in `2-confirmation.jpg`, found
+by looking at `3-unwritten-field.jpg` next to it, and an explicit `.opacity`
+now dims it for real. And whether the counted "several books would not get
+a new EPUB file" sentence, never rendered before, actually reads right in
+both languages, plural included: `6-several-unchanged.jpg` is that check.
+
 **Every claim under a picture was checked against the disk, not against
 the picture.** The run reads the book's own EPUB after the write and
 fails if the field it asked for is not actually there — a screenshot of a
@@ -125,6 +138,14 @@ still holds.
   fallback, so a title the file genuinely lacks now shows as nothing, not
   as a guess that happens to agree.
 
+**Corrected again, same day:** this is also the picture that caught the
+disabled button not actually looking disabled — placed next to
+`2-confirmation.jpg`'s enabled one, the "Write into the Book File" button
+here was the same solid blue, `.disabled` having no visible effect of its
+own against Slate's colours. It now carries an explicit `.opacity(0.4)`
+alongside `.disabled`, visible in this picture as the muted, desaturated
+button it was always meant to be.
+
 ## `4-drm-refused.jpg` — the DRM refusal, in a mixed selection
 
 A DRM-protected book offers no command **on its own** — `isEligible` says
@@ -166,6 +187,25 @@ points at, reread.
 a sentence that says what happened and repeats, one more time, that there
 is no ⌘Z. Two sentences a person could miss the first time and still catch
 the second.
+
+## `6-several-unchanged.jpg` — several books, none of which would change
+
+"Cinders and Salt" (never edited — every field already matches its file)
+and "Nameless" (its only difference, the title, is the one `EPUBOPFPatch`
+can never write) selected together: neither has a real change, so the
+sheet says **"Nothing to write"** and, below it, the sentence nothing had
+ever actually rendered before this picture — **"2 books would not get a
+new EPUB file."** / German **"2 Bücher bekämen keine neue EPUB-Datei."**,
+the plural ("other") form, not the singular ("one") "1 Buch bekäme…" a
+fixed `%lld`-less string would have produced in German regardless of the
+count. Both books stay in the list, each marked **"Left alone — nothing
+would change"**, with their own fields shown underneath — the same
+transparency `4-drm-refused.jpg` gives a book excluded for a different
+reason.
+
+*Judgement:* right. The counted sentence only exists as a catalogue entry
+in the strict sense — `Loc.count` reads its plural variations for a count
+this sheet had never actually driven through it before today.
 
 ---
 

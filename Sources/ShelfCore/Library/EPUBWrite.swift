@@ -115,7 +115,15 @@ public enum EPUBWrite {
             // fallback guessed from the very same file name as Shelf's own
             // import once used would make an absent title read back as a
             // value that happens to match, which is a file that has no
-            // title at all pretending to already agree.
+            // title at all pretending to already agree. The empty
+            // `fallbackTitle` silences `EPUBMetadata.read`'s author guess
+            // the same way, one parameter below its title guess — the two
+            // are one fix, not two, and `EPUBWriteTests` proves both.
+            //
+            // When a read is comparing what a file already has against what
+            // Shelf would write, nothing here is ever guessed — guessing
+            // belongs only to import, where a guessed title is better than
+            // none at all.
             let before = EPUBMetadata.read(archive, fallbackTitle: "").book
             let after = entry.book
 

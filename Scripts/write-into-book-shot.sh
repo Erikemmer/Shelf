@@ -55,6 +55,11 @@ name_of() {
             cannotBeWritten) echo "kann nicht geschrieben werden" ;;
             protectedWord) echo "geschützt" ;;
             writtenInto) echo "beschrieben" ;;
+            nothingToWrite) echo "Nichts zu schreiben" ;;
+            # The plural ("other") category specifically — two books, not
+            # one, is what scene 6 selects, and "1 Buch bekäme" would pass
+            # this check just as wrongly as the English "one" form would.
+            severalWouldNotChange) echo "bekämen keine neue EPUB-Datei" ;;
             *) fail "no German name for '$1'" ;;
         esac
     else
@@ -69,6 +74,8 @@ name_of() {
             cannotBeWritten) echo "cannot be written" ;;
             protectedWord) echo "protected" ;;
             writtenInto) echo "written into" ;;
+            nothingToWrite) echo "Nothing to write" ;;
+            severalWouldNotChange) echo "would not get a new EPUB file" ;;
             *) fail "no English name for '$1'" ;;
         esac
     fi
@@ -323,6 +330,39 @@ unzip -p "$NEW_EPUB" OEBPS/content.opf 2>/dev/null | grep -q "Erik &amp; Erik Pr
     || fail "the book's own file does not carry the new publisher after the write"
 say "checked: $NEW_EPUB now carries the publisher written into it, on disk"
 shoot 5-after
+close_sheet
+
+# ── 6. Several books, none of which would change ─────────────────────────────
+# "Cinders and Salt" was never edited, and "Nameless" has nothing real to
+# change either (its only difference, the title, cannot be written) — a
+# selection of the two exercises the *counted* "Nothing to write" sentence,
+# which nothing had ever rendered before this. The button's visible dimming
+# is checked here too: `.disabled` alone did not dim it against Slate's own
+# colours, found by looking at exactly this screenshot.
+click "desc=$(name_of clearSearch)" >/dev/null 2>&1
+sleep 1
+click "desc=Cinders and Salt" || fail "no cell for “Cinders and Salt”"
+sleep 1
+POINT=$(swift "$HERE/cell-point.swift" "$PID" "desc=Nameless" 2>/dev/null) \
+    || fail "no cell for “Nameless”"
+swift "$HERE/click-at.swift" ${POINT% *} ${POINT#* } cmd
+sleep 1
+POINT=$(swift "$HERE/cell-point.swift" "$PID" "desc=Nameless" 2>/dev/null) \
+    || fail "no cell for “Nameless”, second look"
+swift "$HERE/click-at.swift" ${POINT% *} ${POINT#* } right
+sleep 1
+click_menu_item "$(name_of menuItem)" || fail "no “$(name_of menuItem)” item in the grid's context menu"
+sleep 1
+WAITED=0
+until tree_has "AXSheet"; do
+    WAITED=$((WAITED + 1))
+    [ "$WAITED" -lt 30 ] || fail "the sheet never appeared from the context menu"
+    sleep 1
+done
+sleep 1.5
+tree_has "$(name_of nothingToWrite)" || fail "the sheet does not say “$(name_of nothingToWrite)” for two unchanged books"
+tree_has "$(name_of severalWouldNotChange)" || fail "the counted “nothing would change” sentence never rendered"
+shoot 6-several-unchanged
 close_sheet
 
 say "done – $OUT"

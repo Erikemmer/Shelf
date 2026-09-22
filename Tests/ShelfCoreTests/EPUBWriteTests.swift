@@ -88,6 +88,39 @@ struct EPUBWriteTests {
         #expect(!title.willBeWritten)
     }
 
+    @Test("an author the file does not have shows as not set, never guessed from the file name")
+    func planShowsAMissingAuthorAsNotSetRatherThanGuessed() throws {
+        // The title bug's own twin: `EPUBMetadata.read` guesses an author
+        // from the file name exactly the same way it guesses a title, a few
+        // lines below it. Shelf's own author list has to be empty too here
+        // — a non-empty one the file's zero `dc:creator` elements cannot
+        // match is `EPUBOPFPatch.Failure.authorCountMismatch`, refused
+        // before a plan exists at all, so it is this exact shape (Shelf
+        // agrees there are no authors) that is the one still reachable.
+        let folder = try TemporaryFolder()
+        let libraryRoot = try folder.folder("library")
+        _ = try folder.write(
+            "library/Author/Nameless (1)/Nameless - Some Author.epub",
+            data: Self.bookWithNoTitleAndNoAuthor())
+
+        let library = Library(root: libraryRoot)
+        let bookID = UUID()
+        let format = BookFormat(
+            bookID: bookID, format: .epub, fileName: "Nameless - Some Author.epub", byteSize: 1, sha256: "old",
+            modifiedAt: Date())
+        let entry = LibraryEntry(
+            book: Book(id: bookID, title: "Nameless", authors: []), number: 1,
+            folder: "Author/Nameless (1)", formats: [format])
+
+        guard case .success(let plan) = EPUBWrite.plan(for: entry, library: library) else {
+            Issue.record("expected a plan")
+            return
+        }
+
+        let authors = try #require(plan.changes.first { $0.field == .authors })
+        #expect(authors.before == "")
+    }
+
     @Test("a book where every field is already the same or unwritable has no real change")
     func planWithNothingToWriteHasNoChange() throws {
         let folder = try TemporaryFolder()
@@ -137,6 +170,42 @@ struct EPUBWriteTests {
         }
 
         #expect(plan.hasChange)
+    }
+
+    @Test("a selection of several books, none of which would change, has no book with a real change")
+    func planForSeveralUnchangedBooksHasNoneWithChange() throws {
+        // The count the sheet's "Nothing to write" / "%lld books would not
+        // get a new EPUB file." sentences read — `changingCount` in
+        // `WriteIntoBookSheet` — is `plan.books.filter(\.hasChange).count`.
+        // This proves that count stays zero across a *selection*, not just
+        // for one book in isolation.
+        let folder = try TemporaryFolder()
+        let libraryRoot = try folder.folder("library")
+        _ = try folder.write(
+            "library/A/One (1)/book.epub", data: Self.book(title: "One", author: "Author One"))
+        _ = try folder.write(
+            "library/B/Two (1)/book.epub", data: Self.book(title: "Two", author: "Author Two"))
+
+        let library = Library(root: libraryRoot)
+        let idOne = UUID()
+        let idTwo = UUID()
+        let formatOne = BookFormat(
+            bookID: idOne, format: .epub, fileName: "book.epub", byteSize: 1, sha256: "one", modifiedAt: Date())
+        let formatTwo = BookFormat(
+            bookID: idTwo, format: .epub, fileName: "book.epub", byteSize: 1, sha256: "two", modifiedAt: Date())
+        // Shelf agrees with each file on every field — neither book was
+        // ever edited, the same shape an unedited import leaves behind.
+        let entryOne = LibraryEntry(
+            book: Book(id: idOne, title: "One", authors: ["Author One"]), number: 1, folder: "A/One (1)",
+            formats: [formatOne])
+        let entryTwo = LibraryEntry(
+            book: Book(id: idTwo, title: "Two", authors: ["Author Two"]), number: 1, folder: "B/Two (1)",
+            formats: [formatTwo])
+
+        let plan = EPUBWrite.plan(for: [entryOne, entryTwo], library: library)
+
+        #expect(plan.books.count == 2)
+        #expect(plan.books.filter(\.hasChange).isEmpty)
     }
 
     @Test("a book with no EPUB has no plan")
@@ -420,6 +489,43 @@ struct EPUBWriteTests {
                     """),
             .raw(path: "OEBPS/content.opf", text: opf),
             .raw(path: "OEBPS/text.xhtml", text: "<html><body><p>A nameless book.</p></body></html>"),
+        ]
+        return try EPUBArchiveWriter.archive(entries)
+    }
+
+    /// A minimal, valid EPUB whose OPF has neither `<dc:title>` nor
+    /// `<dc:creator>` — the file name alone ("Author - Title.epub", the
+    /// pattern `FileNameMetadata` reads) is the only thing either could be
+    /// guessed from. Built by hand, like `bookWithNoTitle`: `SyntheticEPUB`
+    /// always writes both.
+    static func bookWithNoTitleAndNoAuthor() throws -> Data {
+        let opf = """
+            <?xml version='1.0' encoding='utf-8'?>
+            <package xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf" \
+            version="2.0" unique-identifier="id">
+              <metadata>
+                <dc:identifier id="id">urn:uuid:\(UUID().uuidString)</dc:identifier>
+              </metadata>
+              <manifest>
+                <item id="text" href="text.xhtml" media-type="application/xhtml+xml"/>
+              </manifest>
+              <spine><itemref idref="text"/></spine>
+            </package>
+            """
+        let entries: [ZipArchiveWriter.Entry] = [
+            .raw(path: "mimetype", text: "application/epub+zip"),
+            .raw(
+                path: "META-INF/container.xml",
+                text: """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                      <rootfiles>
+                        <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+                      </rootfiles>
+                    </container>
+                    """),
+            .raw(path: "OEBPS/content.opf", text: opf),
+            .raw(path: "OEBPS/text.xhtml", text: "<html><body><p>A nameless, authorless book.</p></body></html>"),
         ]
         return try EPUBArchiveWriter.archive(entries)
     }
