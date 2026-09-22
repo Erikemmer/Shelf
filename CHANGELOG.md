@@ -3,6 +3,85 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 13, Teil A — measuring the interrupted import, before repairing it · 22 September 2026
+
+`docs/BACKLOG.md`'s only open entry that leaves files behind in a real
+library ("An interrupted import copies up to 200 books twice") reproduced
+against a 600-book synthetic source
+(`~/Library/Caches/Shelf/interrupted-import-2026-09-22`), before anything
+was changed — no code in this repository differs from Sprint 12, Teil D.
+
+**A real `SIGTERM` and a real `SIGKILL`, sent to a running `shelf-tool
+import`, leave the same thing behind.** Neither is caught today —
+`ImportRunner` and everything around it install no handler for either — so
+a process asked to leave the tidy way and one forced out the hard way
+currently differ only in timing, not in outcome: `kill -TERM` at the 1.8 s
+mark left **79** orphaned folders and 0 books indexed; `kill -KILL` at the
+same mark left **81** and 0 indexed. That sameness is exactly what Teil B
+exists to end, for the one of the two that can be caught at all.
+
+**The worst case, placed deliberately with `SHELF_EXIT_AFTER`** (the same
+untidy-kill simulation Sprint 4's own `Scripts/proof-run.sh` §9 uses — real
+`exit()`, mid-callback, no unwinding) **one file before the second batch
+write: 199 orphaned folders, 65.5 MB** (267 KB average per synthetic EPUB —
+a real library's figure will differ with real file sizes), 200 books
+correctly in the index. `ImportRunner.indexBatchSize - 1` is the exact
+ceiling, and the backlog entry's own "up to 200" already said so.
+
+**`shelf-tool orphans` — the command line's `Library ▸ Find Orphaned
+Folders…` — found every one of the 199, by path, with every file named.** A
+person already has a way out today, without Teil B: open that sheet, or
+simply run the same import again.
+
+**The backlog entry's own headline does not reproduce, and the reason has a
+date: Sprint 4.** "Copies up to 200 books twice" describes what
+`ImportRunner` did *before* `OrphanedFolders` existed —
+`Tests/ShelfCoreTests/OrphanedFoldersTests.swift`'s
+`withoutAdoptionItDuplicates` is exactly that behaviour, kept on purpose as
+a pinned regression test ("Before the fix this was twelve"). Re-running the
+same import over the same source today reclaims instead of duplicating —
+proven at the unit level already (`resumeReusesInsteadOfDuplicating`) and
+now confirmed once more here, against a real killed process rather than a
+simulated one:
+
+```
+run 1, killed after 399 files (SHELF_EXIT_AFTER, exit status 9):
+  folders on disk: 399 | indexed: 200 | orphans: 199
+run 2, resume, same source, same library:
+  orphaned folders found: 199 – 199 taken back, 0 left for the user
+  folders on disk: 600 (expect 600) | indexed: 600 (expect 600)
+  orphans: 0 (expect 0) | doubled titles: 0 (expect 0)
+```
+
+**What is still open, and what Teil B closes.** Nothing is lost and nothing
+is duplicated, but for up to `ImportRunner.indexBatchSize - 1` books (199,
+here) the window between "on disk, verified" and "in the index" survives
+*any* kill today, tidy or hard, because nothing flushes the short last
+batch before the process actually ends. Teil B closes that window for the
+two abort kinds a process can be *asked*, rather than forced, to leave by:
+a clean quit (⌘Q) and `SIGTERM`. `SIGKILL` cannot be caught by any process
+on any platform — POSIX disallows it outright — so that one stays open,
+bounded at `indexBatchSize - 1`, closed only by shrinking the batch size
+(not done here, without a throughput number to justify moving a value
+that is "a compromise with throughput," as Erik's own instruction called
+it) or by `Find Orphaned Folders…`.
+
+**Measured, assumed, unchecked** (Leitlinie: "Unsicherheit benennen"):
+- **Measured**, directly, on this machine: both signal comparisons and the
+  worst-case/resume numbers above, against `shelf-tool` built `-c release`.
+  It shares `ImportRunner`, `OrphanedFolders` and the reclaim step
+  byte-for-byte with the app — `Sources/shelf-tool/main.swift`'s
+  `importFolder` calls the same three `OrphanedFolders` functions
+  `ImportModel.reclaimOrphans` does, on the same types.
+- **Assumed**, from reading `App/Shelf/ShelfApp.swift`'s `AppDelegate` in
+  full rather than from running it: that the real GUI app's ⌘Q and a real
+  `SIGTERM` sent to *it* behave the same as the measurements above, because
+  neither `applicationShouldTerminate` nor any signal handler exists there
+  today — nothing intercepts either path, so nothing should differ.
+- **Unchecked in this Teil, on purpose**: the app layer's own behaviour
+  under a live ⌘Q. Teil C measures that directly, once Teil B has given it
+  something to measure.
+
 ## Sprint 12, Teil D — a pass over the backlog, checked against today's code · 22 September 2026
 
 Teil C found that one open entry (the screen-lock guard) described a danger
