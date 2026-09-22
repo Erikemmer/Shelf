@@ -323,6 +323,19 @@ struct BookMenu: View {
         if books.contains(where: EPUBWrite.isEligible) {
             Button(Loc.string("Write into the Book File…")) { model.beginEPUBWrite(for: books) }
         }
+
+        Divider()
+        // Always this one book, never `subject` — a cover typed once onto
+        // twelve books is a mistake with twelve copies, the same reason the
+        // inspector's own text fields lock across a selection. Disabled
+        // whenever a multiple selection is active at all, not only when this
+        // book happens to be inside it, so this row agrees with the
+        // inspector's own "Remove Cover", which shows the same disabled state
+        // for the same reason.
+        Button(Loc.string("Remove Cover")) {
+            Task { await model.applyCover(nil, to: entry, undoManager: undoManager) }
+        }
+        .disabled(model.hasMultipleSelection || !model.coversOnDisk.contains(entry.id))
     }
 
     /// The books the menu acts on: the whole selection when this book is in it,

@@ -3,6 +3,55 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 12, Teil A — "Remove Cover" · 22 September 2026
+
+The hole Sprint 9 left open on purpose: `CoverReplacement.remove` existed
+in the core since Sprint 9 because undo needed it, and nothing offered it
+as a command — whoever set the wrong cover could only replace it with
+another, never take it away (`docs/BACKLOG.md`).
+
+`Remove Cover` now sits in two places, both calling
+`LibraryModel.applyCover(nil, …)` directly — the same function `Set
+Cover…`, a drop and `Download Cover…` already go through, so the Trash,
+the generation bump and ⌘Z/⇧⌘Z all come for free rather than being rebuilt:
+the inspector's own Cover menu (`InspectorCover.actions`,
+`App/Shelf/Views/InspectorView.swift`) and the grid/table's context menu
+(`BookMenu`, `App/Shelf/Views/ShelvesSection.swift`). Disabled in both
+places during a multiple selection and on a book that already has no
+cover — `model.hasMultipleSelection || !model.coversOnDisk.contains
+(entry.id)`.
+
+One core test was missing and is added:
+`CoverChangeCommitTests.removingThroughCommit` — `CoverReplacement.remove`
+itself was tested since Sprint 9, `commit(nil, …)` (what the menu item
+actually calls, the two-write protocol that bumps the generation and
+reverts it on a failed picture write) was not. 791 core tests now, all
+green, on the changed schema and code alike.
+
+Screenshots, both languages, `docs/screenshots/sprint-12/` (and `/de`),
+taken by the new `Scripts/remove-cover-shot.sh` against
+`Scripts/cover-library.sh`'s own fixture: the menu item enabled, the cell
+and the sidebar's "Missing Cover" count afterward, both disabled states
+visibly dimmed (a multiple selection, and a book with no cover), and the
+grid's own context menu doing the same thing the inspector's does. Every
+claim checked against the folder on disk and the sidebar's own count, not
+against the picture.
+
+**Found taking the screenshots, not before:** a disabled menu item does
+not dismiss its `NSMenu` the way an enabled one does, so the script's own
+click on a disabled "Remove Cover" left the Cover pull-down open and every
+lookup after it failed looking exactly like a missing accessibility label
+— fixed with an explicit Escape in the script, not in the app, since a
+disabled item ignoring a click is correct. And a title with an apostrophe
+has to be grepped for the way `OPFDocument.escaped` wrote it (`&apos;`),
+not the way a person types it — the script's first `folder_of()` searched
+for the wrong string, matched nothing, and `dirname` of nothing is `.`,
+so a precondition check silently asked the script's own working directory
+for a cover instead of the book's folder. Both are the same class of
+mistake this project has already named once this sprint season
+(`current-shelf-app.sh`'s own "Follow-up"): evidence that looks right and
+is not.
+
 ## Sprint 11, Nachsitzung, Teil C — the 907 ms question, on a quiet disk · 22 September 2026
 
 Free space checked first, as instructed: **16–18 GiB free, 53 % of the

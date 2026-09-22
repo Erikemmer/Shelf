@@ -525,6 +525,33 @@ struct CoverChangeCommitTests {
         #expect(indexed?.book.coverGeneration == 1)
     }
 
+    /// `commit(nil, …)` is what "Remove Cover" calls in the window
+    /// (`LibraryModel.applyCover`) — the same two-write protocol as a
+    /// replacement, only the picture half takes the file away instead of
+    /// writing a new one. `CoverReplacement.remove` itself is tested above;
+    /// this is the path the menu item actually goes down.
+    @Test("commit(nil, …) is Remove Cover: it takes the file away and still bumps the generation")
+    func removingThroughCommit() async throws {
+        let temporary = try TemporaryFolder()
+        let (library, entry, folder, index) = try await book(in: temporary, withCover: true)
+
+        let outcome = try await CoverReplacement.commit(
+            nil, to: entry, library: library, index: index)
+
+        guard case .wrote(let updated) = outcome else {
+            Issue.record("expected .wrote, got \(outcome)")
+            return
+        }
+        #expect(updated.book.coverGeneration == 1)
+        #expect(CoverFile.url(in: folder) == nil)
+
+        let onDisk = try OPFDocument.read(
+            Data(contentsOf: folder.appendingPathComponent("metadata.opf")), fallbackTitle: "x")
+        #expect(onDisk.book.coverGeneration == 1)
+        let indexed = try await index.entry(id: entry.id)
+        #expect(indexed?.book.coverGeneration == 1)
+    }
+
     /// **The test this whole fix hangs on.** A disposal that cannot move the
     /// existing cover fails the picture half of the write; the generation was
     /// already bumped in the first half. Left alone, `metadata.opf` would

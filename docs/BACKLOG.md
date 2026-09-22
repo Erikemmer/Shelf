@@ -691,9 +691,12 @@ the most visible hole in the grid.
       twelve copies — and a cover is the strongest case of that, not the
       weakest. If it is ever wanted it is *one picture onto many books*, which
       is a different gesture and wants its own confirmation
-- [ ] **`Remove Cover` as a menu item.** The core can do it
-      (`CoverReplacement.remove`) because undo needs it; nothing offers it,
-      because nobody asked for it
+- [x] **`Remove Cover` as a menu item.** Done in Sprint 12, Teil A: the
+      inspector's own Cover menu and the grid/table's context menu, both
+      down the path that already existed for undo (`CoverReplacement
+      .remove` through `LibraryModel.applyCover(nil, …)`). Disabled during
+      a multiple selection and on a book that already has none, both
+      photographed dimmed rather than merely asserted
 - [ ] **Tests for the picture half.** `CoverImage` — measuring a file, scaling
       it, writing it again as JPEG, and therefore everything specific to HEIC
       and TIFF — needs ImageIO, so it cannot run in `ShelfCoreTests`, which is
@@ -1216,3 +1219,27 @@ sentence, only format code and numbers glued together, and stays that way.
 Screenshots re-taken through `Scripts/write-into-book-cover-shot.sh` (not
 by hand), both languages; `docs/screenshots/sprint-11/README.md` updated
 to quote the new row. `docs/CHANGELOG.md`, Sprint 11, Nachsitzung, Teil B.
+
+## Sprint 12, Teil A – "Remove Cover" · done
+
+The hole Sprint 9 left open on purpose (above): the core could take a
+cover away since Sprint 9 (`CoverReplacement.remove`, built for undo), and
+nothing offered it as a command. Whoever had set the wrong picture could
+only ever replace it with another, never take it away.
+
+- [x] `Remove Cover` in the inspector's own Cover menu (beside `Set
+      Cover…`, `Take Cover from Book File` and `Download Cover…`) and in
+      the grid/table's context menu (`BookMenu`) — both call
+      `LibraryModel.applyCover(nil, …)` directly, the same function every
+      other cover action already goes through, so the Trash-not-delete
+      rule, the generation bump and ⌘Z/⇧⌘Z all come for free
+- [x] Disabled during a multiple selection and on a book that already has
+      no cover, in both places, photographed dimmed rather than merely
+      asserted (`docs/screenshots/sprint-12/`)
+- [x] `CoverChangeCommitTests.removingThroughCommit` — the one gap in
+      Sprint 9's own test coverage: `CoverReplacement.remove` itself was
+      tested, `commit(nil, …)` (what the menu item actually calls) was not
+- [x] Screenshots in both languages, `docs/screenshots/sprint-12/` (and
+      `/de`), with a verdict under each picture in the Sprint 9/11 style —
+      every claim checked against the folder on disk and the sidebar's own
+      "Missing Cover" count, not against the picture

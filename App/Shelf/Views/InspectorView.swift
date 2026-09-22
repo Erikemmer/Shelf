@@ -913,10 +913,23 @@ struct InspectorCover: View {
 
         Divider()
         Button(Loc.string("Download Cover…")) { model.presentFetchMetadata() }
+
+        Divider()
+        // The core has been able to do this since Sprint 9 — undo needs it —
+        // and nothing offered it until now: whoever gets the wrong picture
+        // could only replace it with another, never take it away
+        // (`docs/BACKLOG.md`). Same rules as every other cover action: the
+        // file goes to the Trash, never `removeItem`, and ⌘Z puts it back.
+        Button(Loc.string("Remove Cover")) { remove() }
+            .disabled(model.hasMultipleSelection || !model.coversOnDisk.contains(entry.id))
     }
 
     private func take(_ format: BookFormat) {
         Task { await model.takeCoverFromBookFile(of: entry, format: format, undoManager: undoManager) }
+    }
+
+    private func remove() {
+        Task { await model.applyCover(nil, to: entry, undoManager: undoManager) }
     }
 
     /// An image dragged onto the picture.
