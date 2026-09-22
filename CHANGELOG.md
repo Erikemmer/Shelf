@@ -3,6 +3,50 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 12, Teil D — a pass over the backlog, checked against today's code · 22 September 2026
+
+Teil C found that one open entry (the screen-lock guard) described a danger
+already closed since Sprint 2c, missing only its enforcement — read as a
+sign the fifty-odd open entries might hold others like it. This is that
+check: every one of the 41 checkboxes still open in `docs/BACKLOG.md`,
+read against the code as it stands today, not against what the entry
+assumed when it was written.
+
+**All 41 are still accurate.** None were checked off, none needed
+rewording, and nothing that looks like a real defect turned up on the way
+— this pass only reads, per instruction, and reports rather than repairs.
+What was actually checked against the source, rather than taken on faith:
+
+- Publisher, language and date are still locked across a selection
+  (`InspectorView.row`, still routed through `hasMultipleSelection`).
+- `Shelf.position` is still never set from the window — only
+  `ShelfEdit`'s own append-to-the-end logic touches it.
+- No sidebar ⌘-click filter combination and no dedicated series view exist.
+- `ImportRunner.indexBatchSize` is still 200 — the up-to-200-books-twice
+  entry's own arithmetic still holds.
+- The device profiles' `note` field is still English in every `.json`.
+- No German screenshots exist yet for Send to Device, Delete from Device,
+  the Calibre import sheet, Fetch Metadata or the orphaned-folders sheet.
+- No stored `authorSort`, no "move only these" in Organize, no export
+  resume — none of the three exist in `ShelfCore`.
+- No app-side test target exists in `project.yml` — still only `Shelf`
+  and `ShelfCore/ShelfCoreTests`.
+- `CoverReplacement.replace` still disposes the old cover before renaming
+  the new one into place — the trash-before-swap gap Erik chose to leave,
+  unlike `EPUBFileReplacement`'s own Korrektur 1.
+- `DeleteFromDeviceSheet`'s confirm button still carries only `.disabled`,
+  no explicit `.opacity`, unlike `WriteIntoBookSheet`'s (which has both,
+  with the comment explaining why).
+- `EPUBOPFPatch` still refuses on an author-count mismatch rather than
+  adding or removing one; `DeclarationForm` still reads
+  `<package version="…">` with a bare `hasPrefix("3")`.
+
+Everything else on the list — a real e-reader, Erik's own Calibre
+library, a real MOBI/AZW3/CBR/DRM file, Google Books answering, a
+Developer ID certificate, a person watching trackpad scrolling — needs a
+resource this session does not have by definition, not a code check, and
+stays open for that reason alone.
+
 ## Sprint 12, Nachtrag — the ⌘Z menu title was never broken, only wrongly measured · 22 September 2026
 
 A second and, per instruction, last look at `docs/BACKLOG.md`'s Sprint 6/7
