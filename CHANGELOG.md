@@ -3,6 +3,67 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 12, Teil B — ⌘Z naming itself, attempted and abandoned · 22 September 2026
+
+`docs/BACKLOG.md`'s own Sprint 6/7 entry, tried and reverted, on
+instruction: build it, measure step (a) first, do not accept a result that
+changes step (a), stop after two serious tries if that result cannot be
+had. Both conditions were hit — the second one on the feature's own
+purpose, not on the safety rule.
+
+**Step (a), measured before anything changed**: three letters typed into
+the inspector's title field, uncommitted, then ⌘Z — the field reverted to
+its exact previous value, and the Edit menu, opened first, read "Undo
+Typing" (AppKit's own name, for the field editor's own manager). This is
+the value every attempt below was checked against.
+
+**Attempt 1.** `CommandGroup(replacing: .undoRedo)`, a new
+`UndoRedoCommands: View` reading `@Environment(\.undoManager)`, its Button
+calling `undoManager?.undo()` directly. Re-measured step (a): the letters
+stayed. ⌘Z did nothing, in two variants (the item disabled by
+`!(undoManager?.canUndo ?? false)`, and always enabled) — proving the
+field editor answers ⌘Z from a manager other than the one `LibraryModel`
+registers metadata undos on, not merely that a stale `.disabled` was in
+the way.
+
+**Attempt 2, the action half.** The action calls
+`NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)` instead — the
+same dynamic first-responder dispatch the *unreplaced* Edit ▸ Undo item
+already uses. Re-measured step (a) again: the letters came off on the
+first ⌘Z, nothing on the second or third, byte for byte what step (a)
+measured before any of this existed. The action half of this fix works
+and does not touch text-field editing.
+
+**Attempt 2, the name half — this is the one that did not work.** With
+the action fixed, the title still read a bare "Undo, Redo" after a
+committed publisher edit and after removing a cover — both calls that
+reach `setActionName` on the exact manager the item reads from. Three
+distinct ways of telling SwiftUI to redraw the item were tried:
+`@Environment(\.undoManager)` alone; a `@State` counter bumped by
+`NotificationCenter` observers on `NSUndoManager`'s own
+`didCloseUndoGroup`/`didUndoChange`/`didRedoChange` notifications; and an
+`@Observable` counter on `LibraryModel` (`undoActivity`, bumped beside
+every `setActionName` call, read from the command item's body) — the same
+dependency shape that already drives `.disabled(model.library == nil)`
+correctly elsewhere in the same `.commands` block. All three left the
+title unchanged, every time, across repeated measurements in both
+directions (after an edit, after ⌘Z, after ⇧⌘Z).
+
+**Reverted, not kept half-working.** The action fix alone is real and
+correct, but shipping only it — a `ShortcutAction` split into `.undo`/
+`.redo`, a new `View`, two new catalogue templates, an unused-in-practice
+`undoActivity` counter — for a menu that still reads bare "Undo" is dead
+complexity for no visible change. `git checkout --` on the five touched
+files (`App/Shelf/ShelfApp.swift`, `App/Shelf/Services/LibraryModel.swift`,
+`Sources/ShelfCore/Model/ShortcutReference.swift`,
+`Tests/ShelfCoreTests/ShortcutTests.swift`,
+`App/Shelf/Resources/Localizable.xcstrings`), back to `fa8e7e2`. `make
+test`, `make app`, `make lint`, `make smoke` all green afterward, since
+nothing shipped. `docs/BACKLOG.md` carries the finding forward, including
+the one path not tried: raw AppKit, a custom `NSMenuItem`/`NSMenuDelegate`
+`menuNeedsUpdate(_:)` hook reading the name right before the menu opens,
+outside SwiftUI's declarative title binding entirely.
+
 ## Sprint 12, Teil A — "Remove Cover" · 22 September 2026
 
 The hole Sprint 9 left open on purpose: `CoverReplacement.remove` existed

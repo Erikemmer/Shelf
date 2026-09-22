@@ -436,6 +436,53 @@ is currently assumed.
       for a cosmetic gain. It wants a test that types into a field, presses ⌘Z,
       and reads the field back
 
+      **Attempted in Sprint 12, Teil B, and abandoned — the risk this entry
+      named turned out to be real, and a second problem sits behind it that
+      the risk was never about.** Measured directly, three letters typed into
+      the title field with the group replaced and the action bound to
+      `@Environment(\.undoManager).undo()`: ⌘Z did nothing, the letters
+      stayed. That confirmed the field editor answers ⌘Z from a *different*
+      manager than the one `LibraryModel` registers metadata undos on —
+      `undoManager?.undo()` on the fixed environment reference simply has
+      nothing on its stack while a field is mid-edit. Routing the action
+      through `NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)`
+      instead — the same dynamic first-responder dispatch the *unreplaced*
+      Edit ▸ Undo already uses — fixed exactly that: the same three-letter
+      test now undoes correctly, byte for byte the same as before the group
+      was ever replaced.
+
+      **But the item's own title never updates, which is the entire point of
+      doing this at all.** With the action fixed, the menu still read a bare
+      "Undo, Redo" after a committed publisher edit and after removing a
+      cover — two calls that definitely reached `setActionName` on the exact
+      manager the item's title reads from. Three different ways of telling
+      SwiftUI to redraw the item were tried and each looked plausible before
+      being tried: a `@State` counter bumped from `NotificationCenter`
+      observers on `.NSUndoManagerDidCloseUndoGroup` /
+      `.NSUndoManagerDidUndoChange` / `.NSUndoManagerDidRedoChange`; and an
+      `@Observable` counter on `LibraryModel` itself
+      (`undoActivity`, bumped beside every `setActionName` call) read from
+      the command item's own body, the same dependency shape that already
+      works for every other `.disabled(model.library == nil)` in this same
+      `.commands` block. Neither moved the displayed title at all, in any
+      run. The working theory, not confirmed against Apple's own source: a
+      `CommandGroup`'s content is realised into real `NSMenuItem`s once, and
+      SwiftUI's ordinary state-driven view diffing — proven to reach `.disabled`
+      on items in this exact file — does not extend to rewriting a menu
+      item's *title* after that point, at least not on this SwiftUI/macOS
+      combination.
+
+      Reverted rather than kept half-working: shipping the action fix alone
+      would add a `ShortcutAction` split, a new `View`, two new catalogue
+      templates and an `undoActivity` counter for a menu that still reads
+      "Undo" — dead complexity for zero visible change, worse than the
+      status quo it would replace. If this is tried again, the SwiftUI
+      `Commands` route is the one now known not to work; the open path is
+      raw AppKit — a custom `NSMenuItem`/`NSMenuDelegate` hook
+      (`menuNeedsUpdate(_:)`) that reads the name itself right before the
+      menu opens, the same moment the *standard* Undo item already does it,
+      outside SwiftUI's declarative title binding entirely.
+
 ## Sprint 7 – Polish and release
 
 - [x] **German localisation.** 429 catalogue entries, English and German, eight
