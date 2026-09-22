@@ -79,6 +79,23 @@ let usage = """
                                     original (must be exactly one — the OPF)
                                     and the size of that one entry, before
                                     and after. Never touches <folder> itself
+      epub-cover-patch <folder> <output folder>
+                                    every .epub in <folder>: a synthetic
+                                    cover written in with EPUBCoverPatch —
+                                    once in the same format the book's own
+                                    cover already has (proving exactly one
+                                    entry differs when the manifest already
+                                    names a cover), and once in a different
+                                    format when it does (proving exactly
+                                    two: the image and the OPF, media-type
+                                    corrected). Prints, per book, which of
+                                    the two cases (a: already has a cover,
+                                    b: does not) it fell into, the entry
+                                    counts, and the size before and after,
+                                    absolute and in percent. Shelf's own
+                                    reader (EPUBMetadata) reads the new
+                                    cover back from the result. Never
+                                    touches <folder> itself (docs/adr/0021-…)
       epub-file-replace-proof <folder> <working folder>
                                     the whole EPUBFileReplacement path
                                     (docs/adr/0021-…) against copies of
@@ -223,6 +240,7 @@ case "show": try await Commands.show(Array(arguments.dropFirst()))
 case "digest": try Commands.digest(Array(arguments.dropFirst()))
 case "epub-roundtrip": try Commands.epubRoundtrip(Array(arguments.dropFirst()))
 case "epub-metadata-patch": try Commands.epubMetadataPatch(Array(arguments.dropFirst()))
+case "epub-cover-patch": try Commands.epubCoverPatch(Array(arguments.dropFirst()))
 case "epub-file-replace-proof": try Commands.epubFileReplaceProof(Array(arguments.dropFirst()))
 case "epub-write-fixture": try await Commands.epubWriteFixture(Array(arguments.dropFirst()))
 case "online-read": try Commands.onlineRead(Array(arguments.dropFirst()))
@@ -2218,6 +2236,114 @@ enum Commands {
             }
         }
         if !allOK { exit(1) }
+    }
+
+    // MARK: epub-cover-patch
+
+    /// A small, valid-enough JPEG (magic number and an `FFD9` end marker;
+    /// nothing here decodes it, so the pixels in between never matter) —
+    /// shelf-tool's own synthetic cover, never a borrowed image
+    /// (`CLAUDE.md`).
+    static let syntheticJPEGCover = Data(
+        [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01]
+            + Array(repeating: UInt8(0x99), count: 512) + [0xFF, 0xD9])
+    static let syntheticPNGCover = Data(
+        [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] + Array(repeating: UInt8(0x33), count: 512))
+
+    /// `EPUBCoverPatch`'s own claim (`docs/adr/0021-…`): a cover change
+    /// touches exactly one entry when the manifest already names a cover of
+    /// the same format, and exactly two — the image and the OPF — when the
+    /// format changes and the media-type has to be corrected. Run twice per
+    /// book: once with a cover in the book's own format, once with one in a
+    /// different format, against real books nobody here wrote.
+    static func epubCoverPatch(_ arguments: [String]) throws {
+        guard arguments.count >= 2 else {
+            print("usage: shelf-tool epub-cover-patch <folder> <output folder>")
+            exit(2)
+        }
+        let folder = URL(fileURLWithPath: (arguments[0] as NSString).expandingTildeInPath, isDirectory: true)
+        let output = URL(fileURLWithPath: (arguments[1] as NSString).expandingTildeInPath, isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+
+        let names =
+            (try? FileManager.default.contentsOfDirectory(atPath: folder.path))?
+            .filter { $0.lowercased().hasSuffix(".epub") }.sorted() ?? []
+        guard !names.isEmpty else {
+            print("no .epub files in \(folder.path)")
+            exit(2)
+        }
+
+        var allOK = true
+        for name in names {
+            let source = folder.appendingPathComponent(name)
+            do {
+                let before = try Data(contentsOf: source)
+                let originalArchive = try ZipReader(data: before)
+                let originalRead = EPUBMetadata.read(originalArchive, fallbackTitle: name)
+                let hadCover = originalRead.cover != nil
+
+                let sameFormat = try EPUBCoverPatch.entries(
+                    patchingCover: Self.syntheticJPEGCover, in: originalArchive)
+                let after = try EPUBArchiveWriter.archive(sameFormat.entries)
+                try after.write(to: output.appendingPathComponent(name))
+                let reread = try ZipReader(data: after)
+                let differing = Self.differingFilePaths(original: originalArchive, patched: reread)
+                let readBack = EPUBMetadata.read(reread, fallbackTitle: name)
+                let coverOK = readBack.cover == Self.syntheticJPEGCover
+                let entryCountOK =
+                    hadCover
+                    ? differing.count == 1 : reread.entries.count == originalArchive.entries.count + 1
+
+                var crossFormatNote = ""
+                var crossFormatOK = true
+                if hadCover {
+                    let crossFormat = try EPUBCoverPatch.entries(
+                        patchingCover: Self.syntheticPNGCover, in: originalArchive)
+                    let crossAfter = try EPUBArchiveWriter.archive(crossFormat.entries)
+                    let crossReread = try ZipReader(data: crossAfter)
+                    let crossDiffering = Self.differingFilePaths(original: originalArchive, patched: crossReread)
+                    crossFormatOK = crossDiffering.count == 2 && crossFormat.mediaTypeCorrected != nil
+                    let correction = crossFormat.mediaTypeCorrected.map { " (\($0.from) → \($0.to))" } ?? ""
+                    crossFormatNote =
+                        ", a different-format cover touches \(crossDiffering.count) entries\(correction)"
+                }
+
+                let sizeDelta = after.count - before.count
+                let sign = sizeDelta >= 0 ? "+" : ""
+                let percent = before.isEmpty ? 0 : Double(sizeDelta) / Double(before.count) * 100
+                var line =
+                    "\(name): case \(hadCover ? "a" : "b") (\(hadCover ? "already has a cover" : "no cover yet")), "
+                line += "\(before.count) bytes before, \(after.count) bytes after (\(sign)\(sizeDelta), "
+                line += String(format: "%+.2f%%), ", percent)
+                line +=
+                    "\(differing.count) entr\(differing.count == 1 ? "y" : "ies") differ (\(differing.joined(separator: ", ")))"
+                line += crossFormatNote
+                line += ", cover read back \(coverOK ? "✓" : "✗")"
+                print(line)
+                allOK = allOK && entryCountOK && coverOK && crossFormatOK
+            } catch {
+                print("\(name): FAILED – \(error)")
+                allOK = false
+            }
+        }
+        if !allOK { exit(1) }
+    }
+
+    /// Every file entry present in both archives whose compressed bytes,
+    /// method, CRC or uncompressed size differ — sorted, so two runs of
+    /// this tool print the same order.
+    private static func differingFilePaths(original: ZipReader, patched: ZipReader) -> [String] {
+        var differing: [String] = []
+        for entry in original.files {
+            guard let patchedEntry = patched.entry(at: entry.path) else { continue }
+            let originalPayload = try? original.compressedData(for: entry)
+            let patchedPayload = try? patched.compressedData(for: patchedEntry)
+            let same =
+                entry.method == patchedEntry.method && entry.crc32 == patchedEntry.crc32
+                && entry.uncompressedSize == patchedEntry.uncompressedSize && originalPayload == patchedPayload
+            if !same { differing.append(entry.path) }
+        }
+        return differing.sorted()
     }
 
     // MARK: epub-file-replace-proof

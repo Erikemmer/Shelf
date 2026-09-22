@@ -3,6 +3,73 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 11, Schritt 1 — a cover into an EPUB's own archive, in the core · 22 September 2026
+
+`docs/adr/0021-…` promised a cover as well as metadata; Sprint 10 built only
+the metadata half. `EPUBCoverPatch` is the rest, on the same footing as
+`EPUBOPFPatch`: no window yet, proven synthetically and against the six real
+Gutenberg books.
+
+Two cases, decided by the manifest itself. **a) It already names a cover:**
+only that entry's bytes are replaced, at the path it already has — an EPUB 2
+cover page is often its own XHTML file that embeds the image by that exact
+href, and moving the file would point that page at nothing. A new image in a
+different format from the old one is still written at the old path; only the
+manifest's `media-type` is corrected. **b) It does not:** a new manifest item
+is added, with a cover declaration in whichever form the file itself already
+uses — EPUB 2's `<meta name="cover" content="id">`, EPUB 3's
+`properties="cover-image"`, or both. The "both" rule was not guessed: reading
+`pride-and-prejudice-epub3-images.epub`'s own `content.opf` while building
+this showed a real EPUB 3 book that still carries `<spine toc="…">` naming an
+NCX, kept for readers that only understand EPUB 2 — a book that goes to that
+trouble for its table of contents gets both forms of the cover declaration
+too. The cover image is always written stored, never deflated (JPEG and PNG
+are already compressed; a second pass costs bytes for nothing). Nothing here
+decodes, scales or re-encodes a pixel — the bytes go in exactly as they sit
+next to the book — and DRM is refused in the core, before anything is read.
+
+10 new core tests, synthetic archives only, covering: both cases in both EPUB
+generations, the format-mismatch correction, the "both forms" rule, an id/path
+collision avoided, and DRM refused before anything is touched.
+
+The sharper proof: after a pure cover change, **exactly one entry of the
+archive differs** (the image) when the format did not change, and **exactly
+two** (the image and the OPF) when it did — `shelf-tool epub-cover-patch`,
+run from `Scripts/real-epub-proof.sh`, against the same six Gutenberg books
+Sprint 10 already proves `EPUBOPFPatch` against. All six turned out to
+already have a cover (case a) — `alice-in-wonderland-epub2-noimages.epub`,
+`die-verwandlung-epub2-images.epub`, `grimms-fairy-tales-epub2-images.epub`,
+`les-miserables-epub3-images.epub`, `pride-and-prejudice-epub2-images.epub`
+and `pride-and-prejudice-epub3-images.epub`, every one of them JPEG — so
+case b (no cover at all) is proven only by the synthetic tests, not against
+a real book; nothing in the six offered the chance. Run against a synthetic
+cover in the book's own format (one entry differs, confirmed for all six)
+and again in a different one (two entries differ, `media-type` corrected
+from `image/jpeg` to `image/png`, confirmed for all six); `EPUBMetadata`
+reads the new cover back out of the result every time; the independent
+Python cross-check (`Scripts/epub-crosscheck.py`) agrees. Sizes, machine:
+this Mac, synthetic ~530-byte cover replacing what was there before, so
+every book *shrank*: Alice in Wonderland 136 519 → 83 467 bytes (−38.9 %),
+Die Verwandlung 99 693 → 64 086 (−35.7 %), Grimms' Fairy Tales 531 353 →
+275 186 (−48.2 %), Les Misérables 10 123 259 → 9 903 561 (−2.2 %), Pride and
+Prejudice EPUB2 24 846 132 → 24 617 067 (−0.9 %), EPUB3 24 835 578 →
+24 606 513 (−0.9 %) — a real cover replacement would typically grow a book
+instead, since Shelf's own covers are not shrunk to shelf-tool's tiny test
+size.
+
+Two of `EPUBOPFPatch`'s own private tag-scanning helpers (finding a raw
+tag's span, and its attributes' local names) are `internal` rather than
+`private` as of this sprint, so `EPUBCoverPatch` can share them rather than
+carrying a second copy of the same edge cases (a quoted `>`, a self-closing
+tag). `OPFDocument.readCoverPath` is `coverPath` and `public` for the same
+reason: `EPUBCoverPatch` asks the exact question a read already answers, so
+a write replaces exactly what a read would have shown.
+
+786 core tests (10 new), `make lint`, `make app` and `make smoke` clean. One
+commit. No window changes — `EPUBWrite` and `WriteIntoBookSheet` are
+untouched; the cover does not yet appear in "Write into the Book File"'s own
+plan. That is Sprint 11's Schritt 2, on Erik's word.
+
 ## Sprint 10, Schritt E2 — three follow-up questions about the last fix · 22 September 2026
 
 Erik asked three questions about the correction below, each with a test or a

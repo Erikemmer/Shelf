@@ -379,12 +379,15 @@ public enum EPUBOPFPatch {
         return found
     }
 
-    private struct TagOccurrence {
+    /// Internal, not private — `EPUBCoverPatch` reuses this to find
+    /// `<manifest>`'s own body range, to insert a new `<item>` as its last
+    /// child the same way this type inserts into `<metadata>`.
+    struct TagOccurrence {
         var attributes: [String: String]
         var bodyRange: Range<String.Index>?
     }
 
-    private static func rawOccurrences(of qualifiedName: String, in text: String) -> [TagOccurrence] {
+    static func rawOccurrences(of qualifiedName: String, in text: String) -> [TagOccurrence] {
         var results: [TagOccurrence] = []
         var cursor = text.startIndex
         while let tagStart = Self.nextTagStart(named: qualifiedName, in: text, from: cursor) {
@@ -406,7 +409,12 @@ public enum EPUBOPFPatch {
     /// The index of the next `<qualifiedName` whose name ends at a real tag
     /// boundary (whitespace, `>` or `/`) rather than continuing into a
     /// longer name (`<title` must not match inside `<titlepage`).
-    private static func nextTagStart(
+    ///
+    /// Internal, not private: `EPUBCoverPatch` scans for `<item>` tags the
+    /// same way, to find and edit one manifest entry's `media-type`
+    /// attribute — a second copy of tag-boundary scanning would be a second
+    /// place to get the edge cases (a quoted `>`, a self-closing tag) wrong.
+    static func nextTagStart(
         named qualifiedName: String, in text: String, from start: String.Index
     ) -> String.Index? {
         let needle = "<\(qualifiedName)"
@@ -427,7 +435,10 @@ public enum EPUBOPFPatch {
     /// Walks forward from a tag's own `<`, respecting quoted attribute
     /// values (where `>` is legal and not the tag's end), to the index just
     /// after the tag's closing `>` and whether it was self-closing.
-    private static func endOfOpeningTag(
+    ///
+    /// Internal — see `nextTagStart`'s own comment on why `EPUBCoverPatch`
+    /// shares this rather than reimplementing it.
+    static func endOfOpeningTag(
         startingAt tagStart: String.Index, in text: String
     ) -> (
         end: String.Index, selfClosing: Bool
@@ -485,7 +496,8 @@ public enum EPUBOPFPatch {
         return result
     }
 
-    private static func localName(of name: String) -> String {
+    /// Internal — shared with `EPUBCoverPatch`'s own attribute scan.
+    static func localName(of name: String) -> String {
         guard let colon = name.lastIndex(of: ":") else { return name }
         return String(name[name.index(after: colon)...])
     }
@@ -493,7 +505,9 @@ public enum EPUBOPFPatch {
     /// The inverse of `OPFDocument.escaped` / `escapedAttribute`, for
     /// attribute values read raw from the file rather than through
     /// `XMLTree` – needed only to compare them, never written back out.
-    private static func unescaped(_ text: String) -> String {
+    ///
+    /// Internal — shared with `EPUBCoverPatch`'s own attribute scan.
+    static func unescaped(_ text: String) -> String {
         var result = text
         let entities: [(String, String)] = [
             ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&apos;", "'"), ("&amp;", "&"),

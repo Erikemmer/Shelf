@@ -111,7 +111,7 @@ public enum OPFDocument {
 
         return Parsed(
             book: book,
-            coverPath: readCoverPath(root),
+            coverPath: coverPath(root),
             unmappedMetas: metas.unmapped)
     }
 
@@ -234,7 +234,12 @@ public enum OPFDocument {
     /// `<meta name="cover" content="itemID">`, and an item whose id or href
     /// merely looks like a cover. The last one is a guess, and it is the one
     /// that finds the cover in most books written before 2015.
-    private static func readCoverPath(_ root: XMLTree.Element) -> String? {
+    ///
+    /// Public since Sprint 11: `EPUBCoverPatch` asks this exact question
+    /// before writing, so a write replaces exactly what a read would have
+    /// shown as the cover, rather than a second opinion the two could
+    /// disagree on.
+    public static func coverPath(_ root: XMLTree.Element) -> String? {
         let items = root.descendants(named: "item")
 
         if let item = items.first(where: { ($0.attribute("properties") ?? "").contains("cover-image") }) {

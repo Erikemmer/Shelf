@@ -17,12 +17,17 @@
 # epub-file-replace-proof`): the whole `EPUBFileReplacement` path — written,
 # read back, rehashed, the original to the Trash — against every one of the
 # six, one at a time, plus each of its five refusals proven to leave exactly
-# the original file behind.
+# the original file behind. Then a real cover change (`shelf-tool
+# epub-cover-patch`, `EPUBCoverPatch`) — a synthetic cover in the book's own
+# format, proving exactly one entry differs, and one in a different format,
+# proving exactly two (the image and the OPF, media-type corrected) — read
+# back afterward with Shelf's own reader.
 #
 # Reads-only against the books: nothing here is written back over an
 # original, and nothing under ~/Library/Caches/Shelf/real-epubs-10/ is ever
 # touched except by Scripts/real-epubs.sh fetching it in the first place —
-# section 7 above works against its own copies, in file-replace-proof/.
+# section 7 works against its own copies in file-replace-proof/, section 8
+# in cover-patched/.
 #
 # Usage: Scripts/real-epub-proof.sh [books folder]
 set -uo pipefail
@@ -109,12 +114,33 @@ rm -rf "$REPLACE_PROOF"
 /usr/bin/time -l "$TOOL" epub-file-replace-proof "$BOOKS" "$REPLACE_PROOF"
 REPLACE_STATUS=$?
 
+say "8. A real cover change — EPUBCoverPatch, exactly one entry (or two, across a format change)"
+COVER_PATCHED="$BOOKS/cover-patched"
+rm -rf "$COVER_PATCHED"
+"$TOOL" epub-cover-patch "$BOOKS" "$COVER_PATCHED"
+COVER_STATUS=$?
+
+say "9. The cross-check again, against the cover-patched copies — the title is unchanged this time"
+COVER_CROSSCHECK_FAILED=0
+for original in "$BOOKS"/*.epub; do
+    name="$(basename "$original")"
+    patched="$COVER_PATCHED/$name"
+    [ -f "$patched" ] || {
+        echo "  (skipped: $name has no cover-patched copy – section 8 above already reported why)"
+        continue
+    }
+    python3 "$HERE/epub-crosscheck.py" "$original" "$patched" || COVER_CROSSCHECK_FAILED=1
+done
+
 say "Summary"
 if [ "$ROUNDTRIP_STATUS" -ne 0 ] || [ "$CROSSCHECK_FAILED" -ne 0 ] || [ "$EPUBCHECK_FAILED" -ne 0 ] \
-    || [ "$PATCH_STATUS" -ne 0 ] || [ "$PATCH_CROSSCHECK_FAILED" -ne 0 ] || [ "$REPLACE_STATUS" -ne 0 ]; then
+    || [ "$PATCH_STATUS" -ne 0 ] || [ "$PATCH_CROSSCHECK_FAILED" -ne 0 ] || [ "$REPLACE_STATUS" -ne 0 ] \
+    || [ "$COVER_STATUS" -ne 0 ] || [ "$COVER_CROSSCHECK_FAILED" -ne 0 ]; then
     fail "at least one check above did not pass – see the sections it named"
 fi
 echo "real-epub-proof: every book round-tripped byte-identical per entry, a real metadata change touches" \
-    "exactly the OPF in every one of them, the cross-check agrees both times, and a real book file gets" \
+    "exactly the OPF in every one of them, the cross-check agrees both times, a real book file gets" \
     "replaced end to end – written, read back, rehashed, the original in the Trash – with each of the" \
-    "five refusals leaving exactly the original file behind."
+    "five refusals leaving exactly the original file behind, and a real cover change touches exactly one" \
+    "entry when the manifest already agrees on the format and exactly two – the image and the OPF – when" \
+    "it does not."

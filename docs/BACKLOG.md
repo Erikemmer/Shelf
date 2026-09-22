@@ -1044,3 +1044,47 @@ the core in Schritt E1: on explicit instruction only.
       Not checked against a screenshot this time; `WriteIntoBookSheet`'s
       own button now gets an explicit `.opacity` alongside `.disabled`
       because the ambient style did not dim it on its own.
+
+## Sprint 11, Schritt 1 – a cover into an EPUB's own archive, in the core · done
+
+`EPUBCoverPatch`, the half of `docs/adr/0021-…` Sprint 10 left open. No
+window yet — see Schritt 2 below.
+
+- [x] A manifest that already names a cover: only the entry's bytes
+      replaced, at its own path; a format change corrects `media-type`
+      alone, never moves the file
+- [x] A manifest with no cover at all: a new `<item>`, a cover
+      declaration in whichever form the file itself uses — EPUB 2's
+      `meta`, EPUB 3's `properties`, or both, read off the package
+      version and a `<spine toc="…">` kept for backward compatibility
+- [x] Stored, never deflated; no image decoded, scaled or re-encoded;
+      DRM refused in the core
+- [x] 10 core tests; the sharper proof (exactly one entry differs, or
+      two across a format change) against all six real Gutenberg books,
+      `shelf-tool epub-cover-patch` from `Scripts/real-epub-proof.sh`
+
+### What Schritt 1 found on the way
+
+- [ ] **All six real Gutenberg books already have a cover.** The "no
+      cover at all" branch of `EPUBCoverPatch` — a new manifest item, a
+      fresh cover declaration — is proven only by the ten synthetic
+      tests, never against a real book; nothing in the six offered the
+      chance. Worth remembering if a seventh, cover-less book is ever
+      added to `Scripts/real-epubs.sh`: it would be the first real proof
+      of that branch.
+- [ ] **The "both forms" rule for a new cover declaration (`<spine
+      toc="…">` naming an NCX, alongside `version="3.…"`) is grounded in
+      exactly one real book**, `pride-and-prejudice-epub3-images.epub` —
+      the only EPUB 3 among the six that would have needed the "no cover
+      yet" branch to exercise it, and it already has a cover, so the rule
+      itself has only ever been exercised by unit tests built to match
+      what that one file's own `content.opf` showed. A second, differently
+      -built EPUB 3 file (from a producer other than Gutenberg's own
+      pipeline) would be worth checking against, before leaning on this
+      rule for a real library.
+- [ ] **`DeclarationForm` reads `<package version="…">` verbatim** —
+      `hasPrefix("3")` for EPUB 3. A version string this project has
+      never seen (`"3.0.1"`, a stray leading space, a missing attribute
+      entirely) falls back to the EPUB 2 form rather than refusing, which
+      is the same "harmless over-cautious default" choice `OPFDocument`
+      already makes elsewhere in this file, not a gap found and left.
