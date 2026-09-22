@@ -15,6 +15,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/no-foreign-shelf.sh"
+. "$HERE/current-shelf-app.sh"
 ROOT="$(cd "$HERE/.." && pwd)"
 WORK="${1:-$HOME/Library/Caches/Shelf/runbook-7b}"
 SCRATCH="${SCRATCH:-$HOME/Library/Caches/Shelf/build}"
@@ -190,7 +191,7 @@ fi
 # rather than take the rest of the runbook proof down with it. The subshell
 # keeps the guard's own `exit` from doing that while still asking the one
 # question that matters: is a foreign Shelf running right now.
-if [ -n "$APP" ] && (require_no_foreign_shelf) >/dev/null 2>&1; then
+if [ -n "$APP" ] && verify_shelf_app_is_current "$APP" >/dev/null 2>&1 && (require_no_foreign_shelf) >/dev/null 2>&1; then
     SINCE=$(date "+%Y-%m-%d %H:%M:%S")
     FROM_THE_FUTURE="$WORK/from-the-future"
     rm -rf "$FROM_THE_FUTURE"
@@ -212,8 +213,9 @@ PYEOF
     printf '\n$ %s\n' "log show --start '$SINCE' --predicate 'subsystem == \"de.erikemmer.shelf\"' --info"
     log show --start "$SINCE" --predicate 'subsystem == "de.erikemmer.shelf"' --info 2>/dev/null | tail -4
 else
-    echo "  (skipped: no built Shelf.app, or one is already running — this script"
-    echo "   never ends a Shelf it did not start)"
+    echo "  (skipped: no built Shelf.app, the one found is not built from this"
+    echo "   repository's current HEAD, or one is already running — this script"
+    echo "   never ends a Shelf it did not start and never rebuilds one for you)"
 fi
 
 say "Done"

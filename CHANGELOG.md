@@ -3,6 +3,56 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 11, Aufräum-Sitzung, Teil A — which Shelf.app did we actually photograph? · 22 September 2026
+
+Schritt 3's own finding: the "find the newest built `Shelf.app`" snippet
+compares the app bundle *directory's* own mtime, which an incremental
+Xcode build does not always bump. Erik counted twenty-one scripts under
+`Scripts/` sharing it — every screenshot this project has ever taken sat
+behind the same doubt.
+
+`Scripts/current-shelf-app.sh` (sourced, the same shape
+`no-foreign-shelf.sh` has) adds `verify_shelf_app_is_current`: it reads
+`SHELF_BUILD_COMMIT` back out of a candidate's own `Info.plist` and
+compares it with a fresh `git rev-parse HEAD` — never rebuilds, never
+guesses which of several candidates was meant, aborts naming both commits
+on a mismatch. `SHELF_BUILD_COMMIT` is a build setting `project.yml`
+substitutes into `Info.plist` exactly the way `MARKETING_VERSION` already
+is (`CFBundleShortVersionString: $(MARKETING_VERSION)`), set by `make
+app` / `make app-debug` / `make bootstrap`'s own `xcodebuild …
+SHELF_BUILD_COMMIT="$(git rev-parse HEAD)"`.
+
+**The first version of this fix broke the app's own code signature.** A
+build phase (`postbuildScripts`) that wrote the commit into the already-
+built `Info.plist` ran *after* Xcode's own signing step, and
+`codesign --verify` started failing with "invalid Info.plist (plist or
+signature have been modified)" — caught before it was committed. A build
+setting substituted before signing, the way every other `$(…)`-templated
+`Info.plist` key in this project already works, has nothing to sign around.
+
+All twenty-one scripts call `verify_shelf_app_is_current` before launching
+anything. `Scripts/check-current-app-guard.sh`, wired into `make lint`,
+fails the build if a twenty-second script is ever added without it —
+proven both ways: red with the call removed from `cover-shot.sh`
+(`current-shelf-app: Scripts/cover-shot.sh:123 starts a Shelf instance but
+never calls verify_shelf_app_is_current`), green with it restored.
+
+**Whether old screenshots were affected**, checked against two cheap,
+already-committed ones (no foreign hardware, no extra permission):
+`write-into-book-shot.sh` (Sprint 10) re-shot with a verified build came
+back pixel-for-pixel identical to the committed `1-menu.jpg` and
+`2-confirmation.jpg` (mean absolute byte difference 0.000/255, sampled
+over ~500k bytes each). `orphan-shot.sh` (Sprint 4) re-shot came back
+genuinely different — "10 folder(s)" → "10 folders" (`Loc.count`'s plural
+handling), "267.9 KB" → "274 kB" (a later `ByteCount` formatting change) —
+but every difference matches known wording and formatting work from later
+sprints, not a wrong build photographed at the time. Reported, not fixed,
+per instruction; both re-shot folders were restored to their committed
+state (`git checkout`) afterward.
+
+790 core tests (unchanged — no core code touched), `make lint` (both
+checks), `make app` and `make smoke` clean. One commit.
+
 ## Sprint 11, Schritt 3 — the cover in "Write into the Book File" · 22 September 2026
 
 Schritt 1 and 2 below built and proved `EPUBCoverPatch`; this is the window

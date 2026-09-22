@@ -29,7 +29,7 @@ bootstrap: ## First-time setup on a Mac: check Xcode, install XcodeGen, run test
 	xattr -cr . 2>/dev/null || true
 	swift test --scratch-path $(SCRATCH)
 	xcodegen generate
-	xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Debug -quiet build
+	xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Debug -quiet build SHELF_BUILD_COMMIT="$$(git rev-parse HEAD)"
 	open Shelf.xcodeproj
 	@echo "✅ Bootstrap done – press ⌘R in Xcode to run Shelf."
 
@@ -42,6 +42,7 @@ build: ## Build ShelfCore
 lint: ## Check formatting with swift-format, and that no script can start Shelf without the guard
 	swift format lint --recursive --strict Sources Tests App
 	Scripts/check-shelf-guard.sh
+	Scripts/check-current-app-guard.sh
 
 format: ## Reformat sources in place
 	swift format --in-place --recursive Sources Tests App
@@ -50,10 +51,10 @@ project: ## Generate Shelf.xcodeproj from project.yml (needs: brew install xcode
 	xcodegen generate
 
 app: project ## Build the macOS app, Release (needs Xcode) – this is what gets started
-	xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Release build
+	xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Release build SHELF_BUILD_COMMIT="$$(git rev-parse HEAD)"
 
 app-debug: project ## Build the macOS app with assertions and symbols, for chasing a crash
-	xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Debug build
+	xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Debug build SHELF_BUILD_COMMIT="$$(git rev-parse HEAD)"
 
 smoke: ## Launch the built app, open a library, check it shows a window and settles (SMOKE_LIBRARY=/path)
 	@Scripts/smoke.sh

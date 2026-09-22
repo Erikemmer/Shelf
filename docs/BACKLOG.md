@@ -1134,14 +1134,66 @@ window yet — see Schritt 2 below.
 
 ### What Schritt 3 found on the way
 
-- [ ] **The shared "find the newest built `Shelf.app`" snippet** (in
+- [x] **The shared "find the newest built `Shelf.app`" snippet** (in
       `write-into-book-shot.sh` and copied into
       `write-into-book-cover-shot.sh`) compares the app bundle
       *directory's* own mtime, which an incremental Xcode build does not
       always bump when it only rewrites files nested inside an existing
       bundle. A build from five days earlier was picked over one from a
       minute ago, and the symptom looked exactly like a missing German
-      translation. `SHOT_APP=<path>` sidesteps it; the snippet itself is
-      unchanged — worth a real fix (stat the binary inside `Contents/
-      MacOS`, not the bundle directory) before it costs someone else the
-      same half hour.
+      translation. `SHOT_APP=<path>` sidestepped it at the time; the real
+      fix is below (a follow-up session, once Erik had counted how many
+      scripts actually shared the same snippet).
+
+## Follow-up — which `Shelf.app` did we actually photograph? · done
+
+Twenty-one scripts under `Scripts/` shared the "newest built `Shelf.app`"
+snippet above, so the same doubt sat behind every screenshot this project
+has ever taken. `Scripts/current-shelf-app.sh` (sourced, the same shape
+`no-foreign-shelf.sh` has) adds `verify_shelf_app_is_current`, which reads
+`SHELF_BUILD_COMMIT` back out of a candidate's own `Info.plist` and
+compares it with `git rev-parse HEAD`, run now — never a rebuild, never a
+guess at which of several candidates was meant. `SHELF_BUILD_COMMIT` is a
+build setting `project.yml` substitutes into `Info.plist` exactly the way
+`MARKETING_VERSION` already is, set on the command line by `make app` /
+`make app-debug` / `make bootstrap`'s own `xcodebuild … SHELF_BUILD_COMMIT=
+"$(git rev-parse HEAD)"`.
+
+**Not a build phase that edits the bundle after Xcode has already built
+it** — that was tried first, and it silently broke the app's own code
+signature (`codesign --verify` failed with "invalid Info.plist (plist or
+signature have been modified)"), because a custom `postbuildScripts` phase
+ran after Xcode's own signing step. A build setting is substituted into
+`Info.plist` before signing ever happens, so nothing is ever touched
+afterward.
+
+All twenty-one scripts now call `verify_shelf_app_is_current` before
+launching anything; `Scripts/check-current-app-guard.sh`
+(`make lint`) fails the build if a twenty-second one is ever added without
+it, the same way `check-shelf-guard.sh` already does for
+`require_no_foreign_shelf`.
+
+**Checked against two cheap, already-committed screenshots** (no foreign
+hardware, no extra permission): `write-into-book-shot.sh` (Sprint 10)
+re-shot with a build verified against current HEAD came back pixel-for-
+pixel identical to the committed `1-menu.jpg` and `2-confirmation.jpg` —
+the stale-build doubt does not touch Sprint 10's own pictures.
+`orphan-shot.sh` (Sprint 4) re-shot came back genuinely different — plural
+wording ("10 folder(s)" → "10 folders"), a byte-count unit style ("267.9
+KB" → "274 kB") — but every difference is exactly the kind of wording and
+formatting polish later sprints are known to have made
+(`Loc.count`'s plural handling, `ByteCount` formatting), not evidence of a
+wrong build photographed at the time. Not fixed here, per instruction —
+only reported. `Scripts/current-shelf-app.sh`'s own doc comment has the
+full reasoning.
+
+**One practical cost, worth knowing**: verification can only check the
+candidate discovery *picked* — it does not fix discovery's own use of the
+same unreliable directory mtime to choose which bundle to check in the
+first place. A stray old build (Debug or Release) left over from earlier
+work can still win that sort and then get correctly refused, where before
+it would have been silently used. `SHOT_APP=<path>` remains the way round
+it. Teaching discovery itself to pick correctly rather than merely refuse
+incorrectly would mean picking among several candidates by their own
+stamps — which starts to look like exactly the guessing this fix was
+asked not to do, so it was left alone.

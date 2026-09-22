@@ -40,6 +40,7 @@ fail() {
 pin_app_language en
 . "$HERE/screen-awake.sh"
 . "$HERE/no-foreign-shelf.sh"
+. "$HERE/current-shelf-app.sh"
 require_awake_screen "$@"
 
 [ -f "$LIBRARY/.shelf/library.sqlite" ] || fail "'$LIBRARY' holds no index"
@@ -54,6 +55,7 @@ if [ -z "$APP" ]; then
         -not -path "*Index.noindex*" -maxdepth 6 -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn)
 fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
+verify_shelf_app_is_current "$APP" || exit 1
 require_no_foreign_shelf
 
 open -a "$APP" "$LIBRARY" ${SHELF_LANGUAGE_ARGS:-} || fail "could not launch $APP"

@@ -29,6 +29,7 @@ fail() {
 }
 
 . "$HERE/no-foreign-shelf.sh"
+. "$HERE/current-shelf-app.sh"
 
 # ── The app bundle ────────────────────────────────────────────────────────────
 if [ -z "$APP" ]; then
@@ -45,6 +46,7 @@ if [ -z "$APP" ]; then
         -not -path "*Index.noindex*" -maxdepth 6 -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn)
 fi
 [ -n "$APP" ] && [ -x "$APP/Contents/MacOS/Shelf" ] || fail "no runnable Shelf.app found – run 'make app' first"
+verify_shelf_app_is_current "$APP" || exit 1
 # Which configuration is being measured matters: a Debug build of the same code
 # decodes covers several times slower than a Release one.
 echo "smoke: bundle: $APP"

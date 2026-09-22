@@ -25,6 +25,12 @@ for script in "$HERE"/*.sh; do
     # The guard's own file: it defines require_no_foreign_shelf, it does not
     # call it, and its doc comments quote both without meaning either.
     [ "$name" = "no-foreign-shelf.sh" ] && continue
+    # The other lint check's own file: its case-statement pattern-matching
+    # logic quotes the exact same launch patterns this scan looks for
+    # ("Contents/MacOS/Shelf", "open -a …") as plain text, never as a real
+    # launch, and it never has reason to mention require_no_foreign_shelf.
+    [ "$name" = "current-shelf-app.sh" ] && continue
+    [ "$name" = "check-current-app-guard.sh" ] && continue
 
     guard_line=0
     launch_line=0

@@ -26,6 +26,15 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     ENABLE_HARDENED_RUNTIME: YES
     CODE_SIGN_STYLE: Automatic
+    # The git commit this build was made from, stamped into the app's own
+    # Info.plist below (CFBundleShortVersionString does the same trick for
+    # MARKETING_VERSION) — never a build phase that edits the bundle after
+    # Xcode has already signed it, which corrupts the signature. The
+    # Makefile overrides this on the command line (`xcodebuild …
+    # SHELF_BUILD_COMMIT=…`); a build started any other way (Xcode's own
+    # ⌘B) gets this placeholder, which `Scripts/current-shelf-app.sh` reads
+    # as "no real stamp" rather than a false match.
+    SHELF_BUILD_COMMIT: unknown
 
 targets:
   Shelf:
@@ -67,6 +76,8 @@ targets:
         CFBundleDisplayName: Shelf
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # See the comment on SHELF_BUILD_COMMIT above.
+        ShelfBuildCommit: $(SHELF_BUILD_COMMIT)
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         LSApplicationCategoryType: public.app-category.productivity
         NSHumanReadableCopyright: "© 2026 Erik Emmer"

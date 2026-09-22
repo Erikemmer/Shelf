@@ -37,6 +37,7 @@ pin_app_language en
 
 . "$HERE/screen-awake.sh"
 . "$HERE/no-foreign-shelf.sh"
+. "$HERE/current-shelf-app.sh"
 require_awake_screen "$@"
 
 [ -f "$LIB/.shelf/library.sqlite" ] || fail "'$LIB' holds no index"
@@ -53,6 +54,7 @@ if [ -z "$APP" ]; then
         -not -path "*Index.noindex*" -maxdepth 6 -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn)
 fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
+verify_shelf_app_is_current "$APP" || exit 1
 
 # Never end a Shelf this script did not start: if one is running, say so and
 # stop, rather than photographing somebody else's window.

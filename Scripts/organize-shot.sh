@@ -93,6 +93,7 @@ menu_name() {
 
 . "$HERE/screen-awake.sh"
 . "$HERE/no-foreign-shelf.sh"
+. "$HERE/current-shelf-app.sh"
 require_awake_screen "$@"
 
 [ -f "$LIB/.shelf/library.sqlite" ] || fail "'$LIB' holds no index — run Scripts/organize-library.sh first"
@@ -118,6 +119,7 @@ if [ -z "$APP" ]; then
         -not -path "*Index.noindex*" -maxdepth 6 -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn)
 fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
+verify_shelf_app_is_current "$APP" || exit 1
 
 # Never end a Shelf this script did not start.
 require_no_foreign_shelf

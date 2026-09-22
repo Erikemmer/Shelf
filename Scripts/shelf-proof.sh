@@ -43,6 +43,7 @@ say() { echo "shelf-proof: $1"; }
 # `screen-awake.sh`, which also holds the display awake for the run.
 . "$HERE/screen-awake.sh"
 . "$HERE/no-foreign-shelf.sh"
+. "$HERE/current-shelf-app.sh"
 require_awake_screen "$@"
 
 [ -f "$INDEX" ] || fail "'$LIBRARY' holds no index – import a library there first"
@@ -57,6 +58,7 @@ if [ -z "$APP" ]; then
         -not -path "*Index.noindex*" -maxdepth 6 -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn)
 fi
 [ -n "$APP" ] || fail "no built Shelf.app – run 'make app' first"
+verify_shelf_app_is_current "$APP" || exit 1
 
 require_no_foreign_shelf
 open -a "$APP" "$LIBRARY" || fail "could not launch $APP"
