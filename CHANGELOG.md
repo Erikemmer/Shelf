@@ -25,12 +25,10 @@ repository, a file or a screenshot, and every Sparkle CLI call carries
 `--account shelf`.
 
 **One thing checked rather than assumed, because Teil D's own instructions
-asked for it explicitly:** whether Selector has a way for a *Release*
-build to ever reach its own beta channel that Shelf lacks. It does not —
-read directly out of Selector's `project.yml` and
-`UpdaterModel.swift.feedURLString(for:)`, both `#if DEBUG` only, same as
-Shelf's own. Nothing added to `docs/BACKLOG.md` for this, because there is
-no gap to record.
+asked for it explicitly:** whether a comparable app already has a way for a
+*Release* build to ever reach its own beta channel that Shelf lacks. It
+does not, checked directly rather than assumed. Nothing added to
+`docs/BACKLOG.md` for this, because there is no gap to record.
 
 ## Sprint 14, Teil D — the version, past v1.0.0 on purpose · 23 September 2026
 
@@ -53,9 +51,10 @@ Every step of Sparkle's own update path, driven for real rather than
 inferred from reading the code: an old (`1.0.0`) Debug build, redirected
 via `SHELF_APPCAST_URL` to a fake `appcast-test.xml` (version `9.9.9`,
 committed to the public `Erikemmer/shelf-releases` and reached the same
-way the real feed is, over `raw.githubusercontent.com` — unlike Selector's
-own private-repo test channel, which had no choice but a fully local
-server for everything), found and installed a second local build served
+way the real feed is, over `raw.githubusercontent.com` — possible only
+because that repo is public, unlike an equivalent private one, which would
+have no choice but a fully local server for everything), found and
+installed a second local build served
 from a local HTTP server on this Mac. Every click that matters was a real
 one: `Scripts/click-at.swift` at a position read off the accessibility
 tree, `Scripts/menu-point.swift` for the item inside an already-open menu.
@@ -86,8 +85,7 @@ until a Developer ID exists.
 updated bundle's own `Info.plist`, at the identical path the old build
 was copied to, read `CFBundleShortVersionString` `9.9.9` and
 `CFBundleVersion` `999` after the relaunch — Sparkle really replaced the
-app bundle in place, the same discipline Selector's own proof used
-("per Datei nachgelesen, nicht nur der Oberfläche geglaubt").
+app bundle in place, checked on disk rather than taken on the window's word.
 
 **Removed afterwards, restlos:** `appcast-test.xml` deleted from
 `shelf-releases` and pushed (confirmed `appcast.xml`/`appcast-beta.xml`
@@ -129,9 +127,9 @@ the path before it.
   make between them — never the default, for the reason ADR 0022 and Teil
   A found.
 - **The CHANGELOG.md marker convention.** Shelf's own changelog is not
-  keyed by version (`## Sprint 14, Teil B`, not `## [1.1.0-rc1]`), unlike
-  Selector's — so "the matching section" for a release cannot be found by
-  matching a version string. `changelog-notes.py` instead reads everything
+  keyed by version (`## Sprint 14, Teil B`, not `## [1.1.0-rc1]`) — so "the
+  matching section" for a release cannot be found by matching a version
+  string. `changelog-notes.py` instead reads everything
   newest-first down to an HTML comment,
   `<!-- shelf-release: v<version> · <date> -->`, that a successful publish
   inserts at the top of the file, right above the newest entry — bounding
@@ -150,8 +148,7 @@ the path before it.
   resolves** (`xcodebuild -resolvePackageDependencies … -clonedSourcePackagesDirPath`,
   a fixed path under `$OUT` rather than DerivedData's own hash-keyed one)
   — no `brew`, no separate tarball download, matching the instruction this
-  session was given rather than Selector's own script, which downloads a
-  release tarball directly.
+  session was given.
 - `make app` now checks for a Developer ID identity itself and passes
   `SHELF_HARDENED=YES`/`NO` accordingly, the same check `release.sh`
   already made — Hardened Runtime was otherwise always off for `make app`
@@ -171,9 +168,8 @@ the path before it.
 
 ## Sprint 14, Teil A — Sparkle 2 is in the app · 23 September 2026
 
-Full reasoning in [ADR 0022](docs/adr/0022-updates-separate-delivery-sparkle.md),
-built the way Selector's own ADR 0007 reasoned it, adapted for a source
-repository that is already public rather than private. Summary:
+Full reasoning in [ADR 0022](docs/adr/0022-updates-separate-delivery-sparkle.md).
+Summary:
 
 - Sparkle 2.10.0 as an SPM dependency, in the app target only — never in
   `ShelfCore`, which the Linux CI job still guards. `SUEnableAutomaticChecks`
@@ -189,26 +185,28 @@ repository that is already public rather than private. Summary:
   only; the public half is `SPARKLE_PUBLIC_ED_KEY` in `project.yml`, baked
   into `Info.plist` as `SUPublicEDKey`.
 - **The trap this session found before it could bite:** this Mac's keychain
-  already held Selector's own Sparkle key, under `generate_keys`'s *default*
-  account (`ed25519`, confirmed with `security find-generic-password -s
-  "https://sparkle-project.org"` before generating anything). Calling
-  `generate_keys` without `--account` would silently have handed back
-  Selector's key pair rather than making a new one. `CLAUDE.md` now says so:
-  every Sparkle CLI call for Shelf carries `--account shelf`. Verified
-  distinct: Shelf's new public key is `4nZaq+Rd3IeA3c1AAqNoFUAKpnTL/Y28iEUV4izruwU=`,
-  Selector's remains `8O7EP++fI1zpzU3Dy1/Bc5AEEYDNolkgR/MpvfiC8GU=`.
+  already held another app's own Sparkle key, under `generate_keys`'s
+  *default* account (`ed25519`, confirmed with `security
+  find-generic-password -s "https://sparkle-project.org"` before generating
+  anything). Calling `generate_keys` without `--account` would silently
+  have handed back that key pair rather than making a new one for Shelf.
+  `CLAUDE.md` now says so: every Sparkle CLI call for Shelf carries
+  `--account shelf`. Shelf's new public key,
+  `4nZaq+Rd3IeA3c1AAqNoFUAKpnTL/Y28iEUV4izruwU=`, is confirmed distinct
+  from that other key (read only, never touched — see ADR 0022 for the
+  comparison and which app it belongs to).
 - Sandboxing needs one entitlement:
   `com.apple.security.temporary-exception.mach-lookup.global-name` (with
   Sparkle's own fixed `-spks`/`-spki` suffixes), which lets the sandboxed app
   reach Sparkle's own installer XPC service — the one thing that has to run
   outside the sandbox, because it replaces the app bundle. **No downloader
-  entitlement or Info.plist key was needed**: unlike Selector, Shelf already
-  carries `com.apple.security.network.client` for the online-metadata
+  entitlement or Info.plist key was needed**: Shelf already carries
+  `com.apple.security.network.client` for the online-metadata
   lookups, so Sparkle uses that entitlement directly instead of its own
   separately sandboxed Downloader XPC service. `SUEnableInstallerLauncherService`
   is `true` in `Info.plist`, required for every sandboxed app.
-- **Hardened Runtime follows the signing identity, not a fixed setting**,
-  exactly the fix ADR 0007 reasoned for Selector: an ad-hoc build (no
+- **Hardened Runtime follows the signing identity, not a fixed setting**:
+  an ad-hoc build (no
   Developer ID) signs the app and the embedded `Sparkle.framework` with no
   shared team, and Hardened Runtime's library validation then refuses to
   load the framework. `ENABLE_HARDENED_RUNTIME` now reads `$(SHELF_HARDENED)`,

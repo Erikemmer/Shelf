@@ -654,14 +654,15 @@ public half is `SPARKLE_PUBLIC_ED_KEY` in `project.yml`, baked into
 **The one trap actually found, this Mac's own:** `generate_keys`,
 `sign_update` and `generate_appcast` all default to one *global* keychain
 account (`ed25519`) when `--account` is not given — and this same Mac
-already carries Selector's own Sparkle key under exactly that default
-account, from Selector's own ADR 0007. Every call these three tools ever
-make for Shelf carries `--account shelf`; without it, a command would
-silently read or overwrite Selector's key pair instead of Shelf's own.
-`Scripts/release.sh` always passes it. A `generate_keys -p --account shelf`
-by hand, run once during Sprint 14, confirmed Shelf's public key
-(`4nZaq+Rd3IeA3c1AAqNoFUAKpnTL/Y28iEUV4izruwU=`) is not Selector's
-(`8O7EP++fI1zpzU3Dy1/Bc5AEEYDNolkgR/MpvfiC8GU=`).
+already carried another app's own Sparkle key under exactly that default
+account. Every call these three tools ever make for Shelf carries
+`--account shelf`; without it, a command would silently read or overwrite
+that other key pair instead of Shelf's own. `Scripts/release.sh` always
+passes it. A `generate_keys -p --account shelf` by hand, run once during
+Sprint 14, confirmed Shelf's public key
+(`4nZaq+Rd3IeA3c1AAqNoFUAKpnTL/Y28iEUV4izruwU=`) is distinct from that
+other key, read once for the comparison and never touched (ADR 0022 has
+the full story).
 
 ### What losing the key means
 

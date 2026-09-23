@@ -20,9 +20,10 @@
 # repository, and push the appcast Sparkle's own updater reads –
 # generate_appcast, sign_update, and generate_keys (used directly, once,
 # outside this script) always take `--account shelf`, never the default:
-# this Mac's keychain already holds Selector's own Sparkle key under that
+# this Mac's keychain already holds another app's own Sparkle key under that
 # default account, and calling any of these three without `--account shelf`
-# would silently touch Selector's key pair instead of Shelf's own.
+# would silently touch that other key pair instead of Shelf's own
+# (docs/adr/0022-updates-separate-delivery-sparkle.md).
 #
 # **A missing Developer ID does not stop a real run.** Until Erik enrols in
 # the Apple Developer Program, every real release is ad-hoc-signed, skips
@@ -293,9 +294,9 @@ say "generate_appcast: $GENERATE_APPCAST"
 
 # ── publish: sign the update ─────────────────────────────────────────────────
 step "publish: sign the update"
-# --account $SPARKLE_ACCOUNT always: this Mac's keychain holds Selector's own
-# Sparkle key under the *default* account, and omitting --account here would
-# silently sign with (or read) that key instead of Shelf's own
+# --account $SPARKLE_ACCOUNT always: this Mac's keychain holds another app's
+# own Sparkle key under the *default* account, and omitting --account here
+# would silently sign with (or read) that key instead of Shelf's own
 # (docs/adr/0022-updates-separate-delivery-sparkle.md).
 "$SIGN_UPDATE" --account "$SPARKLE_ACCOUNT" "$ZIP" | sed 's/^/    /'
 

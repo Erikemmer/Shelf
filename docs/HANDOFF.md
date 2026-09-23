@@ -27,11 +27,11 @@ four Teile plus the ADR.
 **What is still open, past this sprint, is exactly what was open before
 it** — a Developer ID certificate and a notarytool profile (below), the
 four cover judgement calls, and what only real hardware and real books can
-answer. Sparked nothing new onto that list: Shelf and Selector alike have
-no path for a *Release*-configuration build to ever reach the beta
-channel — checked directly against Selector's own `project.yml` and
-`UpdaterModel.swift`, not assumed — so that is not a gap Shelf has and
-Selector does not, and nothing was added to `docs/BACKLOG.md` for it.
+answer. Sparked nothing new onto that list: Shelf has no path for a
+*Release*-configuration build to ever reach the beta channel — checked
+directly, not assumed — but that is a real limit of Sparkle's own Debug-only
+redirect design here, not a gap against some other app, so nothing was
+added to `docs/BACKLOG.md` for it.
 
 ---
 

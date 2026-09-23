@@ -210,11 +210,10 @@ the app target already resolved — no `brew`, no separate download:
 **Why the CHANGELOG.md marker exists at all.** Shelf's own `CHANGELOG.md` is
 written "Sprint 14, Teil B", not "`[1.1.0-rc1]`" — a sprint's entries are
 written before a version number for that work exists. So "the section for
-this release" cannot be found by matching a version string the way
-Selector's own changelog allows; it is everything newest-first down to the
-last release's own marker. The first marker was backfilled by hand at the
-`v1.0.0`/Sprint 9 boundary, in the same commit that added
-`Scripts/changelog-notes.py`.
+this release" cannot be found by matching a version string; it is
+everything newest-first down to the last release's own marker. The first
+marker was backfilled by hand at the `v1.0.0`/Sprint 9 boundary, in the
+same commit that added `Scripts/changelog-notes.py`.
 
 ---
 
