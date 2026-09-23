@@ -46,11 +46,24 @@ struct WelcomeView: View {
                     FolderDrop.handle(providers, into: model)
                 }
 
+            if let version = model.updater.availableUpdateVersion { updateBanner(version) }
+
             SlateShortcutLine(ShortcutReference.essentials.map(\.slate))
 
             if !model.recents.entries.isEmpty { recentList }
         }
         .onAppear { model.recents.refreshAvailability() }
+    }
+
+    /// A background or manual Sparkle check found something newer. Tapping it
+    /// does what `Shelf ▸ Check for Updates…` does – Sparkle's own dialog
+    /// takes it from there, so nothing here downloads or installs anything.
+    private func updateBanner(_ version: String) -> some View {
+        SlateBanner(Loc.string("Shelf %@ is available — click to update", version), tint: Slate.accent)
+            .onTapGesture { model.updater.checkForUpdates() }
+            .help(Loc.string("Shelf %@ is available — click to update", version))
+            .accessibilityLabel(Loc.string("Update available: Shelf %@", version))
+            .accessibilityAddTraits(.isButton)
     }
 
     private var recentList: some View {

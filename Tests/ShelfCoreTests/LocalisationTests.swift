@@ -230,7 +230,8 @@ struct LocalisationTests {
     /// keys, a folder inside the caches, the app's own name.
     static let notWindowText: Set<String> = [
         "Library/Caches/Shelf", "Shelf/online", "User-Agent", "application/json", "Accept",
-        "SHELF_ONLINE_HOST", "SHELF_TIMING", "SHELF_AUTO_IMPORT_SOURCE", "recentLibraries", "identifier:", "shelf:",
+        "SHELF_ONLINE_HOST", "SHELF_TIMING", "SHELF_AUTO_IMPORT_SOURCE", "SHELF_APPCAST_URL", "recentLibraries",
+        "identifier:", "shelf:",
         // Sprint 8's one defaults key. It is declared as a `static let` rather
         // than written inline at the `UserDefaults` call, which is why
         // `notDrawing`'s "forKey" does not catch it.

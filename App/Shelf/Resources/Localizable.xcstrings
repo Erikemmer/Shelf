@@ -11214,6 +11214,57 @@
           }
         }
       }
+    },
+    "Check for Updates…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach Updates suchen …"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for Updates…"
+          }
+        }
+      }
+    },
+    "Shelf %@ is available — click to update": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shelf %@ ist verfügbar — zum Aktualisieren klicken"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shelf %@ is available — click to update"
+          }
+        }
+      }
+    },
+    "Update available: Shelf %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update verfügbar: Shelf %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update available: Shelf %@"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -3,6 +3,68 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 14, Teil A — Sparkle 2 is in the app · 23 September 2026
+
+Full reasoning in [ADR 0022](docs/adr/0022-updates-separate-delivery-sparkle.md),
+built the way Selector's own ADR 0007 reasoned it, adapted for a source
+repository that is already public rather than private. Summary:
+
+- Sparkle 2.10.0 as an SPM dependency, in the app target only — never in
+  `ShelfCore`, which the Linux CI job still guards. `SUEnableAutomaticChecks`
+  is `true`, `SUAutomaticallyUpdate` is `false`: Sparkle's own dialog is what
+  actually starts a download or install, from `Shelf ▸ Check for Updates…`
+  (`UpdaterModel.checkForUpdates()`) or a background check. A welcome-screen
+  banner (`UpdaterModel.availableUpdateVersion`, set from
+  `SPUUpdaterDelegate.updater(_:didFindValidUpdate:)`, drawn with SlateKit's
+  existing `SlateBanner`) says so if a background check found something
+  while nobody was looking.
+- `generate_keys --account shelf` (never the default account — see below)
+  wrote the private half of a new EdDSA key pair to this Mac's keychain
+  only; the public half is `SPARKLE_PUBLIC_ED_KEY` in `project.yml`, baked
+  into `Info.plist` as `SUPublicEDKey`.
+- **The trap this session found before it could bite:** this Mac's keychain
+  already held Selector's own Sparkle key, under `generate_keys`'s *default*
+  account (`ed25519`, confirmed with `security find-generic-password -s
+  "https://sparkle-project.org"` before generating anything). Calling
+  `generate_keys` without `--account` would silently have handed back
+  Selector's key pair rather than making a new one. `CLAUDE.md` now says so:
+  every Sparkle CLI call for Shelf carries `--account shelf`. Verified
+  distinct: Shelf's new public key is `4nZaq+Rd3IeA3c1AAqNoFUAKpnTL/Y28iEUV4izruwU=`,
+  Selector's remains `8O7EP++fI1zpzU3Dy1/Bc5AEEYDNolkgR/MpvfiC8GU=`.
+- Sandboxing needs one entitlement:
+  `com.apple.security.temporary-exception.mach-lookup.global-name` (with
+  Sparkle's own fixed `-spks`/`-spki` suffixes), which lets the sandboxed app
+  reach Sparkle's own installer XPC service — the one thing that has to run
+  outside the sandbox, because it replaces the app bundle. **No downloader
+  entitlement or Info.plist key was needed**: unlike Selector, Shelf already
+  carries `com.apple.security.network.client` for the online-metadata
+  lookups, so Sparkle uses that entitlement directly instead of its own
+  separately sandboxed Downloader XPC service. `SUEnableInstallerLauncherService`
+  is `true` in `Info.plist`, required for every sandboxed app.
+- **Hardened Runtime follows the signing identity, not a fixed setting**,
+  exactly the fix ADR 0007 reasoned for Selector: an ad-hoc build (no
+  Developer ID) signs the app and the embedded `Sparkle.framework` with no
+  shared team, and Hardened Runtime's library validation then refuses to
+  load the framework. `ENABLE_HARDENED_RUNTIME` now reads `$(SHELF_HARDENED)`,
+  a build setting `make app` and `Scripts/release.sh` will set to `YES`/`NO`
+  from whether a Developer ID identity is in the keychain — `NO` by default,
+  which is every build until one exists. `com.apple.security.cs.disable-library-validation`
+  was never added; it was never the fix. **Live proof, this session, on this
+  Mac:** `make app` (no Developer ID installed) produced `flags=0x2(adhoc)`
+  on `Shelf.app` itself — no `runtime` flag — and `make smoke` opened it
+  clean, 0.1 % CPU after 5 s, with `Sparkle.framework` embedded and its own,
+  separate ad-hoc-plus-runtime signature untouched inside it.
+- `LocalisationTests.nothingIsDrawnDirectly` needed one addition to its own
+  allow-list: `SHELF_APPCAST_URL`, the Debug-only environment variable that
+  redirects the feed (`UpdaterModel.feedURLString(for:)`, `#if DEBUG` only —
+  ignored entirely in Release) — the same shape as the existing
+  `SHELF_TIMING`/`SHELF_ONLINE_HOST` entries, not a sentence anybody reads.
+  793 core tests, unchanged in count, one now passing for the right reason.
+- **Not yet done, on purpose:** the releases repo (`Erikemmer/shelf-releases`,
+  created and seeded this session with a README and two empty appcasts) has
+  nothing in its feeds yet, and `Scripts/release.sh` does not publish
+  anything yet — that is Teil B.
+
 ## Sprint 13, Teil E — the wait becomes visible, and stops scaling with the whole library · 23 September 2026
 
 Teil D closed the routing gap; this closes the two things left open at the

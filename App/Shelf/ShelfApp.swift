@@ -42,6 +42,8 @@ struct ShelfApp: App {
         .commands {
             CommandGroup(after: .appSettings) {
                 Divider()
+                Button(Loc.string("Check for Updates…")) { model.updater.checkForUpdates() }
+                Divider()
                 // The size is in the title rather than behind a confirmation:
                 // clearing costs nothing but the time to decode again, and
                 // knowing it is 412 MB is the whole reason anyone would.

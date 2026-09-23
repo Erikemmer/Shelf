@@ -17,6 +17,12 @@ packages:
   SlateKit:
     url: https://github.com/Erikemmer/SlateKit
     exactVersion: 0.4.1
+  # Update checking (Sprint 14). Source stays in this repo, which is already
+  # public; only builds and the appcast are public *separately*, in
+  # Erikemmer/shelf-releases – see docs/adr/0022-updates-separate-delivery-sparkle.md.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.10.0
 
 settings:
   base:
@@ -24,8 +30,22 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
-    ENABLE_HARDENED_RUNTIME: YES
+    # Follows whether a Developer ID identity was found at build time –
+    # `make app`/`Scripts/release.sh` set SHELF_HARDENED accordingly, the same
+    # way they already choose between a real signature and an ad-hoc one. An
+    # ad-hoc build has no real team for the app and the embedded
+    # Sparkle.framework to share, so turning Hardened Runtime on for one would
+    # make its library validation refuse to load the other (`dyld: …
+    # different Team IDs`). Off by default so a bare `xcodebuild`/⌘R still
+    # works; always off for `make app-debug` too, since neither overrides it.
+    SHELF_HARDENED: NO
+    ENABLE_HARDENED_RUNTIME: $(SHELF_HARDENED)
     CODE_SIGN_STYLE: Automatic
+    # The Sparkle EdDSA public key (base64), from `generate_keys --account
+    # shelf` – safe to commit, it only lets Shelf *verify* an update's
+    # signature, never produce one. The private half stays in the keychain
+    # only, account "shelf"; see CLAUDE.md and docs/RUNBOOK.md.
+    SPARKLE_PUBLIC_ED_KEY: "4nZaq+Rd3IeA3c1AAqNoFUAKpnTL/Y28iEUV4izruwU="
     # The git commit this build was made from, stamped into the app's own
     # Info.plist below (CFBundleShortVersionString does the same trick for
     # MARKETING_VERSION) — never a build phase that edits the bundle after
@@ -45,10 +65,23 @@ targets:
     dependencies:
       - package: ShelfCore
       - package: SlateKit
+      - package: Sparkle
+        product: Sparkle
     entitlements:
       path: App/Shelf/Resources/Shelf.entitlements
       properties:
         com.apple.security.app-sandbox: true
+        # Sparkle's installer runs outside the sandbox (it has to replace the
+        # app bundle itself); the sandboxed app cannot even address it without
+        # this Mach lookup exception. `-spks`/`-spki` are Sparkle's own fixed
+        # suffixes for its launcher and status services, not a broader grant.
+        # No downloader-service entitlement needed: Shelf already carries
+        # `network.client` below, for the online-metadata lookups, so Sparkle
+        # uses that directly instead of its own separately sandboxed
+        # Downloader XPC service.
+        com.apple.security.temporary-exception.mach-lookup.global-name:
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spks
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spki
         # The library folder and the books inside it are reached through the
         # open panel and then through a security-scoped bookmark. Read-write,
         # because Shelf writes its own `.shelf/` folder and `metadata.opf` –
@@ -89,6 +122,17 @@ targets:
         CFBundleLocalizations: [en, de]
         NSPrincipalClass: NSApplication
         NSHighResolutionCapable: true
+        # Sparkle 2 (docs/adr/0022-…). Checks automatically; never installs
+        # without asking (SUAutomaticallyUpdate false) – "Check for Updates…"
+        # and the welcome-screen banner are how an update is actually applied.
+        SUFeedURL: https://raw.githubusercontent.com/Erikemmer/shelf-releases/main/appcast.xml
+        SUEnableAutomaticChecks: true
+        SUAutomaticallyUpdate: false
+        # Required for every sandboxed app – lets Sparkle install outside the
+        # sandbox through its own Installer.xpc. No SUEnableDownloaderService:
+        # Shelf's own `network.client` entitlement already covers the fetch.
+        SUEnableInstallerLauncherService: true
+        SUPublicEDKey: "$(SPARKLE_PUBLIC_ED_KEY)"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.erikemmer.shelf

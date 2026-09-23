@@ -35,6 +35,16 @@
 	<string>© 2026 Erik Emmer</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/Erikemmer/shelf-releases/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>$(SPARKLE_PUBLIC_ED_KEY)</string>
 	<key>ShelfBuildCommit</key>
 	<string>$(SHELF_BUILD_COMMIT)</string>
 </dict>

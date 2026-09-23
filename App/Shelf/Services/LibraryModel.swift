@@ -225,6 +225,9 @@ final class LibraryModel {
     // MARK: Services
 
     let recents = RecentLibrariesStore()
+    /// `UpdaterModel.availableUpdateVersion`; `Shelf ▸ Check for Updates…`
+    /// calls `updater.checkForUpdates()`.
+    let updater = UpdaterModel()
     let warmer = CoverWarmer()
     private(set) var loader: CoverLoader?
     @ObservationIgnored private var index: LibraryIndex?
