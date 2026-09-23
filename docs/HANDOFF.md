@@ -1,5 +1,46 @@
 # Handoff – where Shelf stands, and what is left
 
+**`v1.1.0-rc1` is out, published for real, 23 September 2026 — Sparkle 2,
+end to end.** Sprint 14 gave Shelf its own update mechanism: `Shelf ▸ Check
+for Updates…`, a welcome-screen banner, and a second, separate public
+repository, `Erikemmer/shelf-releases`, holding builds and two appcast
+feeds (`appcast.xml` stable, `appcast-beta.xml` for `-rc` versions) — never
+source, which stays exactly as public as it already was. Full reasoning:
+[ADR 0022](adr/0022-updates-separate-delivery-sparkle.md). `MARKETING_VERSION`
+is `1.1.0-rc1` now, not `1.0.0` — main had moved well past what the
+`v1.0.0` tag names (below) before this sprint even started, and publishing
+that work under the tag's own number would have meant two different apps
+sharing one version string.
+
+**Still no Developer ID, so `v1.1.0-rc1` shipped exactly the way `v1.0.0`
+was handed out: ad hoc, unsigned, `spctl` rejects it and is expected to.**
+The difference `make release` no longer refuses to run without a
+certificate (Sprint 14, Teil B) — it signs ad hoc, names the download
+`Shelf-1.1.0-rc1-unsigned.zip`, and publishes anyway. Both the update
+mechanism's own client-side proof (a throwaway test channel, Teil C) and
+the real thing (an older build finding and installing `v1.1.0-rc1` over
+the real, now-live `appcast-beta.xml`, Teil D) were driven live, with real
+clicks, and verified by reading the updated bundle's `Info.plist` back off
+disk rather than trusting the window. `CHANGELOG.md`, Sprint 14, has all
+four Teile plus the ADR.
+
+**What is still open, past this sprint, is exactly what was open before
+it** — a Developer ID certificate and a notarytool profile (below), the
+four cover judgement calls, and what only real hardware and real books can
+answer. Sparked nothing new onto that list: Shelf and Selector alike have
+no path for a *Release*-configuration build to ever reach the beta
+channel — checked directly against Selector's own `project.yml` and
+`UpdaterModel.swift`, not assumed — so that is not a gap Shelf has and
+Selector does not, and nothing was added to `docs/BACKLOG.md` for it.
+
+---
+
+**Below is the previous handoff, kept as it was written — the tag it
+describes and the "still open" list under it are both superseded by the
+paragraphs above.**
+
+---
+
 **`v1.0.0` is tagged, on commit `4b5856c`.** Erik set it himself on 21
 September 2026: `git tag -a v1.0.0 4b5856c -m "Shelf 1.0.0 — unsigned"`,
 pushed. That commit is the closing session's v1.0 candidate — 701 core

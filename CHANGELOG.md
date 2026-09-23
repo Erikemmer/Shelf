@@ -5,6 +5,33 @@ on and what was *not* measured.
 
 <!-- shelf-release: v1.1.0-rc1 · 23 September 2026 -->
 
+## Sprint 14, Teil E — documentation catches up with the sprint · 23 September 2026
+
+No code. `docs/RUNBOOK.md` gets a new §15, "Releasing an update": the path
+`make release` takes today (always builds, always publishes; signs for
+real once a Developer ID exists), where the Sparkle key lives and under
+which keychain account, what losing it would mean and why the keychain
+itself — not an exported file — is what has to be backed up, and the one
+thing that changes automatically once a Developer ID exists (nothing to
+edit by hand). `docs/ARCHITECTURE.md` gets `UpdaterModel` in the building
+blocks, a line on Sparkle being the app target's only other external
+dependency (never `ShelfCore`), the delivery-is-separate-but-source-is-not
+shape ADR 0022 reasons, and a new "Data flow: checking for an update"
+section. `docs/HANDOFF.md`'s top section is superseded by a new one
+describing `v1.1.0-rc1`, kept rather than rewritten, the same layering
+convention `v1.0.0`'s own report already used. `CLAUDE.md` gets the two
+lines this whole sprint kept promising: the Sparkle key never goes into a
+repository, a file or a screenshot, and every Sparkle CLI call carries
+`--account shelf`.
+
+**One thing checked rather than assumed, because Teil D's own instructions
+asked for it explicitly:** whether Selector has a way for a *Release*
+build to ever reach its own beta channel that Shelf lacks. It does not —
+read directly out of Selector's `project.yml` and
+`UpdaterModel.swift.feedURLString(for:)`, both `#if DEBUG` only, same as
+Shelf's own. Nothing added to `docs/BACKLOG.md` for this, because there is
+no gap to record.
+
 ## Sprint 14, Teil D — the version, past v1.0.0 on purpose · 23 September 2026
 
 `MARKETING_VERSION` is `1.1.0-rc1`, `CURRENT_PROJECT_VERSION` is `2` —

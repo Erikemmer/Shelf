@@ -612,3 +612,79 @@ distinct inodes across both: 4996
 **It is not a backup.** One copy of the bytes with two names: a disk failure
 takes both. Across a volume boundary it is a copy, without asking, because a
 link cannot cross one.
+
+---
+
+## 15. Releasing an update
+
+Full reasoning: [ADR 0022](adr/0022-updates-separate-delivery-sparkle.md).
+Day-to-day mechanics, and what to do if the key is ever gone.
+
+### The path
+
+```
+make release-dry     # ad-hoc, proves the build/sign/zip path, publishes nothing
+make release          # the real thing — see below for what "real" means today
+```
+
+`make release` always builds and always publishes — it never stops just
+because there is no Developer ID certificate on this Mac yet. What differs
+is the signature: with a certificate, it signs for real, notarises, staples,
+and the download's name is plain (`Shelf-<version>.zip`); without one — every
+run so far, including `v1.1.0-rc1` — it signs ad hoc, skips notarising and
+stapling and says so, and the download is named `Shelf-<version>-unsigned.zip`.
+Either way it publishes: a GitHub release in `Erikemmer/shelf-releases`, the
+right appcast (`appcast-beta.xml` for an `-rc` version, `appcast.xml`
+otherwise) regenerated and pushed there, and a new
+`<!-- shelf-release: … -->` marker at the top of this repository's own
+`CHANGELOG.md` — reviewed and committed by hand afterwards, the same as any
+other change, never by the script itself.
+
+### Where the key lives
+
+The private half of the Sparkle signing key lives in this Mac's login
+keychain, under the account **`shelf`** — never in a file, never in this
+repository, never in a screenshot. `security find-generic-password -s
+"https://sparkle-project.org" -a shelf` shows whether it is there at all
+(after a keychain-password prompt); it does not show the key itself. The
+public half is `SPARKLE_PUBLIC_ED_KEY` in `project.yml`, baked into
+`Info.plist` as `SUPublicEDKey` — safe to commit, because it only lets Shelf
+*verify* an update's signature, never produce one.
+
+**The one trap actually found, this Mac's own:** `generate_keys`,
+`sign_update` and `generate_appcast` all default to one *global* keychain
+account (`ed25519`) when `--account` is not given — and this same Mac
+already carries Selector's own Sparkle key under exactly that default
+account, from Selector's own ADR 0007. Every call these three tools ever
+make for Shelf carries `--account shelf`; without it, a command would
+silently read or overwrite Selector's key pair instead of Shelf's own.
+`Scripts/release.sh` always passes it. A `generate_keys -p --account shelf`
+by hand, run once during Sprint 14, confirmed Shelf's public key
+(`4nZaq+Rd3IeA3c1AAqNoFUAKpnTL/Y28iEUV4izruwU=`) is not Selector's
+(`8O7EP++fI1zpzU3Dy1/Bc5AEEYDNolkgR/MpvfiC8GU=`).
+
+### What losing the key means
+
+Every installed copy of Shelf verifies an incoming update against the public
+key it was built with. If the private key is ever lost (a keychain reset, a
+disk swap with no backup), **no future update can be accepted by any
+existing installation** — there is no way to re-sign old builds after the
+fact. The only way out: a new key pair, a new version built with the new
+`SPARKLE_PUBLIC_ED_KEY`, and every existing install told by hand — a normal
+download, not a Sparkle update — that it has to update once manually. This
+is why the keychain itself has to be backed up (Time Machine ordinarily
+covers `login.keychain-db`), not merely written down somewhere: there is no
+command in this repository that exports the private key, and there should
+not be one. Anyone who wants to export it anyway has the tool already —
+`generate_keys -x <file> --account shelf` — but nothing here does that step
+for them.
+
+### Once a Developer ID exists
+
+Nothing about the update mechanism itself changes — the same key, the same
+`--account shelf`, the same two appcasts. `make app` and `Scripts/release.sh`
+already check for a `Developer ID Application` identity every time they run
+(`security find-identity -v -p codesigning`) and switch `SHELF_HARDENED` to
+`YES` on their own the moment one is found; a real signature, notarisation
+and stapling follow automatically, and the download's name drops the
+`-unsigned` suffix. Nothing to edit by hand.

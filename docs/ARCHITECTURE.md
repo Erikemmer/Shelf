@@ -27,6 +27,9 @@
 │            RecentLibrariesStore (security-scoped bookmarks)   │
 │            SHA256Hasher (CryptoKit, the fast path)            │
 │            TimingLog (SHELF_TIMING=1; silent otherwise)       │
+│            UpdaterModel (Sparkle 2, app target only —         │
+│              ADR 0022; Check for Updates…, the welcome-       │
+│              screen banner, SHELF_APPCAST_URL in Debug)       │
 │            EditingKeyMonitor (1–5, 0, R, T, ␣ and, since      │
 │              Sprint 7, ←→↑↓ ⇱⇲ — at the window, not the menu  │
 │              bar: ADR 0006 and ADR 0017)                      │
@@ -114,6 +117,15 @@ so a copy pasted into the app fails as well.
 The only external dependency in the core is GRDB.swift. See
 [ADR 0003](adr/0003-zip-in-the-core.md) for why the ZIP reader is not libarchive
 and [ADR 0004](adr/0004-slatekit-shared-with-selector.md) for the tag rule.
+Sparkle 2 is the app target's only other external dependency, and it stays
+there: `UpdaterModel` is the one file that imports it, and the Linux job
+would refuse it in `ShelfCore` the same way it refuses AppKit.
+
+**Delivery is a separate repository, source is not.** `Erikemmer/Shelf` is
+public and stays exactly that; only builds and the two appcast feeds
+(`appcast.xml`, `appcast-beta.xml`) live in `Erikemmer/shelf-releases`, a
+second public repository with no source in it at all. See
+[ADR 0022](adr/0022-updates-separate-delivery-sparkle.md).
 
 ## What is where on disk
 
@@ -505,6 +517,35 @@ window showed nine books and one line.
 
 **The cover is the only thing here that writes without Apply**, on its own
 button, only when the book's folder has none, and never into the book file.
+
+## Data flow: checking for an update
+
+```
+launch or Shelf ▸ Check for Updates…
+  → SPUStandardUpdaterController (Sparkle 2, UpdaterModel)
+  → SUFeedURL (Info.plist; SHELF_APPCAST_URL overrides it in Debug only)
+  → GET the appcast (raw.githubusercontent.com/Erikemmer/shelf-releases)
+  → a newer sparkle:version? → Sparkle's own dialog, release notes from
+    the matching item, the welcome screen's banner if this was a
+    background check
+  → Installieren → download the enclosure, verify its EdDSA signature
+    against SUPublicEDKey → install and relaunch
+```
+
+Sparkle owns every step after `SUFeedURL` — `UpdaterModel` only starts the
+controller, remembers the version a background check found
+(`didFindValidUpdate`), and answers `feedURLString(for:)`, `#if DEBUG` only.
+Nothing here ever touches the network directly the way `URLSessionTransport`
+does for online metadata; this is the one other place in the whole app a
+socket opens, and it is Sparkle's own, not Shelf's.
+
+**Ad hoc still installs, and Gatekeeper still says no.** Sparkle trusts its
+own EdDSA check, not Gatekeeper's quarantine mechanism — proved live in
+Sprint 14 (`CHANGELOG.md`, Teil C and Teil D): an unsigned build updates
+another unsigned build cleanly, and `spctl` on the result still answers
+`rejected`, exactly as it would for any other unsigned app a person
+downloaded by hand. Neither is worked around; both are the expected shape
+until a Developer ID exists (ADR 0022).
 
 ## Concurrency
 

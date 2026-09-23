@@ -38,6 +38,14 @@ with Selector. Concept: `docs/CONCEPT.md`. Architecture:
 - **Deleting on a device only after a confirmation that names every file.**
 - **Copy, verify, then trust**: every copy is hashed on both sides before it
   counts (`docs/adr/0002-copy-verify-then-trust.md`).
+- **The Sparkle signing key never goes into a repository, a file, or a
+  screenshot.** The private half lives only in this Mac's keychain, account
+  `shelf`; the public half is the one thing safe to commit
+  (`SPARKLE_PUBLIC_ED_KEY` in `project.yml`). Every Sparkle CLI call
+  (`generate_keys`, `sign_update`, `generate_appcast`) always carries
+  `--account shelf` — this Mac's keychain also holds Selector's own Sparkle
+  key, under the tools' *default* account, and omitting `--account` would
+  silently touch that key instead (`docs/adr/0022-updates-separate-delivery-sparkle.md`).
 - Test material is synthetic and generated (`make synthetic`). No borrowed book
   goes into this repository.
 - Cache and test-output path: `~/Library/Caches/Shelf/` – **never** under
