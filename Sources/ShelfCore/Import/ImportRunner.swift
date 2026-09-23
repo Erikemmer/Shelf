@@ -199,8 +199,25 @@ public struct ImportRunner: Sendable {
 
             // Into the index as we go, so an interruption leaves an index that
             // matches the folder rather than an empty one.
+            //
+            // `.detached`, for the same reason the last, short batch below is:
+            // a cancellation can land exactly at this boundary — the loop
+            // above already checks `Task.isCancelled` once per file — and
+            // `saveBatch` for the real `LibraryIndex` writes through GRDB,
+            // which itself checks `Task.isCancelled` and refuses to write.
+            // Measured against the real app importing a large enough library
+            // that a Cancel click lands mid-run: an *unguarded* call here
+            // let `CancellationError` escape `run()` itself, uncaught by
+            // anything, which turned a routine Cancel into
+            // `ImportModel.run()`'s own catch block setting a visible error
+            // in the sheet rather than the clean, finished report a
+            // cancellation is designed to produce. `try?` for the same
+            // reason it guards the last batch: a batch write failing – for
+            // this reason or any other – must not make the whole run look
+            // like a failure.
             if unsaved.count >= Self.indexBatchSize {
-                try await saveBatch(unsaved)
+                let batch = unsaved
+                try? await Task.detached { try await saveBatch(batch) }.value
                 unsaved.removeAll(keepingCapacity: true)
             }
         }

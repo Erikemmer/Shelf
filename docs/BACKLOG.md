@@ -258,18 +258,16 @@ change of controls, not of layout.
       measured run (65 s and rising, force-killed by the proof script
       itself). Worth a real investigation with Instruments, not another
       guess, if it recurs somewhere this backstop cannot reach it in time
-- [ ] **A visible "Could not read the library index" / `CancellationError`
-      banner can appear right after quitting cancels an import.**
-      `LibraryModel.runImport()` calls `await reload()` unconditionally
-      after `importModel.run()` returns, cancelled or not, inside the same
-      `Task` the cancellation touched — and something in that reload path
-      hits `Task.isCancelled` the same way `LibraryIndex.save` did before
-      Sprint 13, Teil B's fix (`CHANGELOG.md`, Sprint 13, Teil C, Bug 3),
-      except here it surfaces as a red banner instead of a silently lost
-      write. Seen in both languages while screenshotting Teil E's waiting
-      sheet — harmless (nothing is lost; the flush already happened before
-      `reload()` runs), but a person quitting should not see an error about
-      their own quit
+- [x] **A visible "Could not read the library index" / `CancellationError`
+      banner can appear right after quitting cancels an import.** Fixed in
+      Sprint 15, Teil A: `runImport()` now reloads through its own
+      `Task.detached`, the same fix Sprint 13 Bug 3 used for the last short
+      batch. Fixing it live surfaced a sibling: `ImportRunner`'s own
+      *regular* mid-loop `saveBatch` call had the identical unguarded
+      `try await`, and got the identical fix. `CHANGELOG.md`,
+      `Tests/ShelfCoreTests/IndexCancellationTests.swift`,
+      `Scripts/import-cancel-proof.sh`,
+      `docs/screenshots/sprint-14-import-cancel/`
 - [ ] **`ImportModel`'s own `cancel()` cancels nothing.** Found while wiring
       Sprint 13's termination-safe cancellation, and left exactly as found,
       per instruction — not this sprint's task. `ImportModel.task` is

@@ -5,6 +5,68 @@ on and what was *not* measured.
 
 <!-- shelf-release: v1.1.0-rc1 · 23 September 2026 -->
 
+## Sprint 15, Teil A — the false "Could not read the library index" banner, and a sibling bug it led to · 23 September 2026
+
+`docs/BACKLOG.md` carried this since Sprint 3: a visible "Could not read the
+library index" / `CancellationError` banner could appear right after
+quitting cancelled an import — harmless, since nothing was ever lost, but
+wrong, and wrong at exactly the moment someone already fears for their
+library.
+
+**Root cause, found by reading the code rather than guessed:**
+`LibraryModel.runImport()` awaited `reload()` inside `importRunTask` — the
+very `Task` a Cancel click or a quit (`cancelImportRun()`) had just
+cancelled. GRDB's async reads cooperatively check `Task.isCancelled` and
+throw `CancellationError` **before touching the database at all** — the same
+check Sprint 13, Teil C's Bug 3 found silently losing a write. `reload()`'s
+generic `catch` turned that into a real-looking, but false, read-failure
+banner. The fix is the same one Bug 3 used: `runImport()` now reloads
+through its own `Task.detached`, which starts uncancelled regardless of what
+cancelled the caller — a *real* read failure (a locked or corrupt index)
+still surfaces; only the false one from cancellation does not.
+
+**Reproducing it live surfaced a second, sibling bug the first one had been
+masking.** With the false banner gone, cancelling a large enough import
+(4 000 synthetic books, large enough that a real Cancel click lands
+mid-copy) turned up a *different* false error, inside the sheet itself:
+"The operation couldn't be completed. (Swift.CancellationError error 1.)",
+with the sheet stuck on its Cancel button rather than reaching "Done".
+`ImportRunner.run()`'s *regular*, mid-loop `saveBatch` call — the one that
+fires every `indexBatchSize` (200) books, not only the last short one — was
+never given Bug 3's own fix: it was still a plain `try await
+saveBatch(unsaved)`, and a Cancel landing exactly at that boundary let
+`CancellationError` escape `run()` itself, uncaught by anything, into
+`ImportModel.run()`'s own `catch`. Fixed the same way as the batch beside
+it: `try? await Task.detached { try await saveBatch(batch) }.value`.
+
+**Tests, at the root rather than at the two call sites that cannot be
+unit-tested directly** (`LibraryModel` has no app-side test target yet, and
+`ImportRunner`'s own existing cancellation test uses an in-memory
+`BatchCollector` that never checks cancellation, which is exactly why it
+never caught either bug): `Tests/ShelfCoreTests/IndexCancellationTests.swift`
+proves, deterministically (an `AsyncStream` gate, not a race), that a read
+*and* a write inside an already-cancelled `Task` both throw
+`CancellationError` against a perfectly healthy index, and that the same
+read and write through a `Task.detached` both succeed regardless — the exact
+mechanism both fixes now rely on.
+
+**Live proof, both bugs, both languages, real clicks — never assumed:**
+`Scripts/import-cancel-proof.sh` drives the real app: a real import,
+auto-started through `SHELF_AUTO_IMPORT_SOURCE` (Sprint 13's own test hook),
+against 4 000 synthetic books; a real click on Cancel, found through the
+window's own accessibility tree; then the window's own accessibility tree
+read again for the banner's words. Reproduced first, against the code as it
+stood before this fix (`docs/screenshots/sprint-14-import-cancel/before-en-banner.jpg`):
+the red banner, and the grid still reading "This library is empty" even
+though books had already been copied — the reload that would have shown
+them is exactly the one that failed. Then fixed, and the same script run
+again in both languages
+(`docs/screenshots/sprint-14-import-cancel/after-en-clean.jpg`,
+`after-de-clean.jpg`): no banner, the grid showing the 1 860 (English run) /
+2 825 (German run) books actually copied before Cancel landed — different
+counts between runs because the exact moment a real click lands is not
+deterministic, and neither run is worse for it.
+
 ## Sprint 14, Teil E — documentation catches up with the sprint · 23 September 2026
 
 No code. `docs/RUNBOOK.md` gets a new §15, "Releasing an update": the path

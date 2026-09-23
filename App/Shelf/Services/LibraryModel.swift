@@ -855,7 +855,21 @@ final class LibraryModel {
             self.descriptor = stored
         }
         _ = index
-        await reload()
+        // `runImport()` runs inside `importRunTask`, which a Cancel click or a
+        // quit may have just cancelled (`cancelImportRun()`). GRDB's async
+        // reads cooperatively check `Task.isCancelled` and throw
+        // `CancellationError` before touching the database — the same check
+        // Sprint 13, Teil C's Bug 3 found silently losing a write
+        // (`CHANGELOG.md`). Reloading in that same cancelled task turned a
+        // perfectly good index read into a false "Could not read the library
+        // index" banner right after a person's own Cancel or Quit
+        // (`docs/BACKLOG.md`) — the data were never at risk, only the message
+        // was wrong. A detached task starts uncancelled regardless of what
+        // cancelled the caller, so a *real* read failure (a locked or corrupt
+        // index) still surfaces; only the false one from cancellation does not.
+        await Task.detached { [weak self] in
+            await self?.reload()
+        }.value
     }
 
     // MARK: Stopping a running import cleanly
