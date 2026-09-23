@@ -5,6 +5,24 @@ on and what was *not* measured.
 
 <!-- shelf-release: v1.1.0-rc1 · 23 September 2026 -->
 
+## Sprint 15, Teil C — 1.1.0-rc2, the second release, proving a beta channel with two versions actually works · 23 September 2026
+
+`MARKETING_VERSION` is `1.1.0-rc2`, `CURRENT_PROJECT_VERSION` is `3` — higher
+than `1.1.0-rc1`'s `2`, as every build number must be. Still a pre-release:
+`Scripts/release.sh` routes any `-rc` version to the beta channel
+(`appcast-beta.xml`) with `--prerelease`, exactly as `1.1.0-rc1` was.
+
+**What this release actually is:** the code in Teil A (the false
+cancellation banner, fixed in two places) and Teil B (the release path
+itself, hardened before a second release could expose the download-address
+and delta bugs Teil B found and fixed by a local dry run). Publishing it is
+therefore also the only real proof that Teil B's own fix works against a
+*live* two-version beta channel, not only a throwaway local probe — the
+thing Teil B's own dry run could not by itself demonstrate, since nothing
+in a dry run ever reaches `Erikemmer/shelf-releases`. 797 core tests, `make
+test`/`make app`/`make lint`/`make smoke` all green against the bumped
+version.
+
 ## Sprint 15, Teil A — the false "Could not read the library index" banner, and a sibling bug it led to · 23 September 2026
 
 `docs/BACKLOG.md` carried this since Sprint 3: a visible "Could not read the

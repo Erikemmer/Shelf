@@ -32,10 +32,12 @@ settings:
     # v1.0.0 tag by now (writing into an EPUB, Remove Cover, a clean quit,
     # Sparkle itself) and publishing that under "1.0.0" would put a different
     # app under the same number as the tag. The rule against touching
-    # MARKETING_VERSION casually is lifted for this one change; it stays
-    # 1.1.0-rc1 (a pre-release, beta channel only) until Erik promotes it.
-    MARKETING_VERSION: "1.1.0-rc1"
-    CURRENT_PROJECT_VERSION: "2"
+    # MARKETING_VERSION casually is lifted for a real release, and only for
+    # that. Raised again for Sprint 15, Teil C's second release, the one
+    # that proves a beta channel with two versions in it actually works —
+    # still a pre-release (beta channel only) until Erik promotes it.
+    MARKETING_VERSION: "1.1.0-rc2"
+    CURRENT_PROJECT_VERSION: "3"
     # Follows whether a Developer ID identity was found at build time –
     # `make app`/`Scripts/release.sh` set SHELF_HARDENED accordingly, the same
     # way they already choose between a real signature and an ad-hoc one. An
