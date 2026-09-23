@@ -52,7 +52,13 @@ project: ## Generate Shelf.xcodeproj from project.yml (needs: brew install xcode
 	xcodegen generate
 
 app: project ## Build the macOS app, Release (needs Xcode) – this is what gets started
-	xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Release build SHELF_BUILD_COMMIT="$$(git rev-parse HEAD)"
+	@if security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID Application"; then \
+		echo "app: Developer ID identity found — Hardened Runtime on"; \
+		xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Release SHELF_HARDENED=YES build SHELF_BUILD_COMMIT="$$(git rev-parse HEAD)"; \
+	else \
+		echo "app: no Developer ID identity — ad-hoc build, Hardened Runtime off (see docs/adr/0022-updates-separate-delivery-sparkle.md)"; \
+		xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Release SHELF_HARDENED=NO build SHELF_BUILD_COMMIT="$$(git rev-parse HEAD)"; \
+	fi
 
 app-debug: project ## Build the macOS app with assertions and symbols, for chasing a crash
 	xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Debug build SHELF_BUILD_COMMIT="$$(git rev-parse HEAD)"
@@ -96,10 +102,10 @@ organize-shots: organize-library ## Photograph the merge, organise and export sh
 runbook: ## Run every path in docs/RUNBOOK.md once and print what it did
 	@Scripts/runbook-proof.sh
 
-release: ## Build, sign, notarise and staple a downloadable Shelf (needs a Developer ID)
+release: ## Build, sign, notarise, staple and publish a downloadable Shelf to shelf-releases (needs a Developer ID)
 	@Scripts/release.sh
 
-release-dry: ## The same path with an ad-hoc signature, as far as notarisation – needs nothing
+release-dry: ## The same path with an ad-hoc signature, as far as notarisation – nothing published, needs nothing
 	@RELEASE_DRY_RUN=1 Scripts/release.sh
 
 clean: ## Remove build products

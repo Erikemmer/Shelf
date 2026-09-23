@@ -3,6 +3,73 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 14, Teil B — `make release` publishes, and no longer refuses without a Developer ID · 23 September 2026
+
+`Scripts/release.sh` gains a publish phase and one real behaviour change to
+the path before it.
+
+- **A missing Developer ID used to stop a real (non-dry) run outright** —
+  fixed at the same commit `RELEASE_DRY_RUN=1` was documented as the
+  workaround for exactly that. Now it signs ad hoc instead, skips
+  notarising and stapling (saying so, and running `spctl` anyway "for the
+  record" — expected `rejected`), names the download
+  `Shelf-<version>-unsigned.zip`, and **still publishes** — exactly the
+  path `v1.0.0` went out on by hand once, now the one this script always
+  takes until a certificate exists. `RELEASE_DRY_RUN=1` is unchanged and is
+  the only path that never publishes, whatever is or is not in the
+  keychain.
+- **Publishing** (only for a real run): `sign_update --account shelf` on
+  the zip, release notes rendered from `CHANGELOG.md`
+  (`Scripts/changelog-notes.py`, new), `generate_appcast --account shelf`
+  against a per-channel archive directory that accumulates across releases
+  (`~/Library/Caches/Shelf/appcast-archives/{stable,beta}`), a GitHub
+  release in `Erikemmer/shelf-releases` (`--prerelease` and
+  `appcast-beta.xml` for an `-rc` version, `appcast.xml` otherwise), and
+  the updated appcast committed and pushed there. `--account shelf` on
+  every one of the three Sparkle CLI calls this script and `generate_keys`
+  make between them — never the default, for the reason ADR 0022 and Teil
+  A found.
+- **The CHANGELOG.md marker convention.** Shelf's own changelog is not
+  keyed by version (`## Sprint 14, Teil B`, not `## [1.1.0-rc1]`), unlike
+  Selector's — so "the matching section" for a release cannot be found by
+  matching a version string. `changelog-notes.py` instead reads everything
+  newest-first down to an HTML comment,
+  `<!-- shelf-release: v<version> · <date> -->`, that a successful publish
+  inserts at the top of the file, right above the newest entry — bounding
+  *that* release's own notes for whenever the next one is cut. The first
+  marker was backfilled by hand at the `v1.0.0`/Sprint 9 boundary, in this
+  same commit. **A real bug found and fixed before it shipped:** the first
+  version of this inserted the new marker next to the *old* one instead of
+  at the top of the newly-written content — harmless for the very first
+  release (nothing had been published between `v1.0.0` and now, so both
+  positions bound the same span), but would have silently re-included an
+  already-released sprint's notes in every release after that. Caught by
+  simulating two release cycles against a scratch copy of `CHANGELOG.md`
+  before touching the real file, not by reasoning about it after the fact.
+- **`Scripts/release.sh` gets Sparkle's own CLI tools (`sign_update`,
+  `generate_appcast`) from the SPM artifact the app target itself already
+  resolves** (`xcodebuild -resolvePackageDependencies … -clonedSourcePackagesDirPath`,
+  a fixed path under `$OUT` rather than DerivedData's own hash-keyed one)
+  — no `brew`, no separate tarball download, matching the instruction this
+  session was given rather than Selector's own script, which downloads a
+  release tarball directly.
+- `make app` now checks for a Developer ID identity itself and passes
+  `SHELF_HARDENED=YES`/`NO` accordingly, the same check `release.sh`
+  already made — Hardened Runtime was otherwise always off for `make app`
+  regardless of whether a certificate existed, which was Teil A's own gap.
+- **Verified without publishing anything**: `make release-dry` still
+  proves the archive/sign/zip path end to end and exits before any publish
+  step (unchanged); `bash -n` on the rewritten script; the two-cycle
+  CHANGELOG.md marker simulation above, against a scratch copy, never the
+  real file; `sign_update`/`generate_appcast` located and run
+  (`--help`/`-p`) against the resolved SPM artifact in Teil A's own
+  investigation. **Not verified, and this is exactly what Teil D is for:**
+  the publish phase has never actually run — no Developer ID exists on
+  this Mac, and running it for real means creating a real (if unsigned)
+  release in `Erikemmer/shelf-releases`, which HALT 4 gates on purpose.
+  793 core tests, unchanged; `make test && make app && make lint && make
+  smoke` all green.
+
 ## Sprint 14, Teil A — Sparkle 2 is in the app · 23 September 2026
 
 Full reasoning in [ADR 0022](docs/adr/0022-updates-separate-delivery-sparkle.md),
@@ -1960,6 +2027,12 @@ skipped and said so, exactly as `docs/HANDOFF.md` describes.
 
 Not measured: notarisation and stapling themselves, which need the
 Developer ID certificate only Erik can make (`docs/HANDOFF.md` §1).
+
+<!-- shelf-release: v1.0.0 · 21 September 2026 — marker backfilled 23
+     September 2026, Sprint 14 Teil B, when `Scripts/changelog-notes.py`
+     and this convention were built; nothing above this line was in
+     v1.0.0. `make release` inserts one of these itself from here on,
+     each one marking where the release above it stops. -->
 
 ## Sprint 9 – a cover can be changed · 19 September 2026
 

@@ -6,10 +6,13 @@ Everything below is `Scripts/release.sh`, which `make release` runs. This
 document is what the script cannot say: what the two credentials are, why they
 are needed, and what to do when a step refuses.
 
-**Both repositories are public** — `Erikemmer/Shelf` and its one shared
-package, `Erikemmer/SlateKit`. Nothing in the build needs a login, and CI
-builds the app on every push. The two credentials below are Apple's, and they
-are the only ones this release path has ever needed.
+**`Erikemmer/Shelf` is public**, and so is the separate repository a real
+release publishes to, `Erikemmer/shelf-releases` (source and delivery,
+ADR 0022 — never the other way round). Nothing in the build itself needs a
+login, and CI builds the app on every push. The two credentials below are
+Apple's; publishing also needs `gh` to be authenticated as a user who can
+push to `shelf-releases` (`gh auth status`) — nothing this script creates or
+stores itself.
 
 ---
 
@@ -148,29 +151,82 @@ release: FAILED – no “Developer ID Application” certificate in the keychai
 make release
 ```
 
-Seven steps. Each one prints what it did.
+Seven steps to a built, signed app, then publishing (below). Each one prints
+what it did.
 
 | | Step | What it is for |
 |---|---|---|
 | 1 | `make test && make lint` | A release is not a way round the checks. `RELEASE_SKIP_CHECKS=1` exists and the script says so in its output when it is used |
-| 2 | The identity | Reads `Developer ID Application: …` out of the keychain. Never creates one |
-| 3 | Archive | `xcodebuild archive`, Release configuration, hardened runtime from `project.yml` |
-| 4 | Verify | `codesign --verify --deep --strict`, then the code-directory flags must contain `runtime`, then the entitlements are written out to be read |
+| 2 | The identity | Reads `Developer ID Application: …` out of the keychain – see below for what happens when there is none |
+| 3 | Archive | `xcodebuild archive`, Release configuration. Hardened Runtime only when step 2 found a real identity (`docs/adr/0022-updates-separate-delivery-sparkle.md`) |
+| 4 | Verify | `codesign --verify --deep --strict`, then the code-directory flags must (or must not) contain `runtime`, matching step 2, then the entitlements are written out to be read |
 | 5 | Zip | `ditto -c -k --keepParent` — not `zip`, which loses the bundle's symlinks, and notarisation refuses an archive that has |
-| 6 | Notarise | `notarytool submit --wait`. Minutes, not seconds. The log is kept |
-| 7 | Staple and assess | `stapler staple` puts the ticket **inside** the bundle so a Mac with no network can still check it; then `spctl -a -vvv -t install`, which is what the other person's Mac runs; then the zip is made again, because the first one has no ticket in it |
+| 6 | Notarise | `notarytool submit --wait`, only with a real identity. Minutes, not seconds. The log is kept |
+| 7 | Staple and assess | Only after a real notarisation: `stapler staple` puts the ticket **inside** the bundle so a Mac with no network can still check it; then `spctl -a -vvv -t install`, which is what the other person's Mac runs; then the zip is made again, because the first one has no ticket in it |
 
 Everything lands in `~/Library/Caches/Shelf/release/` — outside `~/Documents`,
-which is synced (CLAUDE.md). `Shelf-<version>.zip` is the download.
+which is synced (CLAUDE.md). `Shelf-<version>.zip` (or `Shelf-<version>-unsigned.zip`,
+see below) is the download.
+
+**A missing Developer ID no longer stops a real release.** Until Erik enrols
+in the Apple Developer Program, step 2 signs ad hoc instead, steps 6 and 7
+are skipped and say so, and the download's filename ends in `-unsigned` —
+but the run continues all the way through publishing (below), exactly the
+way `v1.0.0` itself was handed out by hand once. `RELEASE_DRY_RUN=1` is the
+one path that always stops before any of that and never publishes,
+regardless of what is or is not in the keychain — the local proof this
+repository can run on its own.
+
+## Publishing (ADR 0022)
+
+Once steps 1–7 above are done, a real (non-dry) run publishes to the
+separate `Erikemmer/shelf-releases` repository, using Sparkle's own CLI
+tools (`sign_update`, `generate_appcast`) taken from the same SPM artifact
+the app target already resolved — no `brew`, no separate download:
+
+1. `sign_update --account shelf` on the zip (`SHELF_SPARKLE_ACCOUNT`
+   overrides the account).
+2. Release notes rendered from `CHANGELOG.md` (`Scripts/changelog-notes.py`)
+   — see below for how "the matching section" is found in a changelog that
+   is not itself keyed by version.
+3. `generate_appcast --account shelf` against a per-channel archive
+   directory under `~/Library/Caches/Shelf/appcast-archives/` that
+   accumulates across releases (unlike `$OUT`, which this script clears
+   every run), so older entries are kept in the feed.
+4. `gh release create v<version>` in `shelf-releases`, `--prerelease` for an
+   `-rc` version, which also routes it to `appcast-beta.xml` instead of
+   `appcast.xml` — a stable install is never offered a release candidate by
+   accident.
+5. The updated appcast file is committed and pushed in the
+   `shelf-releases` checkout (`$HOME/Documents/shelf-releases` by default,
+   `SHELF_RELEASES_REPO` to override) — an ordinary git repository, not a
+   build product, so it is not under `~/Library/Caches/Shelf/`.
+6. A new `<!-- shelf-release: v<version> · <date> -->` marker is inserted
+   at the top of this repo's own `CHANGELOG.md`, right above the newest
+   entry — **not committed by the script**. `git status --short` shows it
+   afterwards; committing it is the next step, by hand, like any other
+   change.
+
+**Why the CHANGELOG.md marker exists at all.** Shelf's own `CHANGELOG.md` is
+written "Sprint 14, Teil B", not "`[1.1.0-rc1]`" — a sprint's entries are
+written before a version number for that work exists. So "the section for
+this release" cannot be found by matching a version string the way
+Selector's own changelog allows; it is everything newest-first down to the
+last release's own marker. The first marker was backfilled by hand at the
+`v1.0.0`/Sprint 9 boundary, in the same commit that added
+`Scripts/changelog-notes.py`.
 
 ---
 
 ## When a step refuses
 
-**"no Developer ID Application certificate in the keychain"** — see above. The
-dry run is what to do meanwhile.
+**"no Developer ID Application certificate in the keychain"** — no longer a
+refusal for a real run (see above); it signs ad hoc and continues. The dry
+run is what to run to prove the path without publishing anything, whether
+or not a certificate exists.
 
-**"no notarytool keychain profile called shelf-notarytool"** — the
+**"no notarytool keychain profile called shelf-notarytool"** — only reached
+with a real identity. The
 `store-credentials` line above has not been run, or was run for a different user
 or a different keychain.
 
@@ -200,9 +256,8 @@ the one that matters for somebody offline.
 - **No DMG.** The download is a zip. A DMG is prettier and is another thing to
   sign, staple and test; the zip is what notarisation wants anyway, and it is
   what a browser unpacks on its own.
-- **No Sparkle, no update feed.** v1.0 is a file on a page.
-- **Nothing is uploaded anywhere.** Where the zip is put — a web page, a
-  release on GitHub — is a decision, not a step, and it is Erik's.
 - **Nothing here has ever been notarised.** The dry run proves every step up to
-  it. Steps 6 and 7 have never run, because there is no certificate on this Mac,
-  and nothing in this document should be read as saying they have.
+  it. Steps 6 and 7 have never run for real, because there is no certificate
+  on this Mac, and nothing in this document should be read as saying they
+  have. A real, non-dry `make release` publishes an ad-hoc, `-unsigned` build
+  in the meantime (see above) rather than refusing to run at all.
