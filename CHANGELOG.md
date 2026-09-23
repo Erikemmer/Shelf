@@ -3,6 +3,61 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 14, Teil C — the update path proved live, over a throwaway test channel · 23 September 2026
+
+Every step of Sparkle's own update path, driven for real rather than
+inferred from reading the code: an old (`1.0.0`) Debug build, redirected
+via `SHELF_APPCAST_URL` to a fake `appcast-test.xml` (version `9.9.9`,
+committed to the public `Erikemmer/shelf-releases` and reached the same
+way the real feed is, over `raw.githubusercontent.com` — unlike Selector's
+own private-repo test channel, which had no choice but a fully local
+server for everything), found and installed a second local build served
+from a local HTTP server on this Mac. Every click that matters was a real
+one: `Scripts/click-at.swift` at a position read off the accessibility
+tree, `Scripts/menu-point.swift` for the item inside an already-open menu.
+
+**One gap in the existing tooling, found and closed before it could block
+the proof:** `Scripts/menu-point.swift` explicitly skips the whole
+`AXMenuBar` subtree — right for the in-window pop-up menus every other
+script here drives (its own comment says why), and exactly wrong for the
+*application* menu bar's own open dropdown, which sits nested inside that
+very subtree. A new scratch-only helper (this session's own, not part of
+the repo — Teil C's proof is throwaway by design) walked down from the
+named menu bar item instead of skipping it, and found `Nach Updates
+suchen …` (German, matching this Mac's locale, and Sparkle's own dialogs
+turned out to be German too, unprompted).
+
+**What the four screenshots show, each with the real click that produced
+it:** the notice and its changelist together (Sparkle's own dialog names
+the version and renders the fake HTML release notes from
+`appcast-test.xml`); "Bereit zum Installieren" once the download and
+signature check both passed (too fast, over a local server, to catch a
+separate mid-download frame — noted rather than staged); the relaunch,
+a new pid running from the exact same bundle path; and `spctl -a -vvv -t
+execute` on that same, now-updated bundle answering **`rejected`** —
+expected, and not worked around, exactly as ADR 0022 says it should be
+until a Developer ID exists.
+
+**Verified by reading files back, not by trusting the window:** the
+updated bundle's own `Info.plist`, at the identical path the old build
+was copied to, read `CFBundleShortVersionString` `9.9.9` and
+`CFBundleVersion` `999` after the relaunch — Sparkle really replaced the
+app bundle in place, the same discipline Selector's own proof used
+("per Datei nachgelesen, nicht nur der Oberfläche geglaubt").
+
+**Removed afterwards, restlos:** `appcast-test.xml` deleted from
+`shelf-releases` and pushed (confirmed `appcast.xml`/`appcast-beta.xml`
+were never touched by this test — one commit in their history, the
+seed from HALT 1); both test app copies, the zip, and every screenshot
+under `~/Library/Caches/Shelf/update-test/` (64 MB, `rm -rf`, named here
+because this session created every byte of it); the local HTTP server
+(pid, started by this session) and the relaunched test client (pid,
+likewise) both stopped by this session, not left running. `project.yml`
+was restored to `1.0.0`/`1` immediately after the fake build was copied
+out — `git status --short` confirms clean before this commit. Nothing
+under `Erikemmer/Shelf` itself changed; this whole Teil was proof, not
+code.
+
 ## Sprint 14, Teil B — `make release` publishes, and no longer refuses without a Developer ID · 23 September 2026
 
 `Scripts/release.sh` gains a publish phase and one real behaviour change to
