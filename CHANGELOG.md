@@ -3,6 +3,95 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 13, Teil E — the wait becomes visible, and stops scaling with the whole library · 23 September 2026
+
+Teil D closed the routing gap; this closes the two things left open at the
+end of Teil C: a silent wait that can run up to about twenty seconds
+invites an impatient Force Quit, and part of that twenty seconds was work
+that had no reason to scale with the size of the whole library.
+
+**The sheet now says what is happening.** `LibraryModel.isWaitingToQuitForImport`,
+set by `AppDelegate.performTermination()` around the same
+`await model.waitForImportRunToFinishOrForceQuit()` Teil D added, switches
+`ImportSheet`'s `.running` view from the ordinary progress bar to "Finishing
+the import cleanly before quitting…", a spinner, and a sentence naming the
+worst case Teil A measured. No new kind of sheet — the same
+`ImportSheet` the running import was already showing, one more state of a
+view it already had.
+
+**"Quit Now Anyway" is the escape hatch**, named per instruction so a
+person who does not want to wait is not funnelled toward Force Quit to get
+past it. `LibraryModel.waitForImportRunToFinishOrForceQuit()` races the
+import's own `Task` against a `CheckedContinuation` the button resumes —
+both triggers only ever run on the main actor, so the second one in either
+order is a plain, already-resumed no-op rather than a crash. Pressing it
+abandons whatever is still copying exactly as a Force Quit would have —
+bounded at `ImportRunner.indexBatchSize - 1`, found afterwards by `Find
+Orphaned Folders…` — a person's own choice instead of an impatient one that
+would have left the same thing behind anyway. The caption under the button
+says so, naming that command.
+
+**`removePartials` no longer walks the whole library.** It used to
+recurse through every folder under `library.root` looking for a stray
+`.part` file, on every run, cancelled or not — but a partial can only ever
+exist in a folder *this* run wrote into, since `copyAndVerify`'s own
+temporary file is always written next to the destination it stands in for.
+`ImportRunner.run()` now collects `touchedFolders` as it goes (including
+the folder of the operation cancellation lands inside, added before the
+write is attempted) and only looks at those. Measured directly, with a
+temporary timer around the call and reverted before this commit: **0.0009 s
+against an empty library, 0.70 s and 0.73 s across two runs against one
+holding 7 992 folders** — real time this fix removes from the wait,
+regardless of what a person is waiting for. A full import's own marginal
+cost of a tiny (five-book) addition into that same library dropped from
+1.40 s to 0.71–0.80 s across three runs once the fix was in — the remaining
+half is `existingFolders`/`OrphanedFolders.find`'s own library-wide scans,
+which happen during *planning*, before Import is ever clicked, and are out
+of scope here.
+
+`ImportRunnerTests.onlyTouchedFoldersAreSwept` pins the scoping itself: a
+stray partial planted in a folder the run never touches survives the run,
+proving the sweep is scoped rather than merely coincidentally still
+finding everything in today's fixtures. 793 core tests, up from 792.
+
+**Screenshots, both languages, a real posted ⌘Q keystroke** (`CGEventCreateKeyboardEvent`,
+⌘+Q, `.cghidEventTap` — not a menu command through System Events, and this
+picture says so): `docs/screenshots/sprint-13-quit-waiting/en.png` and
+`de.png`. The German wording went through one correction found only by
+looking at the picture: the first draft embedded "Find Orphaned Folders…"
+mid-sentence as a relative clause's verb ("… die Verwaiste Ordner suchen…
+danach findet"), which parses as a noun phrase standing where German
+grammar wants a verb — confusing exactly where the earlier "Nothing was
+removed. Library ▸ Find Orphaned Folders… shows them." pattern is not,
+because that one gives the command its own sentence. The fix does the
+same here: "Jetzt trotzdem zu beenden kann ein paar Ordner zurücklassen.
+%@ findet sie danach."
+
+**Measured, assumed, unchecked:**
+- **Measured**: `removePartials`'s own cost, isolated, against real
+  libraries built by `shelf-tool import` (`-c release`); the fix's effect
+  on a real import's marginal cost, three runs each side; both screenshots,
+  each via a real, posted ⌘+Q keydown/keyup pair, confirmed by the app
+  actually quitting in every run this session sent one; the escape hatch's
+  own code path, read and reasoned through rather than clicked — see
+  "unchecked" below.
+- **Found, not fixed, and written into `docs/BACKLOG.md` instead of the
+  code, per instruction**: a `Task.isCancelled`-shaped `CancellationError`
+  can surface as a visible red banner ("Could not read the library index…")
+  right after a cancelled import, in both languages, from
+  `LibraryModel.runImport()`'s unconditional `await reload()` running
+  inside the same cancelled `Task` — harmless (the flush already
+  happened), but a person quitting should not see an error about it.
+- **Unchecked**: an actual click on "Quit Now Anyway" through the running
+  app — every run this session sent against a real, mid-copy import
+  resolved the ordinary wait before a person (or a script) could have
+  reached for it, which is itself the point of the fix above, but it means
+  the button's own code path is read and reasoned through here rather than
+  proven by a click. `LibraryModel.forceQuitNow()`'s mechanism is the same
+  shape `waitForImportRunToFinishOrForceQuit()`'s own doc comment
+  describes and nothing about it depends on how the wait it is racing
+  against was reached.
+
 ## Sprint 13, Teil D — one path for every quit, Dock included · 23 September 2026
 
 Teil C left one gap named rather than closed: Dock ▸ Quit, Log Out and

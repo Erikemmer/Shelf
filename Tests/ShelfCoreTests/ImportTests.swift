@@ -528,6 +528,37 @@ struct ImportRunnerTests {
         #expect(partials == 0)
     }
 
+    /// Sprint 13, Teil B: cleaning up after itself only ever looks at the
+    /// folders *this run* wrote into, not a recursive walk of the whole
+    /// library — measured at about 0.7 s against an ~8 000-folder library
+    /// with nothing in it to remove (`CHANGELOG.md`). A folder this run
+    /// never touched cannot hold one of its partials — `copyAndVerify`'s own
+    /// temporary file is always written next to the destination it stands in
+    /// for — so a stray one sitting in an unrelated folder from some earlier,
+    /// unrelated run is left exactly where it is; `Library ▸ Find Orphaned
+    /// Folders…` is the explicit path for that, not an incidental sweep on
+    /// the next, unrelated import.
+    @Test("cleaning up after a run only looks at the folders it touched")
+    func onlyTouchedFoldersAreSwept() async throws {
+        let folder = try TemporaryFolder()
+        let (library, _) = try Library.create(at: try folder.folder("Lib"))
+
+        // A leftover this run has nothing to do with, in a folder it will
+        // never write into.
+        let strayPartial = try folder.write(
+            "Lib/Somebody Else/An Old Book (1)/\(ImportRunner.partialPrefix)stale.part", data: Data("x".utf8))
+
+        let candidate = try makeSource(folder, name: "new.epub", book: Book(title: "New", authors: ["Author"]))
+        let plan = ImportPlanner.plan(candidates: [candidate], startingNumber: 1)
+        _ = try await runner().run(ImportRunner.Options(library: library, plan: plan, sourceDescription: "x"))
+
+        #expect(FileManager.default.fileExists(atPath: strayPartial.path))
+        #expect(
+            folder.names(in: "Lib/Author/New (1)") == [
+                "New - Author.epub", "metadata.opf",
+            ])
+    }
+
     @Test("a second format lands in the folder the book already has")
     func addFormat() async throws {
         let folder = try TemporaryFolder()

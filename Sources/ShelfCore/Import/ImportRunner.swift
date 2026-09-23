@@ -139,6 +139,12 @@ public struct ImportRunner: Sendable {
         var highestNumber = 0
         // Books finished since the last time the index was written.
         var unsaved: [LibraryEntry] = []
+        // Every folder this run has written into, including the one being
+        // written when a cancellation lands mid-copy — `removePartials`
+        // below only has anything to find inside one of these, since a
+        // partial's temporary name is only ever written next to the file it
+        // is standing in for (`copyAndVerify`'s own `partial` path).
+        var touchedFolders: Set<String> = []
 
         let total = options.plan.totalBytes
         var done: Int64 = 0
@@ -159,6 +165,7 @@ public struct ImportRunner: Sendable {
             do {
                 switch operation {
                 case .newBook(let new):
+                    touchedFolders.insert(new.folder)
                     let entry = try writeNewBook(new, in: options.library)
                     entries[entry.book.id] = entry
                     unsaved.append(entry)
@@ -172,6 +179,11 @@ public struct ImportRunner: Sendable {
                     // *asked for* — the run has no memory of a book it did not
                     // make.
                     let existing = entries[add.bookID] ?? existingEntry(add.bookID)
+                    // The same fallback `appendFormat` itself applies for an
+                    // empty `add.folder` — the planner leaves it empty for a
+                    // book this run did not create, to be filled in from what
+                    // the library already holds.
+                    touchedFolders.insert(add.folder.isEmpty ? existing?.folder ?? "" : add.folder)
                     let entry = try appendFormat(add, to: existing, in: options.library)
                     entries[entry.book.id] = entry
                     unsaved.append(entry)
@@ -217,7 +229,7 @@ public struct ImportRunner: Sendable {
 
         // Whatever happened – finished, cancelled or full of errors – nothing
         // half-written is left looking like a book.
-        removePartials(in: options.library.root)
+        removePartials(in: options.library.root, folders: touchedFolders)
 
         if Task.isCancelled {
             let remaining = options.plan.fileCount - newBookCount - addedFormatCount - failures.count
@@ -451,17 +463,23 @@ public struct ImportRunner: Sendable {
         }
     }
 
-    /// Leftovers from a cancelled or failed run, anywhere under the library.
-    /// They are never books, so they go; the books they would have become are
-    /// simply not in the index.
-    private func removePartials(in root: URL) {
-        guard
-            let walker = FileManager.default.enumerator(
-                at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
-        else { return }
-        // Hidden files are skipped by the enumerator, and the partials are
-        // hidden, so the folders are walked and the names checked directly.
-        for case let url as URL in walker where url.hasDirectoryPath {
+    /// Leftovers from a cancelled or failed run. They are never books, so
+    /// they go; the books they would have become are simply not in the
+    /// index.
+    ///
+    /// Only `folders` — the ones *this run* wrote into — are looked at, not
+    /// the whole library: `copyAndVerify`'s own `partial` path is always
+    /// next to the file it stands in for, so a folder this run never
+    /// touched cannot hold one of its partials. A recursive walk of the
+    /// whole library used to run here regardless, which cost about 0.7 s
+    /// against an ~8 000-folder library measured empty of anything to
+    /// remove — real time added to the wait Sprint 13, Teil A/B/C found a
+    /// quit can already spend up to about twenty seconds inside, for work
+    /// that could only ever find something in a folder already on this
+    /// list.
+    private func removePartials(in root: URL, folders: Set<String>) {
+        for folder in folders where !folder.isEmpty {
+            let url = root.appendingPathComponent(folder, isDirectory: true)
             let names = (try? FileManager.default.contentsOfDirectory(atPath: url.path)) ?? []
             for name in names where name.hasPrefix(Self.partialPrefix) && name.hasSuffix(".part") {
                 try? FileManager.default.removeItem(at: url.appendingPathComponent(name))

@@ -11146,6 +11146,74 @@
           }
         }
       }
+    },
+    "Finishing the import cleanly before quitting…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import wird sauber beendet, bevor Shelf schließt …"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finishing the import cleanly before quitting…"
+          }
+        }
+      }
+    },
+    "This can take up to about twenty seconds for a large import.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das kann bei einem großen Import bis zu zwanzig Sekunden dauern."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This can take up to about twenty seconds for a large import."
+          }
+        }
+      }
+    },
+    "Quit Now Anyway": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jetzt trotzdem beenden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit Now Anyway"
+          }
+        }
+      }
+    },
+    "Quitting now anyway may leave a few folders behind. %@ will find them afterwards.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jetzt trotzdem zu beenden kann ein paar Ordner zurücklassen. %@ findet sie danach."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitting now anyway may leave a few folders behind. %@ will find them afterwards."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

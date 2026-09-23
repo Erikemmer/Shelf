@@ -180,22 +180,53 @@ struct ImportSheet: View {
         }
     }
 
+    @ViewBuilder
     private func running(_ progress: ImportRunner.Progress) -> some View {
+        if model.isWaitingToQuitForImport {
+            quittingWhileImporting
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                progressRow(
+                    Loc.string(
+                        "Copying and verifying %1$@ of %2$@", Loc.number(progress.filesDone),
+                        Loc.number(progress.filesTotal)),
+                    fraction: progress.fractionDone)
+                Text(progress.currentTitle)
+                    .font(.caption)
+                    .foregroundStyle(Slate.textSecondary)
+                    .lineLimit(1)
+                if let remaining = progress.estimatedRemaining {
+                    Text(Loc.string("about %@ left", ImportReport.duration(remaining)))
+                        .font(.caption2)
+                        .foregroundStyle(Slate.textSecondary)
+                }
+            }
+        }
+    }
+
+    /// Shown in place of the ordinary running progress while a quit is
+    /// waiting for the import's short last batch to flush (Sprint 13,
+    /// Teil B) — a silent wait of up to about twenty seconds, measured
+    /// against a large in-flight backlog, just invites an impatient Force
+    /// Quit, which is the very thing this wait exists to avoid.
+    private var quittingWhileImporting: some View {
         VStack(alignment: .leading, spacing: 8) {
-            progressRow(
-                Loc.string(
-                    "Copying and verifying %1$@ of %2$@", Loc.number(progress.filesDone),
-                    Loc.number(progress.filesTotal)),
-                fraction: progress.fractionDone)
-            Text(progress.currentTitle)
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(Loc.string("Finishing the import cleanly before quitting…"))
+                    .font(.callout)
+                    .foregroundStyle(Slate.textPrimary)
+            }
+            Text(Loc.string("This can take up to about twenty seconds for a large import."))
                 .font(.caption)
                 .foregroundStyle(Slate.textSecondary)
-                .lineLimit(1)
-            if let remaining = progress.estimatedRemaining {
-                Text(Loc.string("about %@ left", ImportReport.duration(remaining)))
-                    .font(.caption2)
-                    .foregroundStyle(Slate.textSecondary)
-            }
+            Text(
+                Loc.string(
+                    "Quitting now anyway may leave a few folders behind. %@ will find them afterwards.",
+                    Loc.string("Find Orphaned Folders…"))
+            )
+            .font(.caption2)
+            .foregroundStyle(Slate.textSecondary)
         }
     }
 
@@ -257,9 +288,17 @@ struct ImportSheet: View {
                     dismiss()
                 }
             case .running:
-                // The real, running `Task` — not `importModel.cancel()`,
-                // which cancels nothing: see `LibraryModel.importRunTask`.
-                SlateSecondaryButton(Loc.string("Cancel")) { model.cancelImportRun() }
+                if model.isWaitingToQuitForImport {
+                    // The escape hatch for the wait above: whatever is still
+                    // copying is abandoned exactly as a Force Quit would
+                    // abandon it, a person's own choice instead of an
+                    // impatient one (Sprint 13, Teil B).
+                    SlateSecondaryButton(Loc.string("Quit Now Anyway")) { model.forceQuitNow() }
+                } else {
+                    // The real, running `Task` — not `importModel.cancel()`,
+                    // which cancels nothing: see `LibraryModel.importRunTask`.
+                    SlateSecondaryButton(Loc.string("Cancel")) { model.cancelImportRun() }
+                }
             case .ready:
                 SlateSecondaryButton(Loc.string("Cancel")) {
                     importModel.reset()
