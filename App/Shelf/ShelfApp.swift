@@ -1,4 +1,5 @@
 import AppKit
+import CoreServices
 import Darwin
 import ShelfCore
 import SlateKit
@@ -372,11 +373,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `SIGTERM`'s default disposition ends the process at once — the same
     /// as `SIGKILL` from an in-flight import's point of view, nothing
     /// flushes. Ignoring the default and routing the signal through
-    /// `NSApp.terminate(nil)` instead means `SIGTERM` takes exactly the path
-    /// ⌘Q already does, in `applicationShouldTerminate(_:)` below — one
-    /// answer for both abort kinds a process can be *asked*, rather than
-    /// forced, to leave by. `SIGKILL` cannot be caught here or anywhere:
-    /// POSIX disallows it, so that one stays open (`docs/BACKLOG.md`).
+    /// `performTermination()` instead means `SIGTERM` takes exactly the path
+    /// ⌘Q already does. `SIGKILL` cannot be caught here or anywhere: POSIX
+    /// disallows it, so that one stays open (`docs/BACKLOG.md`).
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.terminationLogger.notice("applicationDidFinishLaunching: installing SIGTERM handler")
         signal(SIGTERM, SIG_IGN)
@@ -392,20 +391,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // localised title — repointing its action rather than replacing the
         // command with `CommandGroup(replacing: .appTermination)` needs no
         // catalogue entry of its own and keeps AppKit's own wording exactly
-        // as it is. Dock ▸ Quit sends the terminate Apple Event straight to
-        // `NSApp`, bypassing this item entirely, and stays outside what this
-        // reaches (`docs/BACKLOG.md`).
+        // as it is.
         if let quitItem = NSApp.mainMenu?.items.first?.submenu?.items.first(where: {
             $0.action == #selector(NSApplication.terminate(_:))
         }) {
             quitItem.target = self
             quitItem.action = #selector(requestTermination)
         }
+
+        // Dock ▸ Quit, Log Out and Shut Down do not go through the menu item
+        // above at all — they send the standard "quit" Apple Event straight
+        // to the process, which `NSApplication` would otherwise answer with
+        // its own, unreachable termination path (Sprint 13, Teil C: a
+        // presented sheet kept that default path from ever reaching
+        // `applicationShouldTerminate`, and there was no hook inside it to
+        // dismiss the sheet first). Registering our own handler for the
+        // same event replaces AppKit's default one — the standard, documented
+        // way to take over the Quit Apple Event — so this is now the *one*
+        // place every abort kind a process can be asked, rather than forced,
+        // to leave by ends up: the menu item, `SIGTERM`, and this.
+        NSAppleEventManager.shared().setEventHandler(
+            self, andSelector: #selector(handleQuitEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kCoreEventClass), andEventID: AEEventID(kAEQuitApplication))
     }
 
-    /// The one place both ⌘Q/File ▸ Quit and `SIGTERM` end up. Three steps,
-    /// in this order, each measured against the real, running app with `log
-    /// stream` — not assumed:
+    /// Dock ▸ Quit, Log Out and Shut Down's own Apple Event, replacing
+    /// `NSApplication`'s default handling of it (see
+    /// `applicationDidFinishLaunching`'s own comment for why). Nothing else
+    /// answers this event once this handler is installed, so this method is
+    /// the one responsible for actually quitting the app.
+    @objc private func handleQuitEvent(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+        Self.terminationLogger.notice("quit Apple Event received (Dock, Log Out or Shut Down)")
+        requestTermination()
+    }
+
+    /// The synchronous entry point every abort kind a process can be *asked*
+    /// to leave by shares: the retargeted Quit menu item, the `SIGTERM`
+    /// handler, and `handleQuitEvent(_:withReplyEvent:)`. `@objc` selector
+    /// targets cannot themselves be `async`, so this only ever starts
+    /// `performTermination()` and returns at once — the waiting happens
+    /// there, not here.
+    @objc private func requestTermination() {
+        Task { @MainActor [weak self] in
+            await self?.performTermination()
+        }
+    }
+
+    /// What every quit does, in this order, each step measured against the
+    /// real, running app with `log stream` — not assumed:
     ///
     /// 1. Cancel the import *first*, before anything else. Every one of its
     ///    progress updates is its own `Task { @MainActor in … }`, one per
@@ -413,45 +446,94 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///    them queued ahead of a block asked for later that this whole
     ///    method, called after them, sometimes never got a turn until the
     ///    run finished on its own. Cancelling here, synchronously, stops the
-    ///    flood at its source within one file's processing time, which nothing
-    ///    later in this method needs to wait behind.
-    /// 2. Dismiss any presented sheet. Not cosmetic: `applicationShouldTerminate(_:)`
-    ///    was never reached at all — not merely delayed — while the import
-    ///    sheet was still on screen.
-    /// 3. Ask `NSApp` to terminate, `.async` rather than directly: calling it
-    ///    synchronously and reentrantly, from a block already running on
-    ///    `DispatchQueue.main` (this one), also measurably kept it from being
-    ///    reached, whatever the exact AppKit mechanism behind that is.
-    @objc private func requestTermination() {
-        model?.cancelImportRun()
-        model?.isImportSheetPresented = false
-        DispatchQueue.main.async { NSApp.terminate(nil) }
+    ///    flood at its source within one file's processing time.
+    /// 2. If an import was actually running, show the sheet's own waiting
+    ///    state (Sprint 13, Teil B) and `await` the real flush — a genuine
+    ///    `async`/`await` suspension, not a blocking wait, so the window
+    ///    keeps redrawing and "Quit Now Anyway" keeps working while this
+    ///    method is suspended here. This is *not* the same shape as the
+    ///    `.terminateLater` + `Task { @MainActor in … await … }` that
+    ///    deadlocked in Sprint 13, Teil C: that Task was scheduled from
+    ///    *inside* `applicationShouldTerminate(_:)`, an already-running block
+    ///    on GCD's serial main queue, and needed to finish before that block
+    ///    returned. Here the wait is the whole body of an ordinary `async`
+    ///    method, entered fresh from `requestTermination()`'s own `Task`,
+    ///    which has already returned — there is nothing left on the main
+    ///    queue for this suspension to be queued behind.
+    /// 3. Dismiss the sheet and ask `NSApp` to terminate, `.async` rather
+    ///    than directly: calling it synchronously and reentrantly, from a
+    ///    block already running on `DispatchQueue.main` (this one), was
+    ///    measurably what kept `applicationShouldTerminate(_:)` from being
+    ///    reached at all in Sprint 13, Teil C, whatever the exact AppKit
+    ///    mechanism behind that is. By the time this runs, `isImportRunning`
+    ///    is already `false`, so `applicationShouldTerminate(_:)`'s own wait
+    ///    below is a fallback that should rarely, if ever, still have
+    ///    anything to do.
+    ///
+    /// Guarded against running twice at once: a repeated ⌘Q while the first
+    /// request is still waiting, the Apple Event resent, a Force Quit dialog
+    /// trying again — any of these calling `requestTermination()` a second
+    /// time would otherwise start a second wait that replaces
+    /// `LibraryModel`'s own single continuation, and the *first* call would
+    /// then suspend forever, never resumed by anything.
+    private var isTerminating = false
+
+    private func performTermination() async {
+        guard !isTerminating else { return }
+        isTerminating = true
+        guard let model else {
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+            return
+        }
+        model.cancelImportRun()
+        if model.isImportRunning {
+            Self.terminationLogger.notice("waiting for the import's copy to finish before quitting")
+            model.isWaitingToQuitForImport = true
+            await model.waitForImportRunToFinishOrForceQuit()
+            model.isWaitingToQuitForImport = false
+            Self.terminationLogger.notice("the wait for the import's copy is over, quitting")
+        }
+        model.isImportSheetPresented = false
+        Self.terminationLogger.notice("sheet dismissed, dispatching NSApp.terminate")
+        DispatchQueue.main.async {
+            Self.terminationLogger.notice("calling NSApp.terminate(nil) now")
+            NSApp.terminate(nil)
+        }
+        // A backstop, found necessary by measurement rather than assumed:
+        // against the real app, quitting right as a large import finishes
+        // (and `LibraryModel.reload()` is about to redraw a grid that just
+        // grew by thousands of books) reproduced the exact "NSApp.terminate
+        // never reaches applicationShouldTerminate(_:)" symptom Sprint 13,
+        // Teil C found for a presented sheet — for a reason just as
+        // unidentified, at up to 65 s in one measured run and unbounded in
+        // principle, with `applicationShouldTerminate(_:)`'s own 30 s
+        // fallback never even entered, because the callback it guards was
+        // never reached either. If the process is still here 15 s after
+        // asking it to quit, it exits directly rather than becoming
+        // unquittable at exactly the moment a person would reach for Force
+        // Quit — the one outcome every part of Sprint 13 exists to avoid.
+        // Harmless if termination already succeeded: nothing scheduled on a
+        // process that has already exited ever runs.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+            Self.terminationLogger.error("still here 15 s after terminate(nil) — exiting directly")
+            exit(0)
+        }
     }
 
     private static let terminationLogger = Logger(subsystem: "de.erikemmer.shelf", category: "termination")
 
-    /// A quit with an import mid-copy must not just let the process end:
-    /// `ImportRunner` writes its short last batch only when the `Task`
-    /// running it is cancelled and allowed to finish, and until Sprint 13
-    /// nothing ever asked it to — a killed import and a quit import left the
-    /// same orphaned folders (`CHANGELOG.md`, Sprint 13, Teil A). `.examining`
-    /// and every other phase have written nothing yet, so only `.running`
-    /// delays termination at all.
-    ///
-    /// Two things tried here and abandoned, both measured against the real,
-    /// running app with `log stream`, neither assumed: `.terminateLater` with
-    /// an async `Task { @MainActor in … await … }` replying once the run
-    /// finished — the reply never came, because AppKit's own wait for it is
-    /// a nested loop on the main thread that a `Task` hop onto the main actor
-    /// never got a turn inside. Answering that by pumping `.default` mode by
-    /// hand instead of returning `.terminateLater` at all — same result,
-    /// because the real obstacle is GCD's main queue being serial: this
-    /// callback is already *running* as one block on it, and nothing else
-    /// scheduled on that same queue starts until this one returns, however
-    /// the waiting is spelled. `ImportModel.copyFinishedSemaphore` exists
-    /// because of exactly this: signalled from a `Task.detached` that never
-    /// needed the main queue to make progress, so waiting on it here does
-    /// not have the problem above.
+    /// A fallback for a quit that reached `NSApp.terminate(_:)` by some path
+    /// other than `performTermination()` above — nothing in this app does
+    /// that today, but this is cheap insurance against ever finding a fourth
+    /// one the way Sprint 13, Teil A and C found the first three. Uses
+    /// `ImportModel.copyFinishedSemaphore` rather than `async`/`await`: a
+    /// `DispatchSemaphore.wait`, signalled from a `Task.detached` that never
+    /// needed the main queue to make progress, is the one wait that does not
+    /// care what already-running block on GCD's serial main queue it is
+    /// called from — which this delegate callback, unlike
+    /// `performTermination()`, always is (`docs/adr/`-worthy detail kept
+    /// here instead: two failed shapes of this exact wait are in `CHANGELOG.md`,
+    /// Sprint 13, Teil C).
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         Self.terminationLogger.notice(
             "applicationShouldTerminate: model=\(self.model != nil), isImportRunning=\(self.model?.isImportRunning ?? false)"
@@ -460,7 +542,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return .terminateNow
         }
         model.cancelImportRun()
-        Self.terminationLogger.notice("waiting for the import's copy to finish")
+        Self.terminationLogger.notice("applicationShouldTerminate's own fallback wait was actually needed")
         // A bound in case the semaphore is somehow never signalled — quitting
         // late is a much smaller problem than never quitting at all.
         if semaphore.wait(timeout: .now() + 30) == .timedOut {

@@ -237,15 +237,27 @@ change of controls, not of layout.
       caught by any process and stays open, bounded at the batch size,
       findable by `Find Orphaned Folders…`; **`Dock ▸ Quit` stays open too**
       — see the next entry (`CHANGELOG.md`, Sprint 13)
-- [ ] **`Dock ▸ Quit` still hangs like every quit did before Sprint 13.** It
-      sends the terminate Apple Event straight to `NSApp`, bypassing the one
-      `NSMenuItem` (`Ablage ▸ Shelf beenden`) Sprint 13's fix retargets —
-      ⌘Q and the menu click both go through that item and are covered;
-      right-clicking the Dock icon and choosing Quit is not. Closing it
-      would need `applicationShouldTerminate(_:)` itself to be reachable
-      while a sheet is presented, which Sprint 13, Teil C measured it is
-      not, for a reason still unidentified rather than merely unfixed
-      (`CHANGELOG.md`, Sprint 13, Teil C)
+- [x] **`Dock ▸ Quit` no longer hangs.** Fixed in Sprint 13, Teil D/E: an
+      `NSAppleEventManager` handler for the standard "quit" Apple Event
+      (`kAEQuitApplication`) replaces `NSApplication`'s own default handling
+      of it — the same event Dock ▸ Quit, Log Out and Shut Down all send —
+      and routes it through the same `requestTermination()` the menu item
+      and `SIGTERM` already used. Proven against the real app with real
+      `osascript … quit` sends and real posted ⌘Q keystrokes
+      (`CHANGELOG.md`, Sprint 13, Teil D/E)
+- [ ] **`NSApp.terminate(nil)` can still fail to reach
+      `applicationShouldTerminate(_:)` at all, for a reason as unidentified
+      as Sprint 13, Teil C's own presented-sheet finding — reproduced with
+      the sheet already dismissed.** Measured intermittently (roughly half
+      of the runs at a few thousand books already on disk) right as a
+      cancelled import's `LibraryModel.reload()` was about to redraw a grid
+      that had just grown by thousands of entries — never fully explained,
+      only bounded: a 15 s backstop in `AppDelegate.performTermination()`
+      calls `exit(0)` directly if termination has not happened by then, so
+      the app can no longer become unquittable the way it did in one
+      measured run (65 s and rising, force-killed by the proof script
+      itself). Worth a real investigation with Instruments, not another
+      guess, if it recurs somewhere this backstop cannot reach it in time
 - [ ] **`ImportModel`'s own `cancel()` cancels nothing.** Found while wiring
       Sprint 13's termination-safe cancellation, and left exactly as found,
       per instruction — not this sprint's task. `ImportModel.task` is

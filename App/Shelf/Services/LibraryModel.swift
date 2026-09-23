@@ -187,6 +187,14 @@ final class LibraryModel {
 
     var isImportSheetPresented = false
     private(set) var importModel: ImportModel?
+    /// True from the moment a quit is asked for, while an import is running,
+    /// until its short last batch has actually flushed (or a person has
+    /// skipped the wait) — what `ImportSheet` shows in place of the ordinary
+    /// running progress. `AppDelegate.performTermination()` is the only
+    /// writer (`docs/BACKLOG.md`, Sprint 13, Teil A found the wait itself can
+    /// run up to about twenty seconds against a large in-flight backlog, and
+    /// a silent one just invites an impatient Force Quit).
+    var isWaitingToQuitForImport = false
 
     // MARK: Online metadata
 
@@ -887,11 +895,46 @@ final class LibraryModel {
         importRunTask?.cancel()
     }
 
-    /// Waits for a run in flight to actually stop, cancelled or finished on
-    /// its own. Returns at once when nothing is running — safe to call
+    /// Resumed by whichever of two triggers reaches it first: the run
+    /// finishing on its own, or `forceQuitNow()`. `nil` whenever nothing is
+    /// being waited for. Resuming a `CheckedContinuation` twice is a crash,
+    /// and these two triggers genuinely race — both are only ever called on
+    /// the main actor, so setting this to `nil` right after the first
+    /// `resume()` is enough; no lock is needed.
+    @ObservationIgnored private var quitWaitContinuation: CheckedContinuation<Void, Never>?
+
+    /// Waits for a run in flight to actually stop — cancelled or finished on
+    /// its own — or for `forceQuitNow()` to be called, whichever comes
+    /// first. Returns at once when nothing is running — safe to call
     /// unconditionally.
-    func waitForImportRunToFinish() async {
-        await importRunTask?.value
+    ///
+    /// The race is the point: `importRunTask?.value` alone can take the
+    /// worst case Sprint 13, Teil A measured (up to about twenty seconds
+    /// against a large in-flight backlog), and a person watching a stuck
+    /// quit should not have to reach for Force Quit to get past it.
+    func waitForImportRunToFinishOrForceQuit() async {
+        guard let task = importRunTask else { return }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            quitWaitContinuation = continuation
+            Task { @MainActor [weak self] in
+                await task.value
+                self?.resumeQuitWaitIfNeeded()
+            }
+        }
+    }
+
+    /// The escape hatch: whatever is still copying is abandoned exactly as a
+    /// hard kill would abandon it — bounded at
+    /// `ImportRunner.indexBatchSize - 1` books, found afterwards by `Find
+    /// Orphaned Folders…` — a person's own choice instead of an impatient
+    /// Force Quit that would leave the very same thing behind anyway.
+    func forceQuitNow() {
+        resumeQuitWaitIfNeeded()
+    }
+
+    private func resumeQuitWaitIfNeeded() {
+        quitWaitContinuation?.resume()
+        quitWaitContinuation = nil
     }
 
     /// Test-only automation hook, the same shape as `SHELF_TIMING` and

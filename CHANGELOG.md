@@ -3,6 +3,106 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 13, Teil D — one path for every quit, Dock included · 23 September 2026
+
+Teil C left one gap named rather than closed: Dock ▸ Quit, Log Out and
+Shut Down send the standard "quit" Apple Event straight to `NSApp`,
+bypassing the one `NSMenuItem` Teil B/C's fix retargets, and hung exactly
+as every quit did before Sprint 13.
+
+**Reading confirmed before anything was touched, per instruction:** the
+existing fix hung on *routing*, not on the flush logic itself. The actual
+wait — cancel, then block until the short last batch is flushed — already
+lived in `applicationShouldTerminate(_:)`, reached by *any* call to
+`NSApp.terminate(nil)` regardless of who calls it. What only the menu
+item and the `SIGTERM` handler did was dismiss the import sheet **before**
+calling `terminate(nil)` — Teil C's own Bug 1, a presented sheet keeping
+`applicationShouldTerminate(_:)` from being reached at all. Dock ▸ Quit's
+Apple Event reaches `NSApplication`'s own default handling of it directly,
+skipping that dismiss step, so the sheet stayed up and the same block Bug 1
+found came back for exactly this one path.
+
+**The fix: take over the Apple Event itself**, the documented way to
+intercept it — `NSAppleEventManager.shared().setEventHandler(...)` for
+`kCoreEventClass`/`kAEQuitApplication`, registered in
+`applicationDidFinishLaunching`, replacing `NSApplication`'s own handler
+rather than living beside it. `handleQuitEvent(_:withReplyEvent:)` calls the
+same `requestTermination()` the menu item already uses, so there is now
+exactly one place — a menu click, `SIGTERM`, or this — that decides what a
+quit does, matching the instruction to not leave two paths trying the same
+thing.
+
+**`requestTermination()` is now the synchronous entry point for all three,
+and `performTermination()` — a genuine `async` method — does the actual
+work.** This is *not* the same shape as the `.terminateLater` +
+`Task { @MainActor in … await … }` that deadlocked in Teil C: that Task was
+scheduled from *inside* `applicationShouldTerminate(_:)`, an
+already-running block on GCD's serial main queue, and needed to finish
+before that block returned — which is exactly the reentrancy Teil C's own
+comment describes. `performTermination()` is entered fresh, from a `Task`
+that `requestTermination()` starts and immediately returns from, so by the
+time it runs there is nothing on the main queue for its own suspension to
+be queued behind. `applicationShouldTerminate(_:)`'s original semaphore
+wait stays, verbatim, as a fallback for a termination reaching `NSApp` by
+any path this method does not — cheap insurance, and it earned its keep
+sooner than expected (below).
+
+**A reentrancy guard, `AppDelegate.isTerminating`**, found necessary while
+testing: a second quit signal arriving while the first is still waiting —
+a repeated ⌘Q, the Apple Event resent, a Force Quit dialog trying again —
+would otherwise start a second `performTermination()` that replaces
+`LibraryModel`'s own single wait continuation, leaving the *first* call
+suspended forever, resumed by nothing.
+
+**A 15 s backstop, found necessary by measurement, not designed in
+advance:** proving this against the real app (below) found that
+`NSApp.terminate(nil)` can still fail to reach
+`applicationShouldTerminate(_:)` at all — the exact Bug 1 symptom, sheet
+dismissed or not — intermittently, at a few thousand books already on
+disk, apparently around the moment a cancelled import's own
+`LibraryModel.reload()` is about to redraw a much larger grid. One run hung
+65 s before this session's own proof script force-killed the instance it
+had started; nothing in the app would have ended it on its own.
+`applicationShouldTerminate(_:)`'s own 30 s fallback never fired, because
+the callback it guards was never reached either. `performTermination()`
+now schedules `exit(0)` 15 s after asking `NSApp` to terminate — harmless
+if termination already succeeded, since nothing scheduled on a process that
+has already exited ever runs — so the app can no longer become unquittable
+at exactly the moment a person would reach for Force Quit, which is the one
+outcome every part of Sprint 13 exists to prevent. The underlying cause is
+`docs/BACKLOG.md`'s own open entry now, not chased further this session.
+
+**Proof, against the real, running app, `gui-source`'s 8 000-book
+synthetic source, reused from Teil C:**
+
+| trigger | in-flight backlog | result |
+|---|---|---|
+| `osascript … quit` (no import running) | — | 0.32 s, `applicationShouldTerminate` reached at once |
+| `osascript … quit` | 238 folders | 1.00 s, folders = indexed = 308, 0 orphans |
+| `osascript … quit` | 3 000 folders | 1.22 s, folders = indexed = 3 011, 0 orphans |
+| `osascript … quit` | 7 000 folders, before the backstop | **hung — 65.75 s and 65.68 s across two runs, force-killed** |
+| `osascript … quit` | 7 000 folders, after the backstop | 16.09 s (the backstop firing), folders = 7 000, indexed = 6 800, 200 orphaned — all named by `shelf-tool orphans` |
+| a real posted ⌘+Q keydown/keyup | ~100–2 000 folders, several runs | quit correctly every time, mostly under 1.5 s, once via the 15 s backstop |
+
+Every run's folders-on-disk and indexed-books numbers agreed exactly (books
+indexed plus orphans equals folders on disk), the same guarantee Teil C's
+twelve `SIGTERM` runs measured, now proven for the path that was open.
+
+**Measured, assumed, unchecked:**
+- **Measured**: every row above, against the real, running, `-c release`
+  `Shelf.app`, `log stream` open on `de.erikemmer.shelf:termination` for
+  all of them — `application(_:open:)`'s `SHELF_AUTO_IMPORT_SOURCE` test
+  hook (Teil C) started each import, exactly as Teil C's own proof did.
+- **Assumed**: that Log Out and Shut Down themselves behave like the `quit`
+  Apple Event `osascript` sends — they are documented to send the identical
+  event, and this session cannot trigger an actual log-out or shutdown of
+  Erik's own Mac to check.
+- **Unchecked, honestly**: the true cause of the intermittent hang the
+  backstop guards against. Whether it is specific to `reload()`'s own
+  redraw, or something else entirely, is exactly what
+  `docs/BACKLOG.md`'s new entry asks a future session to actually
+  investigate, with Instruments, rather than guess at again.
+
 ## Sprint 13, Teil C — the proof, and three more bugs Teil B's own first cut had · 22 September 2026
 
 Teil B's design worked in `ShelfCoreTests` and did not work against the real,
@@ -317,6 +417,21 @@ library, a real MOBI/AZW3/CBR/DRM file, Google Books answering, a
 Developer ID certificate, a person watching trackpad scrolling — needs a
 resource this session does not have by definition, not a code check, and
 stays open for that reason alone.
+
+**Nachtrag, 23 September 2026 — one of the 41 was wrong.** Sprint 13,
+Teil A reproduced the up-to-200-books-twice entry above and found its own
+headline no longer true: "copies twice" described `ImportRunner` *before*
+`OrphanedFolders` existed (Sprint 4), and a same-source resume today
+reclaims instead of duplicating (`CHANGELOG.md`, Sprint 13, Teil A). This
+pass read the entry, saw `indexBatchSize` was still 200, and called the
+whole thing "still accurate" without re-running the one part of it that
+was actually a claim about *behaviour* rather than a constant. **"All 41
+are still accurate" no longer counts as a verified statement** — one of
+the 41 was checked against the wrong thing and passed anyway. The entry
+itself is corrected further down (docs/BACKLOG.md, "What Sprint 3 found
+and did not finish"); a fresh pass over the other 40, the way this one
+should have been done, is its own session's task, not smuggled into
+Sprint 13.
 
 ## Sprint 12, Nachtrag — the ⌘Z menu title was never broken, only wrongly measured · 22 September 2026
 
