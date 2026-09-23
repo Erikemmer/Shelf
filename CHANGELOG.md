@@ -3,6 +3,21 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 14, Teil D — the version, past v1.0.0 on purpose · 23 September 2026
+
+`MARKETING_VERSION` is `1.1.0-rc1`, `CURRENT_PROJECT_VERSION` is `2` —
+Erik's own call, given directly rather than derived: `main` is well past
+what `v1.0.0` tags (writing into an EPUB's own file, "Remove Cover", a
+clean quit through every path, and now Sparkle itself), so publishing
+that work under the number `1.0.0` would put a different app under the
+same version the tag already names. The rule against touching
+`MARKETING_VERSION` outside a real release is lifted for this one
+change, as instructed, and only for this one. `1.1.0-rc1` is a
+pre-release: `Scripts/release.sh` routes any `-rc` version to the beta
+channel (`appcast-beta.xml`) with `--prerelease`; `appcast.xml`, for
+stable versions, stays exactly as HALT 1 seeded it. 793 core tests, `make
+app`/`make lint`/`make smoke` all green against the bumped version.
+
 ## Sprint 14, Teil C — the update path proved live, over a throwaway test channel · 23 September 2026
 
 Every step of Sparkle's own update path, driven for real rather than

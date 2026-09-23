@@ -28,8 +28,14 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
+    # Raised past 1.0.0 on purpose (Sprint 14, Teil D): main is well past the
+    # v1.0.0 tag by now (writing into an EPUB, Remove Cover, a clean quit,
+    # Sparkle itself) and publishing that under "1.0.0" would put a different
+    # app under the same number as the tag. The rule against touching
+    # MARKETING_VERSION casually is lifted for this one change; it stays
+    # 1.1.0-rc1 (a pre-release, beta channel only) until Erik promotes it.
+    MARKETING_VERSION: "1.1.0-rc1"
+    CURRENT_PROJECT_VERSION: "2"
     # Follows whether a Developer ID identity was found at build time –
     # `make app`/`Scripts/release.sh` set SHELF_HARDENED accordingly, the same
     # way they already choose between a real signature and an ad-hoc one. An
