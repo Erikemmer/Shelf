@@ -3,6 +3,8 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+<!-- shelf-release: v1.1.0-rc1 · 23 September 2026 -->
+
 ## Sprint 14, Teil D — the version, past v1.0.0 on purpose · 23 September 2026
 
 `MARKETING_VERSION` is `1.1.0-rc1`, `CURRENT_PROJECT_VERSION` is `2` —
