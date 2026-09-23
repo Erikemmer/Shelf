@@ -291,6 +291,44 @@ Summary:
   nothing in its feeds yet, and `Scripts/release.sh` does not publish
   anything yet — that is Teil B.
 
+## Sprint 14 — Nachtrag: the four approvals nothing in the repo recorded · 23 September 2026
+
+Sprint 14's own Teile above name the artifacts (the key, the repo, the
+entitlement, the published release) but never the approvals behind them —
+each was a real decision Erik made *before* the corresponding action ran,
+and none of the four was written down anywhere in this repository until
+now. Reconstructed from what the same session's own CHANGELOG entries and
+commits already say happened, not from a separate record of the approval
+itself — that conversation is not preserved here, only its result. Where
+the text below is the session's own wording rather than a direct quote,
+it is marked as such.
+
+1. **Creating and seeding `Erikemmer/shelf-releases`.** A second, public
+   GitHub repository, made before anything else in the sprint could
+   happen — a README and two empty appcast feeds (`appcast.xml`,
+   `appcast-beta.xml`), the seed Teil D's own entry calls "HALT 1"
+   (`CHANGELOG.md`, Sprint 14, Teil A: "the releases repo … created and
+   seeded this session with a README and two empty appcasts").
+2. **Generating a new EdDSA key pair, `generate_keys --account shelf`.**
+   The private half went to this Mac's login keychain only, under the
+   account `shelf` — never the tool's own default account, which this
+   Mac's keychain already held another app's key under
+   (`CHANGELOG.md`, Sprint 14, Teil A; full reasoning in
+   [ADR 0022](adr/0022-updates-separate-delivery-sparkle.md)).
+3. **A new sandbox entitlement**,
+   `com.apple.security.temporary-exception.mach-lookup.global-name`
+   (Sparkle's own `-spks`/`-spki` suffixes only) — the one new right the
+   app's sandbox gained this sprint, letting it reach Sparkle's installer
+   XPC service, the one part of an update that has to run outside the
+   sandbox because it replaces the app bundle itself (`CHANGELOG.md`,
+   Sprint 14, Teil A).
+4. **The first real publish**, gated on purpose behind what Teil B's own
+   entry calls "HALT 4" until Teil D's version bump was in place: `v1.1.0-rc1`
+   built, signed ad hoc (no Developer ID exists on this Mac), and
+   published to `Erikemmer/shelf-releases`'s beta channel — confirmed live
+   in `docs/HANDOFF.md`'s own top section ("`v1.1.0-rc1` is out, published
+   for real, 23 September 2026").
+
 ## Sprint 13, Teil E — the wait becomes visible, and stops scaling with the whole library · 23 September 2026
 
 Teil D closed the routing gap; this closes the two things left open at the

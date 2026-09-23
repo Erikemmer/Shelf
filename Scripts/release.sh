@@ -15,15 +15,29 @@
 #   7  staple and assess    – stapler, then spctl, which is what the Mac in
 #      front of somebody else will run – only reached after a real notarisation
 #
-# Then, for a real (non-dry) run only, publishing (ADR 0022): sign the
-# update, cut a GitHub release in the separate Erikemmer/shelf-releases
-# repository, and push the appcast Sparkle's own updater reads –
-# generate_appcast, sign_update, and generate_keys (used directly, once,
-# outside this script) always take `--account shelf`, never the default:
-# this Mac's keychain already holds another app's own Sparkle key under that
-# default account, and calling any of these three without `--account shelf`
-# would silently touch that other key pair instead of Shelf's own
+# Then, for a real (non-dry) run only: a dmg beside the zip – the zip is
+# what the appcast names and Sparkle fetches, the dmg is a first download by
+# hand – and publishing (ADR 0022): sign both, cut a GitHub release in the
+# separate Erikemmer/shelf-releases repository with both as assets, and push
+# the appcast Sparkle's own updater reads – generate_appcast, sign_update,
+# and generate_keys (used directly, once, outside this script) always take
+# `--account shelf`, never the default: this Mac's keychain already holds
+# another app's own Sparkle key under that default account, and calling any
+# of these three without `--account shelf` would silently touch that other
+# key pair instead of Shelf's own
 # (docs/adr/0022-updates-separate-delivery-sparkle.md).
+#
+# **The appcast is never regenerated from the whole archive history**
+# (Sprint 15, Teil B – found by a local dry run before it shipped, not
+# assumed): generate_appcast applies its --download-url-prefix to every
+# archive it is shown, so pointing it at the accumulated folder on a second
+# release silently rewrote the first release's own, already-published entry
+# to a URL under the second release's tag. Every run instead hands
+# generate_appcast only the one archive it just built, and
+# Scripts/appcast-merge.py splices that single new item into the existing
+# feed, moving every other item's markup untouched rather than letting it be
+# regenerated. --maximum-deltas 0: a delta file would need its own uploaded
+# asset, which nothing here does.
 #
 # **A missing Developer ID does not stop a real run.** Until Erik enrols in
 # the Apple Developer Program, every real release is ad-hoc-signed, skips
@@ -53,10 +67,13 @@
 # a real run (signed or not) is the one that actually publishes.
 #
 # Output goes to ~/Library/Caches/Shelf/release/, never under ~/Documents.
-# The one exception is the shelf-releases checkout itself
-# ($HOME/Documents/shelf-releases by default) – an ordinary git repository,
-# not a build product, so it is not subject to the "never under ~/Documents"
-# rule the way build output is.
+# The shelf-releases checkout ($HOME/Library/Caches/Shelf/shelf-releases by
+# default, Sprint 15, Teil B) is an ordinary git repository, not a build
+# product — but it lives under Caches anyway now, not ~/Documents, which
+# iCloud syncs: a git repository in a synced folder is the same class of
+# problem CLAUDE.md already calls out for SQLite (docs/CONCEPT.md §12). If
+# it is missing, this script clones it fresh with `gh repo clone` — the
+# repository on GitHub is the truth, a clone only ever a copy of it.
 #
 # Usage: Scripts/release.sh            (a real release – builds AND publishes)
 #        RELEASE_DRY_RUN=1 Scripts/release.sh
@@ -66,7 +83,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 OUT="${RELEASE_OUT:-$HOME/Library/Caches/Shelf/release}"
 PROFILE="${SHELF_NOTARY_PROFILE:-shelf-notarytool}"
-RELEASES_REPO="${SHELF_RELEASES_REPO:-$HOME/Documents/shelf-releases}"
+RELEASES_REPO="${SHELF_RELEASES_REPO:-$HOME/Library/Caches/Shelf/shelf-releases}"
 SPARKLE_ACCOUNT="${SHELF_SPARKLE_ACCOUNT:-shelf}"
 DRY="${RELEASE_DRY_RUN:-0}"
 SKIP_CHECKS="${RELEASE_SKIP_CHECKS:-0}"
@@ -140,6 +157,7 @@ else
     fi
 fi
 ZIP="$OUT/$NAME$SUFFIX.zip"
+DMG="$OUT/$NAME$SUFFIX.dmg"
 
 # ── 3. archive ───────────────────────────────────────────────────────────────
 step "3/7  archive"
@@ -183,6 +201,13 @@ step "4/7  the signature"
 codesign --verify --deep --strict --verbose=2 "$APP" 2>&1 | sed 's/^/    /' \
     || fail "the signature does not verify"
 FLAGS=$(codesign -d --verbose=2 "$APP" 2>&1 | sed -n 's/^CodeDirectory.*flags=\([^ ]*\).*/\1/p')
+# `codesign -d` reading the very signature step 4 above just verified is not
+# expected to fail — but an empty FLAGS from a broken pipe would otherwise
+# fall through the ad-hoc branch's own `*)` case below as if it correctly
+# read "no runtime flag", which is indistinguishable from a real read
+# failure without this check (Sprint 15, Teil B: every pipe here closed
+# with `|| fail`, or said why it does not need to be).
+[ -n "$FLAGS" ] || fail "could not read the code directory flags back off $APP"
 say "code directory flags: ${FLAGS:-unknown}"
 if [ "$HARDENED" = "YES" ]; then
     case "$FLAGS" in
@@ -236,6 +261,12 @@ if [ "$NOTARISE" = "1" ]; then
 
        Then run this again."
 
+    # No `|| fail` on this pipe itself: `notarytool submit --wait`'s own exit
+    # code is not the right thing to gate on anyway, since it can return 0
+    # for a *rejected* submission too — the content check right below, on
+    # what the log actually says, is the real verdict and already fails the
+    # build if it is not "Accepted" (Sprint 15, Teil B: every pipe here
+    # closed with `|| fail`, or said why it does not need to be).
     xcrun notarytool submit "$ZIP" --keychain-profile "$PROFILE" --wait 2>&1 | tee "$OUT/notarytool.log" \
         | sed 's/^/    /'
     grep -c "status: Accepted" "$OUT/notarytool.log" >/dev/null 2>&1 \
@@ -266,12 +297,25 @@ else
     say "an ad-hoc, unsigned build cannot be notarised – nothing was sent to Apple."
     step "7/7  staple and assess – SKIPPED (nothing to staple)"
     say "spctl on this build, for the record (expected: rejected):"
+    # No `|| fail` here on purpose: unlike the notarised branch's own spctl
+    # check above, `rejected` is the *correct* answer for an ad-hoc build —
+    # gating on it would fail every ad-hoc release (Sprint 15, Teil B).
     spctl -a -vvv -t install "$APP" 2>&1 | sed 's/^/    /'
     echo
     say "done. $NAME is signed ad hoc and unsigned – notarisation and stapling skipped."
 fi
 say "app: $APP"
-say "zip: $ZIP  ← this is the download"
+say "zip: $ZIP  ← this is the download Sparkle's own updater fetches"
+
+# ── dmg: the first, by-hand download ─────────────────────────────────────────
+# Not for Sparkle — the appcast only ever names the zip (below). This is the
+# second GitHub release asset, for someone who has no Shelf yet and is
+# choosing between the two, the way a Mac app is usually offered.
+step "dmg: the first, by-hand download"
+rm -f "$DMG"
+hdiutil create -volname "Shelf" -srcfolder "$APP" -ov -format UDZO "$DMG" >/dev/null \
+    || fail "could not create $DMG"
+say "dmg: $DMG ($(($(stat -f %z "$DMG") / 1024)) KB)"
 
 # ── publish: get Sparkle's own CLI tools ─────────────────────────────────────
 # From the SPM artifact Xcode already resolved for the app target itself
@@ -298,7 +342,21 @@ step "publish: sign the update"
 # own Sparkle key under the *default* account, and omitting --account here
 # would silently sign with (or read) that key instead of Shelf's own
 # (docs/adr/0022-updates-separate-delivery-sparkle.md).
-"$SIGN_UPDATE" --account "$SPARKLE_ACCOUNT" "$ZIP" | sed 's/^/    /'
+#
+# This call is informational, and closed with `|| fail` anyway (Sprint 15,
+# Teil B): `sign_update` on an update *archive* only ever prints the
+# signature and length for a person to read or paste by hand — it does not
+# modify $ZIP. The signature that actually ends up in the appcast is
+# generate_appcast's own, computed independently, below, also with
+# --account shelf. Printed here so the run shows the signature before the
+# appcast step does, and so a keychain or key problem is caught this early
+# rather than only once generate_appcast reaches the same key.
+"$SIGN_UPDATE" --account "$SPARKLE_ACCOUNT" "$ZIP" | sed 's/^/    /' \
+    || fail "sign_update failed – the Sparkle key in the keychain (account $SPARKLE_ACCOUNT) may be missing or inaccessible"
+# The dmg the same way, for the same record — never read by Sparkle or by
+# generate_appcast, which only ever sees $ZIP.
+"$SIGN_UPDATE" --account "$SPARKLE_ACCOUNT" "$DMG" | sed 's/^/    /' \
+    || fail "sign_update failed on the dmg – the Sparkle key in the keychain (account $SPARKLE_ACCOUNT) may be missing or inaccessible"
 
 # ── publish: the releases repository ─────────────────────────────────────────
 step "publish: Erikemmer/shelf-releases"
@@ -330,32 +388,60 @@ NOTES_HTML="$OUT/$NAME$SUFFIX.html"
 python3 "$HERE/changelog-notes.py" "$VERSION" "$ROOT/CHANGELOG.md" >"$NOTES_HTML" \
     || fail "changelog-notes.py could not find this release's own section – see its own message above"
 
-# generate_appcast reads a whole directory of archives at once and keeps
-# whatever it already finds there, so the channel's own archive directory
-# (kept under ~/Library/Caches/Shelf/, across releases, unlike $OUT which
-# this script clears on every run) is where the zip, its release notes and
-# the previous appcast all have to sit together.
+# The channel's own archive directory keeps every release's zip and notes,
+# across runs (~/Library/Caches/Shelf/, unlike $OUT which this script
+# clears every time) — a record, not generate_appcast's own input any more.
+#
+# **Why generate_appcast is never pointed at that whole directory (Sprint
+# 15, Teil B, found by a local dry run before this fix, not assumed):**
+# `--download-url-prefix` is applied to *every* archive generate_appcast
+# finds, old and new alike (its own source, Appcast.swift: `for update in
+# allUpdates { update.downloadUrlPrefix = downloadURLPrefix }`) — so a
+# second release pointed at the accumulated folder silently rewrote the
+# *first* release's own, already-published entry to a URL under the
+# *second* release's tag, where that older zip was never uploaded. Every
+# release only ever hands generate_appcast the one archive it just built,
+# in a directory of its own — the URL it computes is then correct for that
+# archive alone — and Scripts/appcast-merge.py splices that single new
+# `<item>` into the existing feed by hand, moving every other item rather
+# than asking generate_appcast to regenerate it. `--maximum-deltas 0`: a
+# delta file would need to be uploaded as its own GitHub release asset,
+# which nothing here does, so the appcast must never offer one.
 ARCHIVE_DIR="$HOME/Library/Caches/Shelf/appcast-archives/$CHANNEL"
 mkdir -p "$ARCHIVE_DIR"
 cp "$ZIP" "$ARCHIVE_DIR/"
 cp "$NOTES_HTML" "$ARCHIVE_DIR/$(basename "$ZIP" .zip).html"
-[ -f "$RELEASES_REPO/$APPCAST_FILE" ] && cp "$RELEASES_REPO/$APPCAST_FILE" "$ARCHIVE_DIR/appcast.xml"
 
-say "generating the appcast"
+NEW_ITEM_DIR="$OUT/appcast-new-item"
+rm -rf "$NEW_ITEM_DIR"
+mkdir -p "$NEW_ITEM_DIR"
+cp "$ZIP" "$NEW_ITEM_DIR/"
+cp "$NOTES_HTML" "$NEW_ITEM_DIR/$(basename "$ZIP" .zip).html"
+
+say "generating this release's own appcast entry"
 "$GENERATE_APPCAST" --account "$SPARKLE_ACCOUNT" \
+    --maximum-deltas 0 \
     --download-url-prefix "https://github.com/Erikemmer/shelf-releases/releases/download/v$VERSION/" \
-    -o "$ARCHIVE_DIR/appcast.xml" \
-    "$ARCHIVE_DIR" | sed 's/^/    /' \
+    -o "$NEW_ITEM_DIR/appcast.xml" \
+    "$NEW_ITEM_DIR" | sed 's/^/    /' \
     || fail "generate_appcast failed"
+
+say "merging it into the existing $APPCAST_FILE"
+python3 "$HERE/appcast-merge.py" \
+    "$RELEASES_REPO/$APPCAST_FILE" "$NEW_ITEM_DIR/appcast.xml" "$ARCHIVE_DIR/appcast.xml" \
+    || fail "appcast-merge.py failed"
 cp "$ARCHIVE_DIR/appcast.xml" "$RELEASES_REPO/$APPCAST_FILE"
 
 say "creating the GitHub release in Erikemmer/shelf-releases"
+# Two assets: the zip, which the appcast names and Sparkle fetches; the dmg
+# beside it, for someone choosing their first download by hand rather than
+# through the updater. The appcast never names the dmg.
 gh release create "v$VERSION" \
     --repo Erikemmer/shelf-releases \
     --title "Shelf $VERSION" \
     --notes-file "$NOTES_HTML" \
     "${GH_PRERELEASE_FLAG[@]}" \
-    "$ZIP" \
+    "$ZIP" "$DMG" \
     || fail "gh release create failed"
 
 say "pushing the updated $APPCAST_FILE"

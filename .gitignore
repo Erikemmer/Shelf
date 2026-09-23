@@ -14,6 +14,10 @@ DerivedData/
 # macOS
 .DS_Store
 
+# Python (Scripts/*.py)
+__pycache__/
+*.pyc
+
 # Secrets – never commit real ones
 .env
 *.p12

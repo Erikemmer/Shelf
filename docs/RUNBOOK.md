@@ -633,9 +633,13 @@ is the signature: with a certificate, it signs for real, notarises, staples,
 and the download's name is plain (`Shelf-<version>.zip`); without one — every
 run so far, including `v1.1.0-rc1` — it signs ad hoc, skips notarising and
 stapling and says so, and the download is named `Shelf-<version>-unsigned.zip`.
-Either way it publishes: a GitHub release in `Erikemmer/shelf-releases`, the
-right appcast (`appcast-beta.xml` for an `-rc` version, `appcast.xml`
-otherwise) regenerated and pushed there, and a new
+Either way it publishes: a `.dmg` beside the zip (a first download by hand,
+never read by Sparkle), both as assets on a GitHub release in
+`Erikemmer/shelf-releases`, the right appcast (`appcast-beta.xml` for an
+`-rc` version, `appcast.xml` otherwise) with this release's own entry
+merged in and pushed there — never wholesale-regenerated: every earlier
+entry's own download URL is moved untouched, not reconstructed
+(`Scripts/appcast-merge.py`, Sprint 15, Teil B, docs/RELEASE.md) — and a new
 `<!-- shelf-release: … -->` marker at the top of this repository's own
 `CHANGELOG.md` — reviewed and committed by hand afterwards, the same as any
 other change, never by the script itself.

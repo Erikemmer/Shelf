@@ -179,29 +179,48 @@ repository can run on its own.
 
 ## Publishing (ADR 0022)
 
-Once steps 1–7 above are done, a real (non-dry) run publishes to the
-separate `Erikemmer/shelf-releases` repository, using Sparkle's own CLI
-tools (`sign_update`, `generate_appcast`) taken from the same SPM artifact
-the app target already resolved — no `brew`, no separate download:
+Once steps 1–7 above are done, a real (non-dry) run builds a `.dmg` beside
+the zip (`hdiutil create`, the app bundle only — a by-hand first download,
+never read by Sparkle) and publishes both to the separate
+`Erikemmer/shelf-releases` repository, using Sparkle's own CLI tools
+(`sign_update`, `generate_appcast`) taken from the same SPM artifact the app
+target already resolved — no `brew`, no separate download:
 
-1. `sign_update --account shelf` on the zip (`SHELF_SPARKLE_ACCOUNT`
-   overrides the account).
+1. `sign_update --account shelf` on the zip, then on the dmg
+   (`SHELF_SPARKLE_ACCOUNT` overrides the account) — informational for both:
+   neither call modifies the file, and the signature that actually ends up
+   in the appcast is `generate_appcast`'s own, from step 3.
 2. Release notes rendered from `CHANGELOG.md` (`Scripts/changelog-notes.py`)
    — see below for how "the matching section" is found in a changelog that
    is not itself keyed by version.
-3. `generate_appcast --account shelf` against a per-channel archive
-   directory under `~/Library/Caches/Shelf/appcast-archives/` that
-   accumulates across releases (unlike `$OUT`, which this script clears
-   every run), so older entries are kept in the feed.
-4. `gh release create v<version>` in `shelf-releases`, `--prerelease` for an
-   `-rc` version, which also routes it to `appcast-beta.xml` instead of
-   `appcast.xml` — a stable install is never offered a release candidate by
-   accident.
-5. The updated appcast file is committed and pushed in the
-   `shelf-releases` checkout (`$HOME/Documents/shelf-releases` by default,
-   `SHELF_RELEASES_REPO` to override) — an ordinary git repository, not a
-   build product, so it is not under `~/Library/Caches/Shelf/`.
-6. A new `<!-- shelf-release: v<version> · <date> -->` marker is inserted
+3. `generate_appcast --account shelf --maximum-deltas 0` against a
+   directory holding **only this release's own zip and notes** — never the
+   whole accumulated archive folder (Sprint 15, Teil B). Found by a local
+   dry run before it shipped: `--download-url-prefix` is applied to *every*
+   archive `generate_appcast` is shown, old and new alike, so pointing it at
+   the accumulated folder on a second release silently rewrote the first
+   release's own, already-published entry to a URL under the *second*
+   release's tag — a link nothing was ever uploaded to. `--maximum-deltas
+   0`: a delta file would need its own uploaded GitHub release asset, which
+   nothing here does.
+4. `Scripts/appcast-merge.py` splices that single new `<item>` into the
+   channel's existing appcast (fetched from `shelf-releases` in step 5
+   below) — every other item is moved as-is, never regenerated, so its own
+   download URL and signature survive untouched. The channel's own archive
+   directory under `~/Library/Caches/Shelf/appcast-archives/` still keeps
+   every release's zip and notes, across runs, as a record — it is just no
+   longer what `generate_appcast` itself reads.
+5. `gh release create v<version>` in `shelf-releases`, both the zip and the
+   dmg as assets, `--prerelease` for an `-rc` version, which also routes it
+   to `appcast-beta.xml` instead of `appcast.xml` — a stable install is
+   never offered a release candidate by accident. The appcast names only
+   the zip; the dmg is never in it.
+6. The updated appcast file is committed and pushed in the
+   `shelf-releases` checkout (`$HOME/Library/Caches/Shelf/shelf-releases`
+   by default, Sprint 15, Teil B — moved out of `~/Documents`, which iCloud
+   syncs; `SHELF_RELEASES_REPO` to override) — an ordinary git repository,
+   not a build product, cloned fresh with `gh repo clone` if it is missing.
+7. A new `<!-- shelf-release: v<version> · <date> -->` marker is inserted
    at the top of this repo's own `CHANGELOG.md`, right above the newest
    entry — **not committed by the script**. `git status --short` shows it
    afterwards; committing it is the next step, by hand, like any other
@@ -252,9 +271,6 @@ the one that matters for somebody offline.
 
 ## What this does not do yet
 
-- **No DMG.** The download is a zip. A DMG is prettier and is another thing to
-  sign, staple and test; the zip is what notarisation wants anyway, and it is
-  what a browser unpacks on its own.
 - **Nothing here has ever been notarised.** The dry run proves every step up to
   it. Steps 6 and 7 have never run for real, because there is no certificate
   on this Mac, and nothing in this document should be read as saying they
