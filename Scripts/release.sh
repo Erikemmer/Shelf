@@ -110,6 +110,24 @@ xcode-select -p >/dev/null 2>&1 || fail "Xcode not found. Install it, open it on
 command -v xcodegen >/dev/null 2>&1 || fail "xcodegen missing. brew install xcodegen"
 xcrun --find notarytool >/dev/null 2>&1 || fail "notarytool missing – it ships with Xcode 13 and later."
 
+# ── 0. the working tree ──────────────────────────────────────────────────────
+# The archive step below stamps SHELF_BUILD_COMMIT with `git rev-parse HEAD`,
+# read once, right there. An uncommitted change would still build – it just
+# means the stamp then names a commit that does not actually contain
+# everything the archive holds, exactly the gap Sprint 16, Teil C found by
+# hand, after the fact, on an already-published release (`ShelfBuildCommit`
+# read back as "unknown" for a different reason there – release.sh never
+# passed the build setting at all – but a dirty tree is the same class of
+# problem: the stamp lies about what was built). Refusing here, once, before
+# anything is built, needs nobody to remember a manual `git status --short`
+# first; RELEASE_SKIP_CHECKS does not skip this – it is not one of "the four
+# checks", it is what makes the build-commit stamp meaningful at all.
+DIRTY_TREE="$(git -C "$ROOT" status --porcelain)"
+[ -z "$DIRTY_TREE" ] || fail "the working tree has uncommitted changes – commit them first, or the
+       build-commit stamp would name a commit that does not contain
+       everything actually built:
+$(echo "$DIRTY_TREE" | sed 's/^/       /')"
+
 # ── 1. the four checks ───────────────────────────────────────────────────────
 # A release that skipped them would be the one build nobody checked.
 if [ "$SKIP_CHECKS" = "1" ]; then
@@ -176,7 +194,7 @@ if [ "$IDENTITY" = "-" ]; then
     xcodebuild -project "$ROOT/Shelf.xcodeproj" -scheme Shelf -configuration Release \
         -archivePath "$ARCHIVE" \
         CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual OTHER_CODE_SIGN_FLAGS="--timestamp=none" \
-        SHELF_HARDENED="$HARDENED" \
+        SHELF_HARDENED="$HARDENED" SHELF_BUILD_COMMIT="$(git -C "$ROOT" rev-parse HEAD)" \
         archive >"$ARCHIVE_LOG" 2>&1 \
         || fail "archive failed – see $ARCHIVE_LOG"
 else
@@ -186,7 +204,7 @@ else
     xcodebuild -project "$ROOT/Shelf.xcodeproj" -scheme Shelf -configuration Release \
         -archivePath "$ARCHIVE" \
         CODE_SIGN_IDENTITY="$IDENTITY" CODE_SIGN_STYLE=Manual \
-        SHELF_HARDENED="$HARDENED" \
+        SHELF_HARDENED="$HARDENED" SHELF_BUILD_COMMIT="$(git -C "$ROOT" rev-parse HEAD)" \
         archive >"$ARCHIVE_LOG" 2>&1 \
         || fail "archive failed – see $ARCHIVE_LOG"
 fi
@@ -195,6 +213,14 @@ say "archived: $ARCHIVE"
 ARCHIVED_APP="$ARCHIVE/Products/Applications/Shelf.app"
 [ -d "$ARCHIVED_APP" ] || fail "the archive holds no Shelf.app – see $ARCHIVE_LOG"
 cp -R "$ARCHIVED_APP" "$APP" || fail "could not copy the app out of the archive"
+
+# Read the stamp back rather than trust that the build setting above took –
+# the same principle Scripts/current-shelf-app.sh already checks window
+# scripts against, applied here to the one build that gets published.
+. "$HERE/current-shelf-app.sh"
+verify_shelf_app_is_current "$APP" \
+    || fail "the just-built $APP is not stamped with this repository's own HEAD – see above"
+say "build-commit stamp verified: $(git -C "$ROOT" rev-parse HEAD)"
 
 # ── 4. verify the signature ──────────────────────────────────────────────────
 step "4/7  the signature"
