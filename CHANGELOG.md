@@ -5,6 +5,8 @@ on and what was *not* measured.
 
 <!-- shelf-release: v1.1.0-rc1 · 23 September 2026 -->
 
+<!-- shelf-release: v1.1.0-rc2 · 24 September 2026 -->
+
 ## Sprint 15, Teil C — 1.1.0-rc2, the second release, proving a beta channel with two versions actually works · 23 September 2026
 
 `MARKETING_VERSION` is `1.1.0-rc2`, `CURRENT_PROJECT_VERSION` is `3` — higher
