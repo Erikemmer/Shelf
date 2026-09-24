@@ -214,6 +214,11 @@ struct ShelfApp: App {
             // groups are confirmed (ADR 0018, addendum — docs/adr/0018-…).
             Button(Loc.string("Similar Spellings…")) { model.beginSimilarSpellings() }
                 .disabled(model.library == nil || model.isLoading)
+            // Every rule underneath it is a pure function with exactly one
+            // right answer (Sprint 18, Teil C3) — still a previewed,
+            // confirmed command like every other one here (ADR 0018).
+            Button(Loc.string("Standardize Fields…")) { model.beginFieldStandardization() }
+                .disabled(model.library == nil || model.isLoading)
             Button(Loc.string("Close Library")) { model.closeLibrary() }
                 .shortcut(.closeLibrary)
                 .disabled(model.library == nil)

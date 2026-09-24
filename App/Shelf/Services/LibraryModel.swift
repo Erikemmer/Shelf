@@ -2370,6 +2370,43 @@ final class LibraryModel {
         organizeSuggestion = affected.count
     }
 
+    // MARK: Standardize fields (Sprint 18, Teil C3)
+
+    enum FieldStandardizationPhase: Equatable {
+        case ready(FieldStandardizationPlan)
+        case done(Int)
+    }
+
+    var fieldStandardizationPhase: FieldStandardizationPhase?
+
+    /// Computes C3's plan over the whole library and holds it fixed for the
+    /// sheet to show. Nothing is written by this — every rule underneath it
+    /// is a pure function with exactly one right answer, but the write
+    /// itself is still a deliberate, previewed command like every other one
+    /// (ADR 0018), not something that happens on opening a menu.
+    func beginFieldStandardization() {
+        fieldStandardizationPhase = .ready(FieldStandardization.plan(over: entries))
+    }
+
+    /// Writes exactly the plan that was shown — not a recomputation of it —
+    /// as one undo step regardless of how many books or fields it touches.
+    func applyFieldStandardization(_ plan: FieldStandardizationPlan, undoManager: UndoManager?) {
+        guard !plan.isEmpty else {
+            fieldStandardizationPhase = nil
+            return
+        }
+        undoManager?.beginUndoGrouping()
+        for (entry, change) in plan.changes { apply(change, to: entry, undoManager: undoManager) }
+        undoManager?.setActionName(
+            plan.bookCount > 1
+                ? Loc.string(
+                    "%1$@ (%2$@)", Loc.string("Standardize Fields"), Loc.count("%lld books", plan.bookCount))
+                : Loc.string("Standardize Fields"))
+        undoManager?.endUndoGrouping()
+        fieldStandardizationPhase = .done(plan.bookCount)
+        organizeSuggestion = plan.bookCount
+    }
+
     private func refreshFacets() async {
         guard let index else { return }
         do {

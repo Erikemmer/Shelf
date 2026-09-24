@@ -33,85 +33,7 @@ struct ContentView: View {
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             FolderDrop.handle(providers, into: model)
         }
-        .sheet(
-            isPresented: Binding(
-                get: { model.isImportSheetPresented },
-                set: { model.isImportSheetPresented = $0 })
-        ) {
-            ImportSheet().environment(model)
-        }
-        .sheet(
-            isPresented: Binding(
-                get: { model.isOrphanSheetPresented },
-                set: { model.isOrphanSheetPresented = $0 })
-        ) {
-            OrphanSheet().environment(model)
-        }
-        .sheet(
-            isPresented: Binding(
-                get: { model.devices.isSendSheetPresented },
-                set: { model.devices.isSendSheetPresented = $0 })
-        ) {
-            SendToDeviceSheet().environment(model)
-        }
-        .sheet(
-            isPresented: Binding(
-                get: { model.isDeviceContentsSheetPresented },
-                set: { model.isDeviceContentsSheetPresented = $0 })
-        ) {
-            DeviceContentsSheet().environment(model)
-        }
-        .sheet(
-            isPresented: Binding(
-                get: { model.devices.isDeleteSheetPresented },
-                set: { model.devices.isDeleteSheetPresented = $0 })
-        ) {
-            DeleteFromDeviceSheet().environment(model)
-        }
-        .sheet(
-            isPresented: Binding(
-                get: { model.isFetchMetadataSheetPresented },
-                set: { model.isFetchMetadataSheetPresented = $0 })
-        ) {
-            // The window's undo manager, handed down: a sheet has none of its
-            // own, so a fetched field would be written with no way back.
-            FetchMetadataSheet(undoManager: undoManager).environment(model)
-        }
-        .sheet(
-            isPresented: Binding(
-                get: { model.organizePhase != nil },
-                set: { if !$0 { model.organizePhase = nil } })
-        ) {
-            OrganizeSheet().environment(model)
-        }
-        .sheet(
-            isPresented: Binding(
-                get: { model.mergePhase != nil },
-                set: { if !$0 { model.mergePhase = nil } })
-        ) {
-            MergeSheet().environment(model)
-        }
-        .sheet(
-            isPresented: Binding(
-                get: { model.similarSpellingsPhase != nil },
-                set: { if !$0 { model.similarSpellingsPhase = nil } })
-        ) {
-            SimilarSpellingsSheet().environment(model)
-        }
-        .sheet(
-            isPresented: Binding(
-                get: { model.exportPhase != nil },
-                set: { if !$0 { model.exportPhase = nil } })
-        ) {
-            ExportSheet().environment(model)
-        }
-        .sheet(
-            isPresented: Binding(
-                get: { model.epubWritePhase != nil },
-                set: { if !$0 { model.epubWritePhase = nil } })
-        ) {
-            WriteIntoBookSheet().environment(model)
-        }
+        .modifier(WorkflowSheets(undoManager: undoManager))
         .onAppear {
             editingKeys.start(handleWindowKey)
             focus = model.focusTarget
@@ -314,5 +236,129 @@ struct ContentView: View {
             }
         }
         .padding(.horizontal, 20)
+    }
+}
+
+/// Every sheet a workflow (import, device, metadata, organise, merge…) opens
+/// from this window, split out of `ContentView.body` into its own modifier.
+///
+/// Not a style choice — a dozen chained `.sheet(...)` calls in one expression
+/// is exactly the shape that made the type checker give up ("unable to
+/// type-check this expression in reasonable time") the moment a thirteenth
+/// was added for "Standardize Fields…". Splitting the chain across two
+/// modifiers, each type-checked on its own, is the fix; it has to be two
+/// rather than one flat list here for the same reason.
+private struct WorkflowSheets: ViewModifier {
+    @Environment(LibraryModel.self) private var model
+    let undoManager: UndoManager?
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(LibraryWorkflowSheets(undoManager: undoManager))
+            .modifier(DeviceAndReaderSheets(undoManager: undoManager))
+    }
+}
+
+private struct LibraryWorkflowSheets: ViewModifier {
+    @Environment(LibraryModel.self) private var model
+    let undoManager: UndoManager?
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(
+                isPresented: Binding(
+                    get: { model.isImportSheetPresented },
+                    set: { model.isImportSheetPresented = $0 })
+            ) {
+                ImportSheet().environment(model)
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { model.isOrphanSheetPresented },
+                    set: { model.isOrphanSheetPresented = $0 })
+            ) {
+                OrphanSheet().environment(model)
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { model.isFetchMetadataSheetPresented },
+                    set: { model.isFetchMetadataSheetPresented = $0 })
+            ) {
+                // The window's undo manager, handed down: a sheet has none of
+                // its own, so a fetched field would be written with no way back.
+                FetchMetadataSheet(undoManager: undoManager).environment(model)
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { model.organizePhase != nil },
+                    set: { if !$0 { model.organizePhase = nil } })
+            ) {
+                OrganizeSheet().environment(model)
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { model.mergePhase != nil },
+                    set: { if !$0 { model.mergePhase = nil } })
+            ) {
+                MergeSheet().environment(model)
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { model.similarSpellingsPhase != nil },
+                    set: { if !$0 { model.similarSpellingsPhase = nil } })
+            ) {
+                SimilarSpellingsSheet().environment(model)
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { model.fieldStandardizationPhase != nil },
+                    set: { if !$0 { model.fieldStandardizationPhase = nil } })
+            ) {
+                FieldStandardizationSheet().environment(model)
+            }
+    }
+}
+
+private struct DeviceAndReaderSheets: ViewModifier {
+    @Environment(LibraryModel.self) private var model
+    let undoManager: UndoManager?
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(
+                isPresented: Binding(
+                    get: { model.devices.isSendSheetPresented },
+                    set: { model.devices.isSendSheetPresented = $0 })
+            ) {
+                SendToDeviceSheet().environment(model)
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { model.isDeviceContentsSheetPresented },
+                    set: { model.isDeviceContentsSheetPresented = $0 })
+            ) {
+                DeviceContentsSheet().environment(model)
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { model.devices.isDeleteSheetPresented },
+                    set: { model.devices.isDeleteSheetPresented = $0 })
+            ) {
+                DeleteFromDeviceSheet().environment(model)
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { model.exportPhase != nil },
+                    set: { if !$0 { model.exportPhase = nil } })
+            ) {
+                ExportSheet().environment(model)
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { model.epubWritePhase != nil },
+                    set: { if !$0 { model.epubWritePhase = nil } })
+            ) {
+                WriteIntoBookSheet().environment(model)
+            }
     }
 }

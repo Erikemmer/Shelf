@@ -307,6 +307,23 @@
         }
       }
     },
+    "%1$@: “%2$@” → “%3$@”": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: „%2$@“ → „%3$@“"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: “%2$@” → “%3$@”"
+          }
+        }
+      }
+    },
     "%1$lld folder(s) hold no readable book. Nothing was changed or removed – see %2$@.": {
       "extractionState": "manual",
       "localizations": {
@@ -899,6 +916,40 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "%lld book(s) standardized": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Buch/Bücher vereinheitlicht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld book(s) standardized"
+          }
+        }
+      }
+    },
+    "%lld book(s) would change": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Buch/Bücher würde(n) sich ändern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld book(s) would change"
           }
         }
       }
@@ -4366,6 +4417,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Every folder in this library belongs to a book."
+          }
+        }
+      }
+    },
+    "Every title, language, ISBN and tag already reads the standardized way.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Titel, jede Sprache, ISBN und jedes Schlagwort liest sich bereits vereinheitlicht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every title, language, ISBN and tag already reads the standardized way."
           }
         }
       }
@@ -9039,6 +9107,57 @@
         }
       }
     },
+    "Standardize %lld Book(s)": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Buch/Bücher vereinheitlichen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standardize %lld Book(s)"
+          }
+        }
+      }
+    },
+    "Standardize Fields": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Felder vereinheitlichen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standardize Fields"
+          }
+        }
+      }
+    },
+    "Standardize Fields…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Felder vereinheitlichen…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standardize Fields…"
+          }
+        }
+      }
+    },
     "Stop": {
       "extractionState": "manual",
       "localizations": {
@@ -10667,6 +10786,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "create a library at %@"
+          }
+        }
+      }
+    },
+    "dropped": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "entfernt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dropped"
           }
         }
       }

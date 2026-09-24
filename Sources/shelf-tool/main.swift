@@ -57,6 +57,9 @@ let usage = """
                                     would propose for authors and publishers,
                                     and the winning spelling for each. Reads
                                     only
+      standardize-fields <library>  list what "Standardize Fields…" would
+                                    change per book (title, language, ISBN,
+                                    tags), per C3's own rules. Reads only
       rebuild <library>             erase the index and rebuild it from the folders
       shelve <library> <path> <count> [offset]
                                     put <count> books on the shelf at <path>,
@@ -276,6 +279,7 @@ case "orphans": try await Commands.orphans(Array(arguments.dropFirst()))
 case "duplicates": try await Commands.duplicates(Array(arguments.dropFirst()))
 case "merge-candidates": try await Commands.mergeCandidates(Array(arguments.dropFirst()))
 case "similar-spellings": try await Commands.similarSpellings(Array(arguments.dropFirst()))
+case "standardize-fields": try await Commands.standardizeFields(Array(arguments.dropFirst()))
 case "rebuild": try await Commands.rebuild(Array(arguments.dropFirst()))
 case "unshelve": try await Commands.unshelve(Array(arguments.dropFirst()))
 case "shelve": try await Commands.shelve(Array(arguments.dropFirst()))
@@ -764,6 +768,43 @@ enum Commands {
             }
         }
         if groups.isEmpty { print("  (none)") }
+    }
+
+    /// What "Standardize Fields…" would change, from the command line. Reads
+    /// only — nothing here writes anything (Sprint 18, Teil C3).
+    static func standardizeFields(_ arguments: [String]) async throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool standardize-fields <library folder>")
+            exit(2)
+        }
+        let libraryURL = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        let (library, _) = try Library.open(libraryURL)
+        let index = try LibraryIndex(library: library)
+        let entries = try await index.allEntries()
+        let plan = FieldStandardization.plan(over: entries)
+
+        print("books: \(entries.count) · would change: \(plan.bookCount)")
+        for (entry, change) in plan.changes {
+            print("  \(entry.book.title)")
+            for field in change.fields {
+                switch field {
+                case .title: print("    title: \"\(change.before.title)\" → \"\(change.after.title)\"")
+                case .language:
+                    print(
+                        "    language: \(change.before.language ?? "–") → \(change.after.language ?? "–")")
+                case .identifiers:
+                    let before = change.before.identifiers["isbn"] ?? "–"
+                    let after = change.after.identifiers["isbn"] ?? "dropped"
+                    print("    isbn: \(before) → \(after)")
+                case .tags:
+                    print(
+                        "    tags: [\(change.before.tags.joined(separator: ", "))] → "
+                            + "[\(change.after.tags.joined(separator: ", "))]")
+                default: break
+                }
+            }
+        }
+        if plan.isEmpty { print("  (none)") }
     }
 
     /// What ShelfCore makes of the answers the two services gave.

@@ -164,16 +164,41 @@ public enum SimilarSpellings {
             bookCounts: counts.filter { spellings.contains($0.key) })
     }
 
+    /// C3's own tag rule, narrower than the author/publisher ones above: only
+    /// a case or whitespace variant, never an accent or punctuation fold
+    /// (`TagFold`, deliberately not `DuplicateKey.fold`) — two tags that only
+    /// look the same once accents are stripped are not "the same spelling".
+    public static func tagGroups(among entries: [LibraryEntry]) -> [SimilarSpellingGroup] {
+        var countsByName: [String: Int] = [:]
+        for entry in entries {
+            for tag in entry.book.tags { countsByName[tag, default: 0] += 1 }
+        }
+        let groups = Dictionary(grouping: countsByName.keys, by: TagFold.normalized).values
+            .filter { $0.count > 1 }
+        return groups.map { spellings in
+            build(.tag, spellings: Array(spellings), counts: countsByName)
+        }
+    }
+
     /// Higher wins. For an author: never the initialed form over a full
     /// one, and never the sort form ("Surname, Given") over the display one
     /// ("Given Surname") — C1's own display rule is "Vorname Nachname", and
-    /// a comma is what marks the sort form, not a display preference.
+    /// a comma is what marks the sort form, not a display preference. For a
+    /// tag, "most complete" carries no meaning — same length either way — so
+    /// the tie always falls through to the more frequent spelling.
     private static func completenessScore(_ name: String, kind: NameKind) -> Int {
         switch kind {
         case .author:
             var score = isInitialsForm(name) ? 0 : 2
             if name.contains(",") { score -= 1 }
             return score
+        case .tag:
+            // A tag's spellings differ only by case or whitespace (that is
+            // the whole rule), so "most complete" means "keeps the most
+            // capitalisation" — an all-lowercase fold is treated as the
+            // least complete form, the same direction C1 treats an initial
+            // as less complete than a full given name.
+            return name.filter(\.isUppercase).count
         default: return name.count
         }
     }
