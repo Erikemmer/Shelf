@@ -99,6 +99,25 @@ struct LibraryIndexTests {
         #expect(byName["c.kfx"]?.drmExamined == false)
     }
 
+    /// `delete` is the reverse of `save`, for `BookDisposal` — a book whose
+    /// folder went to the Trash entirely has to leave every table it ever
+    /// touched, including `search`, which has no foreign key to cascade from.
+    @Test("deleting a book removes it from every table, search included")
+    func deleteRemovesEverything() async throws {
+        let index = try LibraryIndex(inMemory: "delete")
+        let written = entry(
+            title: "Gone Tomorrow", authors: ["Someone"], tags: ["a tag"], isbn: "9780306406157")
+        try await index.save(written)
+        #expect(try await index.count() == 1)
+
+        try await index.delete(id: written.id)
+
+        #expect(try await index.count() == 0)
+        #expect(try await index.entry(id: written.id) == nil)
+        let hits = try await index.search("Gone Tomorrow")
+        #expect(hits.isEmpty)
+    }
+
     /// Author order is data – the first one decides the folder – so it has to
     /// survive a round trip through two tables.
     @Test("authors keep their order through the join table")

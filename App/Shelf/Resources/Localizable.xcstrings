@@ -5496,6 +5496,40 @@
         }
       }
     },
+    "Move Book to Trash": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buch in den Papierkorb legen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Book to Trash"
+          }
+        }
+      }
+    },
+    "Move Book to Trash…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buch in den Papierkorb legen…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Book to Trash…"
+          }
+        }
+      }
+    },
     "Move Shelf": {
       "extractionState": "manual",
       "localizations": {
@@ -9392,6 +9426,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "This book's file and Shelf disagree on how many authors it has (%1$lld against %2$lld) — Shelf does not add or remove authors, so it is left alone."
+          }
+        }
+      }
+    },
+    "This can be undone with ⌘Z. Files: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das lässt sich mit ⌘Z rückgängig machen. Dateien: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This can be undone with ⌘Z. Files: %@"
           }
         }
       }

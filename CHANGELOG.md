@@ -3,6 +3,36 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 18, Teil B5 (built ahead of schedule) — a whole book to the Trash · 24 September 2026
+
+Found while working towards removing "My Clippings" from a real library:
+`FormatDisposal` (Teil B2, above) refuses on purpose when asked to take a
+book's *last* file — it exists for a book that keeps several formats and
+loses one, never for making a book disappear file by file. A one-file book
+like a stray "My Clippings" needs the other command, and nothing in Shelf
+removed a book **entirely** yet: no core type, no menu item, and — found
+only by trying to write one — no way to take a book out of the index at
+all (`LibraryIndex` had `save`, an upsert, and nothing for the reverse).
+
+**`BookDisposal`** is the new core type, the same shape as `FormatDisposal`:
+the whole folder through `FolderDisposal` (the Trash, never `removeItem`),
+`restore` verifying every file inside it by hash before trusting a move
+back — a book can hold several files and restoring only to find one of
+them wrong is worth saying which, so `RestoreFailure.hashMismatch` names
+it. `LibraryIndex.delete(id:)` is the reverse of `save`: every table
+`ON DELETE CASCADE` references `books` clears itself, and `search` — a
+virtual FTS5 table with no foreign key to cascade from — is the one row
+deleted by hand, the same asymmetry `writeSearchRow` already works around
+on the way in.
+
+The grid and table's book context menu gets "Move Book to Trash…", behind
+a confirmation naming the book and every one of its files (CLAUDE.md's own
+rule for anything a merge or a removal could displace), wired for real ⌘Z
+the same way `FormatDisposal`'s undo is. 5 new tests in
+`BookDisposalTests.swift`, one new test in `LibraryIndexTests.swift` for
+`delete`. Named "built ahead of schedule" because it belongs to Teil B5 in
+the plan, not B2 — B2 itself needed nothing changed.
+
 ## Sprint 18, Teil B2 — one format file to the Trash, keeping the book · 24 September 2026
 
 A book with several files (a KFX beside an EPUB, a stray MOBI a Calibre

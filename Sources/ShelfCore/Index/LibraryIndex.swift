@@ -150,6 +150,24 @@ public final class LibraryIndex: Sendable {
         }
     }
 
+    /// Removes one book and everything about it — the reverse of `save`,
+    /// for `BookDisposal`, which is the only production caller of this: a
+    /// book whose folder just went to the Trash entirely, never a routine
+    /// edit.
+    ///
+    /// Every table that `ON DELETE CASCADE` references `books` (`book_authors`,
+    /// `book_tags`, `book_shelves`, `formats`, `identifiers`, `custom_values`)
+    /// clears itself; `search` is a virtual FTS5 table and has no foreign key
+    /// to cascade from, so it is the one row deleted by hand here — the same
+    /// asymmetry `writeSearchRow` already works around on the way in.
+    public func delete(id: UUID) async throws {
+        try await pool.write { database in
+            let idString = id.uuidString
+            try database.execute(sql: "DELETE FROM search WHERE book_id = ?", arguments: [idString])
+            try database.execute(sql: "DELETE FROM books WHERE id = ?", arguments: [idString])
+        }
+    }
+
     /// `entry.number`, or the next free one when another book already has it.
     ///
     /// **A rebuild must never fail on a library somebody actually has.** The

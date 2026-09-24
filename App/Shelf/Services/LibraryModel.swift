@@ -926,6 +926,123 @@ final class LibraryModel {
         }
     }
 
+    // MARK: Sending a whole book to the Trash
+
+    /// The book a "Move Book to Trash…" was clicked on, while the
+    /// confirmation naming it and its files is on screen. `nil` the rest of
+    /// the time.
+    var pendingBookRemoval: LibraryEntry?
+
+    /// Sends a book's whole folder to the Trash and takes it out of the
+    /// index — the deliberate, explicit command CLAUDE.md's own list of what
+    /// may ever be removed names narrowly (a duplicate, a stray "My
+    /// Clippings", …), never a routine part of looking at a book.
+    /// `FormatDisposal.removeFormat` is the other half: it removes one file
+    /// and refuses when it would be the book's last one; this removes the
+    /// book entirely, on purpose, and never as a side effect of that refusal.
+    func removeBook(_ entry: LibraryEntry, undoManager: UndoManager?) {
+        guard let library else { return }
+        errorMessage = nil
+        do {
+            let result = try BookDisposal.remove(entry, library: library)
+            registerBookRemovalUndo(result, undoManager: undoManager)
+            Task { await self.applyBookRemoval(result) }
+        } catch let refusal as BookDisposal.Refusal {
+            errorMessage = [Loc.core(refusal.message), refusal.detail].compactMap { $0 }.joined(separator: " ")
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func registerBookRemovalUndo(_ result: BookDisposal.Result, undoManager: UndoManager?) {
+        undoManager?.registerUndo(withTarget: self) { model in
+            MainActor.assumeIsolated {
+                model.performBookRestoration(result, undoManager: undoManager)
+            }
+        }
+        undoManager?.setActionName(Loc.string("Move Book to Trash"))
+    }
+
+    /// The write half of `removeBook`: takes the book out of the index and
+    /// out of what the window shows. The folder itself is already gone —
+    /// `BookDisposal.remove` moved it synchronously — so registering the
+    /// undo before this runs can never race a write that has not happened
+    /// yet.
+    private func applyBookRemoval(_ result: BookDisposal.Result) async {
+        guard let index else { return }
+        do {
+            try await index.delete(id: result.entry.id)
+            removeEntry(id: result.entry.id)
+            totals = try await index.totals(coversOnDisk: coversOnDisk)
+            refilter()
+        } catch {
+            show(error, doing: Loc.string("update the index after moving “%@” to the Trash", result.entry.book.title))
+        }
+    }
+
+    /// What the registered undo calls: puts the folder back, every file
+    /// verified by hash against the Trash copy, and puts a matching redo
+    /// (removing it again) on the opposite stack.
+    private func performBookRestoration(_ result: BookDisposal.Result, undoManager: UndoManager?) {
+        guard let library else { return }
+        errorMessage = nil
+        do {
+            try BookDisposal.restore(result, library: library, makeHasher: PortableSHA256Hasher.factory)
+        } catch let failure as BookDisposal.RestoreFailure {
+            errorMessage = [Loc.core(failure.message), failure.detail].compactMap { $0 }.joined(separator: " ")
+            return
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+        undoManager?.registerUndo(withTarget: self) { model in
+            MainActor.assumeIsolated {
+                model.performBookRemoval(result, undoManager: undoManager)
+            }
+        }
+        undoManager?.setActionName(Loc.string("Move Book to Trash"))
+        Task { await self.applyBookRestoration(result) }
+    }
+
+    /// The redo half of `performBookRestoration`: removes the book again,
+    /// without re-showing the confirmation — a redo is not a fresh request.
+    private func performBookRemoval(_ result: BookDisposal.Result, undoManager: UndoManager?) {
+        guard let library else { return }
+        errorMessage = nil
+        do {
+            let redone = try BookDisposal.remove(result.entry, library: library)
+            registerBookRemovalUndo(redone, undoManager: undoManager)
+            Task { await self.applyBookRemoval(redone) }
+        } catch let refusal as BookDisposal.Refusal {
+            errorMessage = [Loc.core(refusal.message), refusal.detail].compactMap { $0 }.joined(separator: " ")
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func applyBookRestoration(_ result: BookDisposal.Result) async {
+        guard let index else { return }
+        do {
+            try await index.save(result.entry)
+            entries.append(result.entry)
+            totals = try await index.totals(coversOnDisk: coversOnDisk)
+            refilter()
+        } catch {
+            show(
+                error,
+                doing: Loc.string("update the index after bringing back “%@”", result.entry.book.title))
+        }
+    }
+
+    /// Takes one entry out of both arrays the window reads from. The
+    /// opposite of `replace(_:)`, which every write until now only ever
+    /// needed the "still here, different values" half of.
+    private func removeEntry(id: UUID) {
+        entries.removeAll { $0.id == id }
+        visible.removeAll { $0.id == id }
+        selection.remove(id)
+    }
+
     /// Choose a Calibre library, count it, and show the counting protocol.
     ///
     /// The folder with `metadata.db` in it, which is what Calibre calls the

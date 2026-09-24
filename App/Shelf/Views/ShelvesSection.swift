@@ -336,6 +336,14 @@ struct BookMenu: View {
             Task { await model.applyCover(nil, to: entry, undoManager: undoManager) }
         }
         .disabled(model.hasMultipleSelection || !model.coversOnDisk.contains(entry.id))
+
+        Divider()
+        // Always this one book, never `subject`: removing several books at
+        // once from a context menu with no per-book list to check against is
+        // exactly the mistake CLAUDE.md's naming rule exists to prevent.
+        Button(Loc.string("Move Book to Trash…"), role: .destructive) {
+            model.pendingBookRemoval = entry
+        }
     }
 
     /// The books the menu acts on: the whole selection when this book is in it,

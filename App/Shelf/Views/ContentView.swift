@@ -203,6 +203,39 @@ struct ContentView: View {
             }
         }
         .background(Slate.contentBackground)
+        .confirmationDialog(
+            bookRemovalQuestion, isPresented: isAskingToRemoveBook, titleVisibility: .visible
+        ) {
+            Button(Loc.string("Move Book to Trash"), role: .destructive) {
+                if let pending = model.pendingBookRemoval {
+                    model.removeBook(pending, undoManager: undoManager)
+                }
+                model.pendingBookRemoval = nil
+            }
+            Button(Loc.string("Cancel"), role: .cancel) { model.pendingBookRemoval = nil }
+        } message: {
+            // Every file, named — the confirmation CLAUDE.md's own rules ask
+            // for whenever a book file could be displaced, and the whole
+            // point of this step rather than an afterthought under it.
+            Text(bookRemovalFileList)
+        }
+    }
+
+    private var isAskingToRemoveBook: Binding<Bool> {
+        Binding(
+            get: { model.pendingBookRemoval != nil },
+            set: { if !$0 { model.pendingBookRemoval = nil } })
+    }
+
+    private var bookRemovalQuestion: String {
+        guard let entry = model.pendingBookRemoval else { return "" }
+        return Loc.string("Move “%@” to the Trash?", entry.book.title)
+    }
+
+    private var bookRemovalFileList: String {
+        guard let entry = model.pendingBookRemoval else { return "" }
+        let names = entry.formats.map(\.fileName).sorted().joined(separator: ", ")
+        return Loc.string("This can be undone with ⌘Z. Files: %@", names)
     }
 
     @ToolbarContentBuilder
