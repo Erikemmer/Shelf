@@ -466,7 +466,7 @@ gh release create "v$VERSION" \
     --repo Erikemmer/shelf-releases \
     --title "Shelf $VERSION" \
     --notes-file "$NOTES_HTML" \
-    "${GH_PRERELEASE_FLAG[@]}" \
+    ${GH_PRERELEASE_FLAG[@]+"${GH_PRERELEASE_FLAG[@]}"} \
     "$ZIP" "$DMG" "$NOTES_HTML_DE" "$NOTES_HTML_EN" \
     || fail "gh release create failed"
 

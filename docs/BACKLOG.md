@@ -619,6 +619,25 @@ is currently assumed.
 
 ## Housekeeping, when it is next convenient
 
+- [ ] **`"${ARR[@]}"` on a genuinely empty array is an `unbound variable`
+      error under `set -u` in this Mac's `/bin/bash` (3.2.57 — Apple ships
+      the last GPLv2 release, never 4.4+, which fixed this).** Found live in
+      Sprint 16, Teil C: `Scripts/release.sh`'s `GH_PRERELEASE_FLAG=()` on
+      the stable channel (empty, since only an `-rc` version gets
+      `--prerelease`) crashed `gh release create` outright — every earlier
+      real release had gone through the beta channel, where the array
+      always had one element, so this never fired before. Fixed there with
+      the portable idiom, `${ARR[@]+"${ARR[@]}"}`, which expands to nothing
+      instead of erroring when the array is empty. **Not checked in every
+      other script that loops or expands an array under `set -u`** —
+      `grep -n '\[@\]' Scripts/*.sh` after `grep -l 'set -u' Scripts/*.sh`
+      finds the candidates: `ax-proof.sh` (`DUMPED`/`SKIPPED`, either could
+      plausibly be empty), `device-images.sh`, `online-proof.sh`,
+      `proof-run.sh` (`DELETE_PATHS` in particular). Each needs its own
+      "can this array actually be empty at runtime" judgement, not a
+      blanket fix — worth an afternoon, not urgent, since none of them is
+      known to have hit it yet.
+
 - [x] **Move the arrow keys off the menu bar.** Done in Sprint 7,
       [ADR 0017](adr/0017-the-arrow-keys-leave-the-menu-bar.md). Measured again
       by `Scripts/arrow-key-proof.sh`: 0.0 % of the main thread inside the menu
