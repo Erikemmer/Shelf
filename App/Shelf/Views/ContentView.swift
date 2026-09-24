@@ -316,6 +316,13 @@ private struct LibraryWorkflowSheets: ViewModifier {
             ) {
                 FieldStandardizationSheet().environment(model)
             }
+            .sheet(
+                isPresented: Binding(
+                    get: { model.isFillMissingFieldsSheetPresented },
+                    set: { model.isFillMissingFieldsSheetPresented = $0 })
+            ) {
+                FillMissingFieldsSheet().environment(model)
+            }
     }
 }
 

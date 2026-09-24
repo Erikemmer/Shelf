@@ -121,7 +121,10 @@ final class OnlineMetadataModel {
     private(set) var note: String?
     private(set) var briefNote: String?
 
-    private let fetcher: MetadataFetcher
+    // Not `private`: `FillMissingFieldsModel` (Sprint 18, Teil C4) shares this
+    // instance rather than opening a second one, so the two features' calls
+    // are paced against each other rather than each assuming it is alone.
+    let fetcher: MetadataFetcher
     private let transport = URLSessionTransport()
     private let libraryRoot: URL
     private var searchTask: Task<Void, Never>?

@@ -124,6 +124,12 @@ struct ShelfApp: App {
             Button(Loc.string("Fetch Metadata…")) { model.presentFetchMetadata() }
                 .shortcut(.fetchMetadata)
                 .disabled(model.library == nil || model.selection.isEmpty)
+            // Every book in the library, not the selection — the whole point
+            // is "what is still missing" for the collection (Sprint 18, Teil
+            // C4). Strictly ISBN, plus the narrow Title+Author exception for
+            // a description only; see the ADR 0015 addendum.
+            Button(Loc.string("Fill Missing Fields…")) { model.presentFillMissingFields() }
+                .disabled(model.library == nil)
             Divider()
             Button(Loc.string("Show in Finder")) { model.revealSelectedInFinder() }
                 .shortcut(.showInFinder)

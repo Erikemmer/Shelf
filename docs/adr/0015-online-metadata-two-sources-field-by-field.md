@@ -126,6 +126,47 @@ opened at all**: the cover is a new file beside it (CONCEPT §4, "Won't").
   shows the same answer — including a wrong one — for a month. `Shelf ▸ Clear
   Downloaded Metadata` names its size and empties it.
 
+## Addendum – 24 September 2026, Sprint 18, Teil C4
+
+**A batch pass now exists, on Erik's explicit instruction, and rule 5 above is
+narrower than it reads.** Re-read carefully, rule 5's own reasoning is about a
+*title* search: "a multiple selection walks the books one at a time… because a
+button that writes to four hundred books on one click is the thing this whole
+design exists to avoid" sits directly under "no automatic bulk match", and the
+match rule 5 means is the one this ADR spends most of its words on — a title
+and an author naming a *book*, of which there may be nine editions, scored and
+picked from a list. That is a guess, however good the score, and nothing about
+this addendum changes how it is handled: still one book at a time, still a
+person choosing.
+
+**An ISBN search is not that kind of match.** It names one edition by
+construction (rule 2's own reasoning — the query itself is the identity, not a
+score over one), the same fact B3's merge-matching already trusts an ISBN
+with and ADR 0002 trusts a hash with. `FillMissingFields.plan` runs
+`MetadataMerge`'s own field-by-field trust rules — the identical
+`isTickedByDefault` this ADR already requires: empty field only, only from a
+record about this edition, never where the two services disagree — for every
+book with a valid ISBN, in one pass, and shows **one combined preview naming
+every book and every field before anything writes**, exactly ADR 0018's
+"preview is the plan" applied to a fetched value instead of a typed one. That
+is a previewed, confirmed, undoable command, the same shape `Merge into…` and
+`Standardize Fields…` already are — not the silent "four hundred books on one
+click" rule 5 was written to rule out. Nothing here lowers the bar for what
+gets ticked; it only runs the existing bar over many books instead of one.
+
+**The one field allowed outside ISBN identity is `description`, and only
+under `DescriptionFill`'s own four conditions** (empty field; exactly one
+Title+Author candidate matching the book's title and every author exactly;
+a known language agreeing with the book's own; a plain-text summary over 80
+characters). This is deliberately the risk rule 5 warns about, narrowed as
+far as it can go: the field a wrong edition costs the least (a description is
+close to the same across a book's printings) and the identity check borrows
+what a title search cannot usually offer — an *exact*, not scored, agreement
+on both title and every author, standing in for the ISBN this book does not
+have or whose search came back with nothing. Everything else stays
+ISBN-only; there is still no scored Title+Author guess for a publisher, a
+date, a language or a series here or anywhere this addendum touches.
+
 ## Alternatives not taken
 
 - **An API key for Google Books.** It would fix the 429, and it would be a

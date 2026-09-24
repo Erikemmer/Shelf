@@ -71,14 +71,21 @@ public enum FillMissingFields {
     /// sequentially. `MetadataFetcher` is an actor that already paces its own
     /// calls per service across every request it is given (Sprint 6), so this
     /// is a plain loop and needs no rate limiting of its own.
+    ///
+    /// `progress`, when given, is called after every book with how many have
+    /// been asked about so far — a real library paced at one request per
+    /// second per service can take minutes, and a window with nothing moving
+    /// in it for minutes is indistinguishable from one that has hung.
     public static func plan(
-        over entries: [LibraryEntry], fetcher: MetadataFetcher, at now: Date = Date()
+        over entries: [LibraryEntry], fetcher: MetadataFetcher, at now: Date = Date(),
+        progress: (@Sendable (Int, Int) -> Void)? = nil
     ) async -> Result {
         var plans: [BookPlan] = []
         var unchanged: [Unchanged] = []
         var problems: Set<String> = []
 
-        for entry in entries {
+        for (done, entry) in entries.enumerated() {
+            defer { progress?(done + 1, entries.count) }
             var working = entry.book
             var proposals: [Proposal] = []
             var reason: UnchangedReason = .nothingToAskWith

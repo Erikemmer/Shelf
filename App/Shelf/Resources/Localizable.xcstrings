@@ -290,6 +290,23 @@
         }
       }
     },
+    "%1$@: %2$@ (%3$@)": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@ (%3$@)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@ (%3$@)"
+          }
+        }
+      }
+    },
     "%1$@: “%2$@” wins": {
       "extractionState": "manual",
       "localizations": {
@@ -320,6 +337,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@: “%2$@” → “%3$@”"
+          }
+        }
+      }
+    },
+    "%1$lld books changed, %2$lld covers added": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld Bücher geändert, %2$lld Cover hinzugefügt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld books changed, %2$lld covers added"
           }
         }
       }
@@ -950,6 +984,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld book(s) would change"
+          }
+        }
+      }
+    },
+    "%lld book(s) would gain a field": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Buch/Bücher würde(n) ein Feld erhalten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld book(s) would gain a field"
           }
         }
       }
@@ -3037,6 +3088,23 @@
         }
       }
     },
+    "Asking Open Library and Google Books — book %1$lld of %2$lld…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Library und Google Books werden gefragt — Buch %1$lld von %2$lld…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asking Open Library and Google Books — book %1$lld of %2$lld…"
+          }
+        }
+      }
+    },
     "Author": {
       "extractionState": "manual",
       "localizations": {
@@ -4669,6 +4737,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Files move into the surviving book's folder; the absorbed folders go to the Trash, empty. Every file is hashed before and after, and there is a way back."
+          }
+        }
+      }
+    },
+    "Fill Missing Fields": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fehlende Felder ergänzen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fill Missing Fields"
+          }
+        }
+      }
+    },
+    "Fill Missing Fields…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fehlende Felder ergänzen…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fill Missing Fields…"
           }
         }
       }
@@ -6716,6 +6818,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Not verified"
+          }
+        }
+      }
+    },
+    "Nothing came back that the library did not already have.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es kam nichts zurück, das die Bibliothek nicht schon hätte."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing came back that the library did not already have."
           }
         }
       }
@@ -10038,6 +10157,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Title Sort"
+          }
+        }
+      }
+    },
+    "Title+Author": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titel+Autor"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Title+Author"
           }
         }
       }

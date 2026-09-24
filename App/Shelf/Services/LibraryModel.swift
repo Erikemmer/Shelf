@@ -202,6 +202,11 @@ final class LibraryModel {
     /// Made when a library is opened, because it needs the library's root to
     /// put a fetched cover beside the right book.
     private(set) var onlineMetadata: OnlineMetadataModel?
+    /// "Fill Missing Fields…" (Sprint 18, Teil C4). Shares `onlineMetadata`'s
+    /// own `MetadataFetcher` rather than opening a second one, so both
+    /// features' calls are paced against each other.
+    private(set) var fillMissingFields: FillMissingFieldsModel?
+    var isFillMissingFieldsSheetPresented = false
 
     // MARK: Orphaned folders
 
@@ -314,6 +319,8 @@ final class LibraryModel {
             self.loader = loader
             importModel = ImportModel(library: library, index: index)
             onlineMetadata = OnlineMetadataModel(libraryRoot: library.root)
+            fillMissingFields = FillMissingFieldsModel(
+                fetcher: onlineMetadata!.fetcher, libraryRoot: library.root)
             errorMessage = nil
             syncWarning = library.syncWarning
             warmer.reset()
@@ -1436,6 +1443,47 @@ final class LibraryModel {
         let count = online.chosenProposals.count
         guard count > 0 else { return nil }
         return Loc.count("%lld fields", count)
+    }
+
+    // MARK: Fill missing fields (Sprint 18, Teil C4)
+
+    /// Opens the batch preview across every book in the library — not only
+    /// the selection, since the whole point is to answer "what is still
+    /// missing" for the collection, not for whatever happens to be selected.
+    /// Nothing is asked or written until this is confirmed (ADR 0018), and
+    /// the network questions run only once the sheet's own button starts them.
+    func presentFillMissingFields() {
+        guard library != nil else { return }
+        isFillMissingFieldsSheetPresented = true
+    }
+
+    func beginFillMissingFieldsSearch() {
+        fillMissingFields?.begin(over: entries)
+    }
+
+    /// Writes every book's plan and fetches every gap's cover, as **one**
+    /// undo step — the same discipline `Standardize Fields…` and `Similar
+    /// Spellings…` already keep: the value shown is the value written, and
+    /// undoing the whole run is one ⌘Z regardless of how many books or
+    /// covers it touched.
+    func applyFillMissingFields(_ result: FillMissingFields.Result, undoManager: UndoManager?) async {
+        guard let fillMissingFields else { return }
+        let gaps = fillMissingFields.coverGaps(among: entries)
+        let covers = await fillMissingFields.fetchCovers(for: gaps)
+
+        guard !result.plans.isEmpty || !covers.isEmpty else {
+            fillMissingFields.markDone(booksFilled: 0, coversFilled: 0)
+            return
+        }
+        undoManager?.beginUndoGrouping()
+        for plan in result.plans { apply(plan.change, to: plan.entry, undoManager: undoManager) }
+        for cover in covers {
+            let current = entries.first { $0.id == cover.entry.id } ?? cover.entry
+            await applyCover(cover.data, to: current, undoManager: undoManager)
+        }
+        undoManager?.setActionName(Loc.string("Fill Missing Fields"))
+        undoManager?.endUndoGrouping()
+        fillMissingFields.markDone(booksFilled: result.plans.count, coversFilled: covers.count)
     }
 
     /// Downloads the cover the sheet is showing and puts it beside the book.

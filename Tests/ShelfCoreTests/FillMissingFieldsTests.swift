@@ -180,6 +180,25 @@ struct FillMissingFieldsTests {
         #expect(result.unchanged.first?.reason == .nothingToAskWith)
     }
 
+    @Test("Progress is reported once per book, in order")
+    func progressReportedOncePerBook() async {
+        actor Recorder {
+            var seen: [(Int, Int)] = []
+            func record(_ done: Int, _ total: Int) { seen.append((done, total)) }
+        }
+        let recorder = Recorder()
+        _ = await FillMissingFields.plan(
+            over: [entry(title: "One", authors: []), entry(title: "Two", authors: [], number: 2)],
+            fetcher: fetcher([]),
+            progress: { done, total in Task { await recorder.record(done, total) } })
+        // The callback itself is synchronous per book; give the recorder's
+        // tasks a moment to land before reading them back.
+        try? await Task.sleep(for: .milliseconds(50))
+        let seen = await recorder.seen
+        #expect(seen.map(\.0) == [1, 2])
+        #expect(seen.map(\.1) == [2, 2])
+    }
+
     // MARK: - Composition: the ISBN pass and the description exception together
 
     @Test("A book with an ISBN can still get its description via Title+Author")
