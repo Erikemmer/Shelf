@@ -20,19 +20,32 @@
 # same idiom), some are literal, reference-data arrays that cannot be
 # (left as the plain form, with a comment at the declaration saying so).
 #
-# A grep, not a parser, in two passes over each in-scope script:
+# A grep, not a parser, in one pass over each in-scope script, line by line:
 #
-#   1. Which array names are ever declared safe? A comment block (run of
-#      contiguous "#..." lines) that contains the fixed phrase "never
-#      empty under set -u" declares safe every array name any line in
-#      that same block also mentions as "${NAME[@]}" — wherever else in
-#      the file that name is used, not only right there. The phrase is
-#      fixed on purpose: this check and a human reader are looking for
-#      the same words.
-#   2. Every plain "${NAME[@]}" (or unquoted "${NAME[@]}") that is not
-#      already guarded with "[@]+\"...\"" on its own line must name an
-#      array pass 1 found safe. "${#NAME[@]}" (a length) never counts —
-#      it cannot crash either way.
+#   A comment block (a run of contiguous "#..." lines) that contains the
+#   fixed phrase "never empty under set -u" and also mentions an array as
+#   "${NAME[@]}" declares *that one usage* safe — the plain "${NAME[@]}"
+#   on the very next line, or later on that same line as a trailing
+#   comment. Nowhere else. The block is forgotten the moment a line comes
+#   between it and a usage, blank or not, so a justification a screen away
+#   from the code it was written for no longer counts — it has to sit
+#   right where the risk is, every time the array is expanded again,
+#   because a later use elsewhere earns none of an earlier one's proof.
+#   The phrase is fixed on purpose: this check and a human reader are
+#   looking for the same words.
+#
+#   Every plain "${NAME[@]}" (or unquoted "${NAME[@]}") that is not
+#   already guarded with "[@]+\"...\"" on its own line, and is not covered
+#   by the directly preceding block or its own trailing comment, fails.
+#   "${#NAME[@]}" (a length) never counts — it cannot crash either way.
+#
+# Until Sprint 16, Teil E this was two passes, and pass 1 collected every
+# name any block in the *whole file* declared safe — so one justification,
+# anywhere, covered every later "${NAME[@]}" of that name for the rest of
+# the file, including a use added afterwards next to no comment at all.
+# Found live in `device-images.sh`: the one paragraph after `DEVICES=(…)`
+# was silently standing in for four separate loops, three of them with no
+# comment above them at all. Demonstrated red/green below, in `make lint`.
 #
 # Anything left over fails, and names the file and the line.
 set -uo pipefail
@@ -67,13 +80,15 @@ for script in "$HERE"/*.sh; do
     done <"$script"
     [ "$uses_set_u" -eq 1 ] || continue
 
-    # ── pass 1: which array names does this file declare safe ───────────
-    safe_names=""
+    # ── one pass: a block only ever justifies the usage right below it ──
+    n=0
     block=""
     block_has_marker=0
     while IFS= read -r raw || [ -n "$raw" ]; do
+        n=$((n + 1))
         lead="${raw%%[![:space:]]*}"
         trimmed="${raw#"$lead"}"
+
         case "$trimmed" in
             '#'*)
                 block="$block
@@ -84,25 +99,15 @@ $trimmed"
                 continue
                 ;;
         esac
-        if [ "$block_has_marker" -eq 1 ]; then
-            safe_names="$safe_names
-$(array_name_in "$block")"
-        fi
+
+        # This line ends whatever comment block preceded it. Check this
+        # line against only that block and itself, then forget the block –
+        # the next line, comment or not, starts owing nothing to it.
+        this_block="$block"
+        this_block_has_marker="$block_has_marker"
         block=""
         block_has_marker=0
-    done <"$script"
-    if [ "$block_has_marker" -eq 1 ]; then
-        safe_names="$safe_names
-$(array_name_in "$block")"
-    fi
 
-    # ── pass 2: every plain array-value expansion must name a safe array ─
-    n=0
-    while IFS= read -r raw || [ -n "$raw" ]; do
-        n=$((n + 1))
-        lead="${raw%%[![:space:]]*}"
-        trimmed="${raw#"$lead"}"
-        case "$trimmed" in '#'*) continue ;; esac
         # Already protected on this line: nothing to check on it.
         case "$trimmed" in *'[@]+"'*) continue ;; esac
         # A plain array-value expansion – "${#NAME[@]}" (a length) does
@@ -112,13 +117,21 @@ $(array_name_in "$block")"
             *) continue ;;
         esac
 
+        line_names=""
+        [ "$this_block_has_marker" -eq 1 ] || case "$trimmed" in
+            *"$SAFE_MARKER"*) this_block_has_marker=1; this_block="$trimmed" ;;
+        esac
+        if [ "$this_block_has_marker" -eq 1 ]; then
+            line_names="$(array_name_in "$this_block")"
+        fi
+
         for risky_name in $(array_name_in "$trimmed"); do
-            if printf '%s\n' "$safe_names" | grep -qxF "$risky_name"; then
+            if printf '%s\n' "$line_names" | grep -qxF "$risky_name"; then
                 continue
             fi
             echo "array-guard: Scripts/$name:$n expands \"\${$risky_name[@]}\" without the" >&2
-            echo "  \${ARR[@]+\"\${ARR[@]}\"} guard, and no comment in the file says" >&2
-            echo "  \"$SAFE_MARKER\" for $risky_name:" >&2
+            echo "  \${ARR[@]+\"\${ARR[@]}\"} guard, and no comment on this line or the" >&2
+            echo "  block directly above it says \"$SAFE_MARKER\" for $risky_name:" >&2
             echo "  $trimmed" >&2
             FAILED=1
         done

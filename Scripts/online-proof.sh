@@ -41,8 +41,7 @@ ISBNS=(
     9781449355739  # Learning Python — O'Reilly
     9780132350884  # Clean Code — Robert C. Martin
 )
-# Literal, ten ISBNs, never computed or filtered – "${ISBNS[@]}" below is
-# never empty under set -u (Sprint 16, Teil F).
+# Literal, ten ISBNs, never computed or filtered.
 
 say() { echo "online-proof: $1"; }
 mkdir -p "$OUT"
@@ -80,6 +79,8 @@ fetch() { # url outfile  → prints "status time bytes attempts"
 declare -a ROWS=()
 OL_HITS=0; GB_HITS=0; OL_TIME=0; GB_TIME=0; OL_FAIL=""; GB_FAIL=""
 
+# "${ISBNS[@]}" is never empty under set -u: the literal, ten-ISBN list
+# above (Sprint 16, Teil E).
 for ISBN in "${ISBNS[@]}"; do
     # ── Open Library ──────────────────────────────────────────────────────────
     RAW="$OUT/.raw.json"

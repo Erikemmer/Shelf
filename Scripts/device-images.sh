@@ -38,22 +38,25 @@ DEVICES=(
     "tolino|HFS+|64m|.tolino Books|Books"
     "PocketBook|MS-DOS FAT32|64m|system applications Books|Books"
 )
-# Literal, four rows, never computed or filtered – every "${DEVICES[@]}"
-# below is never empty under set -u: it cannot be empty unless this
-# declaration itself is edited down to nothing, a different, visible
-# change (Sprint 16, Teil F).
+# Literal, four rows: it cannot be empty unless the table above is edited
+# down to nothing, a different, visible change. Every "${DEVICES[@]}" below
+# carries the same reasoning, right where it is used, rather than once here
+# for the whole file – a later use elsewhere would otherwise inherit a
+# guarantee only this declaration earned (Sprint 16, Teil E/F).
 
 say() { echo "device-images: $1"; }
 fail() { echo "device-images: FAILED – $1" >&2; exit 1; }
 
 volume_names() {
     local row
+    # "${DEVICES[@]}" is never empty under set -u: the literal table above.
     for row in "${DEVICES[@]}"; do echo "${row%%|*}"; done
 }
 
 make_images() {
     mkdir -p "$CACHE" || fail "cannot make $CACHE"
     local row name fs size markers books image
+    # "${DEVICES[@]}" is never empty under set -u: the literal table above.
     for row in "${DEVICES[@]}"; do
         IFS='|' read -r name fs size markers books <<< "$row"
         image="$CACHE/$name.dmg"
@@ -71,6 +74,7 @@ make_images() {
 
 mount_images() {
     local row name rest image
+    # "${DEVICES[@]}" is never empty under set -u: the literal table above.
     for row in "${DEVICES[@]}"; do
         name="${row%%|*}"
         image="$CACHE/$name.dmg"
@@ -88,6 +92,7 @@ mount_images() {
 # FAT32 image has nothing in it until it is.
 lay_out() {
     local row name fs size markers books marker
+    # "${DEVICES[@]}" is never empty under set -u: the literal table above.
     for row in "${DEVICES[@]}"; do
         IFS='|' read -r name fs size markers books <<< "$row"
         [ -d "/Volumes/$name" ] || continue

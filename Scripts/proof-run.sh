@@ -231,12 +231,13 @@ SHELF_PATHS=(
     "Reference/Dictionaries"
     "To Read"
 )
-# Literal, ten paths, never computed or filtered – "${SHELF_PATHS[@]}"
-# below is never empty under set -u (Sprint 16, Teil F).
+# Literal, ten paths, never computed or filtered.
 PER_SHELF=$((SHELVED / ${#SHELF_PATHS[@]}))
 OFFSET=0
 ASSIGN_LOG="$ROOT/shelf-timings.txt"
 : > "$ASSIGN_LOG"
+# "${SHELF_PATHS[@]}" is never empty under set -u: the literal, ten-path
+# list above (Sprint 16, Teil E).
 for path in "${SHELF_PATHS[@]}"; do
     "$TOOL" shelve "$LIBRARY" "$path" "$PER_SHELF" "$OFFSET" >> "$ASSIGN_LOG" || {
         echo "could not shelve onto $path" >&2
@@ -698,8 +699,7 @@ echo "  a copy of the library: $BOOKS_BEFORE EPUBs"
 # so one is made: 40 books get their author set to one of three spellings of
 # the same person, and then the three are folded into one.
 say "one author under three spellings, over 40 books"
-# Literal, three spellings, never computed or filtered – "${SPELLINGS[@]}"
-# below is never empty under set -u (Sprint 16, Teil F).
+# Literal, three spellings, never computed or filtered.
 SPELLINGS=("Sebastian Fitzek" "Fitzek, Sebastian" "S. Fitzek")
 N=0
 while IFS= read -r TITLE; do
@@ -709,6 +709,8 @@ while IFS= read -r TITLE; do
 done < <("$TOOL" first-titles "$S8_LIB" 40)
 echo "  40 books given one of three spellings"
 
+# "${SPELLINGS[@]}" is never empty under set -u: the literal, three-spelling
+# list above (Sprint 16, Teil E).
 for SPELLING in "${SPELLINGS[@]}"; do
     COUNT_ONE=$("$TOOL" names "$S8_LIB" author | awk -F'\t' -v n="$SPELLING" '$2 == n {print $1}' | tr -d ' ')
     echo "    ${SPELLING}: ${COUNT_ONE:-0} books"
