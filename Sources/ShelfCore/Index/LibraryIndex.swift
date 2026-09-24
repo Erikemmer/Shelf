@@ -2,7 +2,10 @@ import Foundation
 import GRDB
 
 /// One book as the index holds it: the metadata, where it lives, and its files.
-public struct LibraryEntry: Identifiable, Equatable, Sendable {
+///
+/// `Codable` because `BookMergeManifest` keeps a whole snapshot of every book
+/// a merge touches – undo restores it verbatim rather than re-deriving it.
+public struct LibraryEntry: Identifiable, Equatable, Sendable, Codable {
     public var book: Book
     /// The running number in the folder name, `Pride and Prejudice (17)`.
     public var number: Int

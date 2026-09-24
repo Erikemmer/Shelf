@@ -3,6 +3,55 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 18, Teil B1 (core) — the merge engine: preview, run, resume, undo · 24 September 2026
+
+The planner, the manifest and the runner behind "Merge Books…" — the UI
+comes next, but the engine is complete and proven on its own, the same
+order `Organize Library…` (Sprint 8) was built in.
+
+**`BookMergePlanner`** turns a `MergeGroup` (Teil B3) into a full
+`BookMergeGroupPlan`, exactly what a person will see and exactly what the
+runner later executes (ADR 0018 — no second computation): which book
+survives (the lowest book number, by default — the same "first by number"
+order `Scripts/proof-run.sh` already treats as canonical), which files move
+in, which are discarded and why, which fields fill in or conflict, and
+which book's cover is taken when the survivor has none. Disk questions —
+does this format open, does it have a cover — arrive through an injected
+`FormatQualityProbe`, the same seam `OrganizeBookProbe` uses, so the
+decision stays testable without a file on disk and only the app layer's
+real probe has to know how to actually open a PDF or a CBR.
+
+**`BookMetadataMerge`** is B1's own rule, literally: an empty field fills
+only when every absorbed book that has an answer agrees; a field the
+survivor already answers keeps it, and a disagreement is counted, never
+acted on. Tags and shelves are unioned outright, never lost. Reuses
+`MetadataChange.Field` and `LanguageCode` rather than inventing either
+again.
+
+**`BookMergeManifest`/`BookMergeRunner`** mirror `OrganizeManifest`/
+`OrganizeRunner`'s proven shape — same batching-every-N-groups, same
+never-throws `read`, same reverse-chronological `undo` — adapted to what a
+merge actually does differently: no folder ever renames itself into a
+collision, so there is no case-only staging step to mirror; what a merge
+does that `Organize` never has to is verify *file* moves and discards by
+hash, and restore a whole absorbed folder from the Trash on undo, every
+file inside it re-verified against what it was before the merge touched
+it. The runner deliberately never writes metadata itself — `GroupOutcome`
+hands the caller a finished format list, and metadata is written through
+`MetadataEditor.apply`/`LibraryIndex.delete`, the mechanisms already
+trusted to do that correctly, the same separation `OrganizeRunner` keeps
+from metadata it never touches either.
+
+4 runner tests prove it against real files on real disk: a plain merge
+(hash-verified move, absorbed folder trashed), a byte-identical duplicate
+discarded and undone, a resumed run that provably does not redo the group
+already done (re-attempting it would throw — the file is no longer where
+the plan says), and a full undo restoring every file and folder, hash
+verified. 17 planner tests, 11 metadata-merge tests.
+
+`LibraryEntry` gained `Codable` — the manifest keeps whole book snapshots
+so undo restores them verbatim rather than re-deriving anything.
+
 ## Sprint 18, Teil B3 — which books are "sicher genug zum Zusammenführen" · 24 September 2026
 
 The rule the coming merge feature needs, built and proven separately from
