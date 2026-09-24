@@ -53,6 +53,10 @@ let usage = """
                                     ISBN, or same normalised title and author
                                     with no conflicting language or ISBN).
                                     Reads only
+      similar-spellings <library>   list the groups "Similar Spellings…"
+                                    would propose for authors and publishers,
+                                    and the winning spelling for each. Reads
+                                    only
       rebuild <library>             erase the index and rebuild it from the folders
       shelve <library> <path> <count> [offset]
                                     put <count> books on the shelf at <path>,
@@ -271,6 +275,7 @@ case "calibre-import": try await Commands.calibreImport(Array(arguments.dropFirs
 case "orphans": try await Commands.orphans(Array(arguments.dropFirst()))
 case "duplicates": try await Commands.duplicates(Array(arguments.dropFirst()))
 case "merge-candidates": try await Commands.mergeCandidates(Array(arguments.dropFirst()))
+case "similar-spellings": try await Commands.similarSpellings(Array(arguments.dropFirst()))
 case "rebuild": try await Commands.rebuild(Array(arguments.dropFirst()))
 case "unshelve": try await Commands.unshelve(Array(arguments.dropFirst()))
 case "shelve": try await Commands.shelve(Array(arguments.dropFirst()))
@@ -733,6 +738,29 @@ enum Commands {
                 print(
                     "    \(member.number). \(member.book.title) — \(member.book.primaryAuthor)"
                         + " [\(member.formatLine)]")
+            }
+        }
+        if groups.isEmpty { print("  (none)") }
+    }
+
+    /// What "Similar Spellings…" would propose, from the command line. Reads
+    /// only — nothing here merges anything.
+    static func similarSpellings(_ arguments: [String]) async throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool similar-spellings <library folder>")
+            exit(2)
+        }
+        let libraryURL = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        let (library, _) = try Library.open(libraryURL)
+        let index = try LibraryIndex(library: library)
+        let entries = try await index.allEntries()
+        let groups = SimilarSpellings.authorGroups(among: entries) + SimilarSpellings.publisherGroups(among: entries)
+
+        print("books: \(entries.count) · proposed groups: \(groups.count)")
+        for group in groups {
+            print("  \(group.kind.label): \"\(group.winner)\" wins")
+            for spelling in group.spellings {
+                print("    \(spelling) (\(group.bookCounts[spelling] ?? 0))")
             }
         }
         if groups.isEmpty { print("  (none)") }
