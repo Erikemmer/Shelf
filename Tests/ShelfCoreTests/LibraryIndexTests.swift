@@ -118,6 +118,30 @@ struct LibraryIndexTests {
         #expect(hits.isEmpty)
     }
 
+    /// `AuthorSort.of` gets a Dutch *van* wrong on its own — this is the
+    /// correction path, not the derivation.
+    @Test("a corrected sort form overwrites the derived one, and only that author's row")
+    func authorSortOverrideCorrectsOneRow() async throws {
+        let index = try LibraryIndex(inMemory: "author-sort-override")
+        try await index.save(entry(title: "Moonlight Sonata", authors: ["Ludwig van Beethoven"], number: 1))
+        try await index.save(entry(title: "Emma", authors: ["Jane Austen"], number: 2))
+
+        #expect(try await index.authorSort(for: "Ludwig van Beethoven") == AuthorSort.of("Ludwig van Beethoven"))
+
+        try await index.applyAuthorSortOverrides(["Ludwig van Beethoven": "van Beethoven, Ludwig"])
+
+        #expect(try await index.authorSort(for: "Ludwig van Beethoven") == "van Beethoven, Ludwig")
+        // Untouched: the override is keyed by name, not applied blindly to
+        // every row.
+        #expect(try await index.authorSort(for: "Jane Austen") == AuthorSort.of("Jane Austen"))
+    }
+
+    @Test("authorSort answers nil for a name nobody has saved")
+    func authorSortNilForUnknownName() async throws {
+        let index = try LibraryIndex(inMemory: "author-sort-unknown")
+        #expect(try await index.authorSort(for: "Nobody At All") == nil)
+    }
+
     /// Author order is data – the first one decides the folder – so it has to
     /// survive a round trip through two tables.
     @Test("authors keep their order through the join table")

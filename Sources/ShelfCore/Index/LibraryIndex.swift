@@ -1041,6 +1041,34 @@ public final class LibraryIndex: Sendable {
         }
     }
 
+    /// Reapplies every one of a person's own `authors.name_sort` corrections.
+    ///
+    /// The only place this needs calling: after a rebuild, which recreates
+    /// every author row from `AuthorSort.of` and would otherwise silently
+    /// drop a correction that lived only in the index. An ordinary import
+    /// never needs it — `upsertAuthor` only writes `name_sort` the first
+    /// time a name is seen, so an existing, already-corrected row is simply
+    /// reused, untouched, for every later book by the same person.
+    public func applyAuthorSortOverrides(_ overrides: [String: String]) async throws {
+        guard !overrides.isEmpty else { return }
+        try await pool.write { database in
+            for (name, sortForm) in overrides {
+                try database.execute(
+                    sql: "UPDATE authors SET name_sort = ? WHERE name = ?", arguments: [sortForm, name])
+            }
+        }
+    }
+
+    /// What an author's row currently says its sort form is — the derived
+    /// one, or a person's own correction if `applyAuthorSortOverrides` has
+    /// already been asked to write one. `nil` when nobody by this name has
+    /// been saved yet.
+    public func authorSort(for name: String) async throws -> String? {
+        try await pool.read { database in
+            try String.fetchOne(database, sql: "SELECT name_sort FROM authors WHERE name = ?", arguments: [name])
+        }
+    }
+
     public func saveShelves(_ shelves: [Shelf]) async throws {
         try await pool.write { database in
             let wanted = shelves.map(\.id.uuidString)

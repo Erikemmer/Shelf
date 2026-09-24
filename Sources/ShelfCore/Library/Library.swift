@@ -171,6 +171,18 @@ public struct LibraryDescriptor: Codable, Equatable, Sendable {
     /// survives here for the same reason an empty shelf does — no book can
     /// remember it.
     public var customColumns: [CalibreCustomColumn]
+    /// A person's own correction of `AuthorSort.of(name)`, keyed by the
+    /// author's display name.
+    ///
+    /// `AuthorSort` is a rule, and a rule gets some names wrong — a Dutch
+    /// *van*, a Spanish double surname (`docs/BACKLOG.md`). The derived form
+    /// is right often enough to be the default everywhere else in this
+    /// project, but a name it gets wrong had no way to be corrected by hand
+    /// until this existed. Kept here, the same way the shelves are, because
+    /// a rebuild recreates `authors.name_sort` from `AuthorSort.of` for every
+    /// row and would silently drop a correction that lived only in the index
+    /// (ADR 0001) — `library.json` is what a rebuild reapplies it from.
+    public var authorSortOverrides: [String: String]
 
     public init(
         schemaVersion: Int = currentSchemaVersion,
@@ -179,7 +191,8 @@ public struct LibraryDescriptor: Codable, Equatable, Sendable {
         nextBookNumber: Int = 1,
         shelves: [Shelf] = [],
         view: LibraryViewSettings = LibraryViewSettings(),
-        customColumns: [CalibreCustomColumn] = []
+        customColumns: [CalibreCustomColumn] = [],
+        authorSortOverrides: [String: String] = [:]
     ) {
         self.schemaVersion = schemaVersion
         self.name = name
@@ -188,6 +201,7 @@ public struct LibraryDescriptor: Codable, Equatable, Sendable {
         self.shelves = shelves
         self.view = view
         self.customColumns = customColumns
+        self.authorSortOverrides = authorSortOverrides
     }
 
     /// Decoded by hand so that a field added later can be missing.
@@ -206,6 +220,8 @@ public struct LibraryDescriptor: Codable, Equatable, Sendable {
         shelves = try values.decodeIfPresent([Shelf].self, forKey: .shelves) ?? []
         view = try values.decodeIfPresent(LibraryViewSettings.self, forKey: .view) ?? LibraryViewSettings()
         customColumns = try values.decodeIfPresent([CalibreCustomColumn].self, forKey: .customColumns) ?? []
+        authorSortOverrides =
+            try values.decodeIfPresent([String: String].self, forKey: .authorSortOverrides) ?? [:]
     }
 
     public var shelfTree: ShelfTree { ShelfTree(shelves) }

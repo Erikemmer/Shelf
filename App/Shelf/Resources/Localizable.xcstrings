@@ -4132,6 +4132,23 @@
         }
       }
     },
+    "Edit Sort Name…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sortierform bearbeiten…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit Sort Name…"
+          }
+        }
+      }
+    },
     "Edit tags": {
       "extractionState": "manual",
       "localizations": {
@@ -7995,6 +8012,23 @@
         }
       }
     },
+    "Save": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sichern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
+          }
+        }
+      }
+    },
     "Saved as %@ next to the book.": {
       "extractionState": "manual",
       "localizations": {
@@ -8818,6 +8852,23 @@
         }
       }
     },
+    "Sort form": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sortierform"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort form"
+          }
+        }
+      }
+    },
     "Sort order": {
       "extractionState": "manual",
       "localizations": {
@@ -8831,6 +8882,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sort order"
+          }
+        }
+      }
+    },
+    "Sort “%@” as…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ einsortieren als…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort “%@” as…"
           }
         }
       }
@@ -10348,6 +10416,23 @@
         }
       }
     },
+    "apply the sort name for “%@”": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "die Sortierform für „%@“ anzuwenden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "apply the sort name for “%@”"
+          }
+        }
+      }
+    },
     "bring the merged books back": {
       "extractionState": "manual",
       "localizations": {
@@ -10888,6 +10973,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "save the shelves"
+          }
+        }
+      }
+    },
+    "save the sort name for “%@”": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "die Sortierform für „%@“ zu speichern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "save the sort name for “%@”"
           }
         }
       }
@@ -11534,6 +11636,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "“%@” is not available right now. Is the disk connected?"
+          }
+        }
+      }
+    },
+    "“Surname, Given Name” — how this one author should file in the sidebar and the table.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Nachname, Vorname“ — wie dieser eine Autor in der Seitenleiste und der Tabelle einsortiert wird."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Surname, Given Name” — how this one author should file in the sidebar and the table."
           }
         }
       }

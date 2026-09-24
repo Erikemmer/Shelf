@@ -12,6 +12,10 @@ struct SidebarView: View {
     @Environment(LibraryModel.self) private var model
     /// Which name the rename/merge sheet is open on, if any.
     @State private var merging: MergeTarget?
+    /// The author whose sort form is being corrected, if any, and the draft
+    /// text the alert's field is showing.
+    @State private var editingAuthorSort: String?
+    @State private var authorSortDraft = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -49,6 +53,20 @@ struct SidebarView: View {
         .textSelection(.disabled)
         .sheet(item: $merging) { target in
             MergeNamesSheet(kind: target.kind, startingFrom: target.name)
+        }
+        .alert(
+            editingAuthorSort.map { Loc.string("Sort “%@” as…", $0) } ?? "",
+            isPresented: Binding(
+                get: { editingAuthorSort != nil }, set: { if !$0 { editingAuthorSort = nil } })
+        ) {
+            TextField(Loc.string("Sort form"), text: $authorSortDraft)
+            Button(Loc.string("Save")) {
+                if let name = editingAuthorSort { model.setAuthorSort(authorSortDraft, for: name) }
+                editingAuthorSort = nil
+            }
+            Button(Loc.string("Cancel"), role: .cancel) { editingAuthorSort = nil }
+        } message: {
+            Text(Loc.string("“Surname, Given Name” — how this one author should file in the sidebar and the table."))
         }
     }
 
@@ -197,6 +215,18 @@ struct SidebarView: View {
             }
             Button(Loc.string("Merge into…")) {
                 merging = MergeTarget(kind: kind, name: facet.name)
+            }
+        }
+        // Only authors have a *sort* form worth correcting by hand — a
+        // series or a tag sorts by its own display name (`TitleSort`, which
+        // only ever moves a leading article and gets nothing else wrong the
+        // way a name's own particles and double surnames can).
+        if section == .authors {
+            Button(Loc.string("Edit Sort Name…")) {
+                let name = facet.name
+                editingAuthorSort = name
+                authorSortDraft = AuthorSort.of(name)
+                Task { authorSortDraft = await model.authorSort(for: name) }
             }
         }
     }

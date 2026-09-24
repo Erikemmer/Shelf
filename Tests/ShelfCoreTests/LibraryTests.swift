@@ -28,6 +28,31 @@ struct LibraryTests {
         #expect(descriptor.name == "Books")
     }
 
+    @Test("authorSortOverrides survives a round trip through library.json")
+    func authorSortOverridesRoundTrip() throws {
+        let folder = try TemporaryFolder()
+        let root = try folder.folder("Lib")
+        var (library, descriptor) = try Library.create(at: root)
+        descriptor.authorSortOverrides["Ludwig van Beethoven"] = "van Beethoven, Ludwig"
+        try library.write(descriptor)
+
+        let reread = try library.readDescriptor()
+        #expect(reread.authorSortOverrides["Ludwig van Beethoven"] == "van Beethoven, Ludwig")
+    }
+
+    /// A `library.json` written before this field existed has no key for it
+    /// at all — the same leniency `customColumns` already needed.
+    @Test("a library.json with no authorSortOverrides key decodes to an empty one")
+    func authorSortOverridesDefaultsWhenMissing() throws {
+        let json = """
+            {"schemaVersion": 1, "name": "Old Library", "createdAt": "2026-01-01T00:00:00Z"}
+            """
+        let descriptor = try LibraryDescriptor.decoder.decode(LibraryDescriptor.self, from: Data(json.utf8))
+        #expect(descriptor.authorSortOverrides.isEmpty)
+        #expect(descriptor.shelves.isEmpty)
+        #expect(descriptor.customColumns.isEmpty)
+    }
+
     /// Overwriting `library.json` would orphan the index and with it every
     /// shelf the user built by hand.
     @Test("creating a library where one already is, is refused")

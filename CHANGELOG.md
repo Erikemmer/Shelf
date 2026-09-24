@@ -3,6 +3,35 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 18, Teil C1 — a stored, correctable `authorSort` · 24 September 2026
+
+The oldest item on `docs/HANDOFF.md`'s own "if next session is v1.1" list:
+`AuthorSort.of` is a rule, and a rule gets some names wrong — a Dutch
+*van*, a Spanish double surname — and until now there was no way to
+correct one by hand. Sprint 8 made renaming an author easy and left
+exactly this gap, on purpose, "a schema change, which is why it was not
+smuggled in."
+
+**`LibraryDescriptor` gains `authorSortOverrides: [String: String]`** —
+the same treatment the shelves already get, and for the same reason: the
+index is a cache, a rebuild recreates `authors.name_sort` from
+`AuthorSort.of` for every row, and a correction that lived only in the
+index would be silently dropped the next time somebody rebuilds
+(ADR 0001). Decoded leniently, like `customColumns` before it — a
+`library.json` written before this field existed has no key for it, and a
+missing key means "nobody has corrected anything yet," not "this library
+cannot be opened."
+
+`LibraryIndex.applyAuthorSortOverrides` writes every correction into the
+live index; the one place that needs calling is after a rebuild — an
+ordinary import never touches `name_sort` for a name that already has a
+row, so a correction survives every later book by the same person on its
+own. The sidebar's Authors section gets `Edit Sort Name…`, a single-field
+alert pre-filled with whatever the row currently says.
+
+3 new tests: the round trip through `library.json`, the lenient decode of
+an older file, and that a correction touches only the one author's row.
+
 ## Sprint 18, Teil B1 — the index kept a file the merge had just trashed · 24 September 2026
 
 **Found live, the first time "Merge All Safe Groups…" actually ran against

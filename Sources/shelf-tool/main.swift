@@ -1404,6 +1404,9 @@ enum Commands {
         for batch in result.entries.chunked(into: 500) {
             try await index.save(batch)
         }
+        // After the books, same as the app: an author has no row until a
+        // book claims one.
+        try await index.applyAuthorSortOverrides(descriptor.authorSortOverrides)
         descriptor.nextBookNumber = max(descriptor.nextBookNumber, result.highestNumber + 1)
         try library.write(descriptor)
 

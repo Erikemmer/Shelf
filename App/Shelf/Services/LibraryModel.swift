@@ -1194,6 +1194,47 @@ final class LibraryModel {
         }
     }
 
+    // MARK: An author's own sort form
+
+    /// What an author's row currently says its sort form is, for an editor
+    /// to show as a starting point. Falls back to the derived rule when
+    /// nobody has corrected this name yet.
+    func authorSort(for name: String) async -> String {
+        guard let index else { return AuthorSort.of(name) }
+        return (try? await index.authorSort(for: name)) ?? AuthorSort.of(name)
+    }
+
+    /// A person's own correction of how an author's name sorts —
+    /// `AuthorSort.of` gets a Dutch *van*, a Spanish double surname wrong,
+    /// and until this existed there was no way to say so (`docs/BACKLOG.md`).
+    ///
+    /// Written to `library.json` first — the index is a cache and a rebuild
+    /// would otherwise drop the correction silently (ADR 0001) — then to the
+    /// live index, so the sidebar and the table sort by it at once, without
+    /// waiting for a rebuild nobody asked for.
+    func setAuthorSort(_ sortForm: String, for name: String) {
+        guard let library, var descriptor else { return }
+        let trimmed = sortForm.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        descriptor.authorSortOverrides[name] = trimmed
+        do {
+            try library.write(descriptor)
+        } catch {
+            show(error, doing: Loc.string("save the sort name for “%@”", name))
+            return
+        }
+        self.descriptor = descriptor
+        Task {
+            guard let index else { return }
+            do {
+                try await index.applyAuthorSortOverrides([name: trimmed])
+                await reload()
+            } catch {
+                show(error, doing: Loc.string("apply the sort name for “%@”", name))
+            }
+        }
+    }
+
     /// Choose a Calibre library, count it, and show the counting protocol.
     ///
     /// The folder with `metadata.db` in it, which is what Calibre calls the
@@ -2707,6 +2748,9 @@ final class LibraryModel {
             // and never the names — which is what a proof run found.
             try await index.saveCustomColumns(descriptor?.customColumns ?? [])
             try await index.save(result.entries)
+            // After, not before: an author has no row until a book claims
+            // one, and a rebuild recreates every row from `AuthorSort.of`.
+            try await index.applyAuthorSortOverrides(descriptor?.authorSortOverrides ?? [:])
             if var descriptor {
                 descriptor.shelves = tree.shelves
                 descriptor.nextBookNumber = max(descriptor.nextBookNumber, result.highestNumber + 1)
