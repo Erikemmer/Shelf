@@ -17,6 +17,10 @@ public struct ImportCandidate: Equatable, Sendable {
     public var cover: Data?
     public var coverName: String?
     public var drm: DRMKind?
+    /// `nil` defers to the format's own `drmIsExaminable` at `BookFormat`
+    /// construction – see `BookFileReader.Result.drmExamined`, which this is
+    /// carried over from.
+    public var drmExamined: Bool?
     public var modifiedAt: Date
     /// What could not be read. Carried into the report; never a reason to skip.
     public var warnings: [String]
@@ -30,6 +34,7 @@ public struct ImportCandidate: Equatable, Sendable {
         cover: Data? = nil,
         coverName: String? = nil,
         drm: DRMKind? = nil,
+        drmExamined: Bool? = nil,
         modifiedAt: Date = Date(),
         warnings: [String] = []
     ) {
@@ -41,6 +46,7 @@ public struct ImportCandidate: Equatable, Sendable {
         self.cover = cover
         self.coverName = coverName
         self.drm = drm
+        self.drmExamined = drmExamined
         self.modifiedAt = modifiedAt
         self.warnings = warnings
     }

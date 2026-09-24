@@ -3,6 +3,44 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 18, Teil B4 — KFX's own container marker, read for DRM only · 24 September 2026
+
+Sprint 17, Teil A stopped at "DRM unknown" for every KFX, deliberately, per
+instruction (`docs/BACKLOG.md`). That instruction changed, narrowly, for a
+one-time library-wide standardisation pass: `DRMProbe.drm(of:format:)` now
+reads a KFX file's own container marker — never its content — and answers
+three ways: `DRMION` at the start, or a KFX-ZIP holding a `*.voucher` entry,
+is Kindle DRM (`DRMKind.kfx`, a distinct case from `.kindle`'s EXTH-based
+one); a plain `CONT` container (no ZIP entries to hold a voucher in) is
+clean; anything else — unrecognised bytes, a KFX-ZIP with no voucher, a file
+that will not open — stays **not checked**, never guessed at.
+
+**`BookFormat.drmExamined` is new** (schema migration `v4-drm-examined`,
+`formats.drm_examined`), because "was this file asked" stopped being a
+constant of the format the moment KFX could sometimes be classified and
+sometimes not. `LibraryEntry.drmWasFullyExamined` now reads this per-file
+flag instead of `BookFileFormat.drmIsExaminable`, which stays a
+format-level constant (KFX metadata is still never read) — every call site
+that never sets `drmExamined` explicitly keeps its exact old meaning,
+because the default falls back to the old format-level answer. Existing
+KFX rows are migrated to `drm_examined = false`: honestly "not yet asked"
+until a re-import or `Rebuild Index from Folders` re-derives the real
+answer, the same path that already fixed DRM surviving a rebuild in Sprint
+17. `Rebuild Index from Folders` is the one place `DRMProbe` is called in
+production, and drag-and-drop import now asks the same question through
+`BookFileReader.read`'s `.kfx` case, which previously never touched
+`DRMProbe` at all.
+
+18 tests in `DRMProbeTests.swift` (the three container rules, "not
+checked" for a KFX-ZIP without a voucher and for unrecognised bytes, a
+missing file, a full rebuild classifying three KFX files three different
+ways, and a book becoming "fully examined" once its KFX is), plus a
+save/read round trip for `drmExamined` in `LibraryIndexTests.swift`. ADR
+0011 gets a dated addendum rather than a rewrite — the rest of it, KFX
+content never decoded, stands. `docs/BACKLOG.md`'s "not building a KFX DRM
+probe here, per instruction" is marked superseded, narrowly, with a link to
+the addendum, not deleted.
+
 ## Sprint 17, Teil A — "DRM: 0" was never asked about 36 of the files it counted · 24 September 2026
 
 Sprint 16, Teil G's own import summary said "DRM: 0 files flagged" and hedged

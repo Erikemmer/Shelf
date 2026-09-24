@@ -306,7 +306,8 @@ public struct ImportRunner: Sendable {
         book.modifiedAt = Date()
         let format = BookFormat(
             bookID: book.id, format: candidate.format, fileName: operation.fileName,
-            byteSize: candidate.byteSize, sha256: digest, modifiedAt: candidate.modifiedAt, drm: candidate.drm)
+            byteSize: candidate.byteSize, sha256: digest, modifiedAt: candidate.modifiedAt, drm: candidate.drm,
+            drmExamined: candidate.drmExamined)
 
         writeCover(candidate, into: folder)
         // A failed OPF is a warning, not a failed import: the book file is
@@ -336,7 +337,8 @@ public struct ImportRunner: Sendable {
 
         let format = BookFormat(
             bookID: operation.bookID, format: candidate.format, fileName: operation.fileName,
-            byteSize: candidate.byteSize, sha256: digest, modifiedAt: candidate.modifiedAt, drm: candidate.drm)
+            byteSize: candidate.byteSize, sha256: digest, modifiedAt: candidate.modifiedAt, drm: candidate.drm,
+            drmExamined: candidate.drmExamined)
 
         var entry =
             existing

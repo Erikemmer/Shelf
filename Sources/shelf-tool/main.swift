@@ -3052,8 +3052,8 @@ enum Commands {
 
         return ImportCandidate(
             source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: book,
-            cover: read.cover, coverName: read.coverName, drm: read.drm, modifiedAt: facts.modifiedAt,
-            warnings: read.warnings)
+            cover: read.cover, coverName: read.coverName, drm: read.drm, drmExamined: read.drmExamined,
+            modifiedAt: facts.modifiedAt, warnings: read.warnings)
     }
 
     /// Every book file under a folder, however deep.

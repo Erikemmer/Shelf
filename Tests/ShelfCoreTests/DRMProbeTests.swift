@@ -44,13 +44,77 @@ struct DRMProbeTests {
         #expect(DRMProbe.drm(of: clean, format: .mobi) == nil)
     }
 
-    @Test("a comic and a KFX carry no scheme Shelf recognises")
-    func noSchemeForTheRest() throws {
+    @Test("a comic carries no scheme Shelf recognises")
+    func noSchemeForComics() throws {
         let folder = try TemporaryFolder()
         let cbz = try folder.write("a.cbz", data: SyntheticComic().data())
         #expect(DRMProbe.drm(of: cbz, format: .cbz) == nil)
-        let kfx = try folder.write("a.kfx", data: Data("CONT".utf8))
-        #expect(DRMProbe.drm(of: kfx, format: .kfx) == nil)
+    }
+
+    // MARK: KFX – the container's own marker, nothing decoded (ADR 0011, addendum)
+
+    /// A `DRMION` container announces protection at the very first bytes.
+    @Test("a KFX starting with a DRMION container is Kindle DRM")
+    func kfxDRMION() throws {
+        let folder = try TemporaryFolder()
+        let url = try folder.write("a.kfx", data: Data("DRMION".utf8) + Data([0, 0, 0, 0]))
+        #expect(DRMProbe.drm(of: url, format: .kfx) == .kfx)
+        #expect(DRMProbe.examined(of: url, format: .kfx))
+    }
+
+    /// A plain `CONT` container has no ZIP entries to hold a voucher in –
+    /// clean, and confidently so, unlike the "everything else" case below.
+    @Test("a KFX starting with a plain CONT container is clean and examined")
+    func kfxCONT() throws {
+        let folder = try TemporaryFolder()
+        let url = try folder.write("a.kfx", data: Data("CONT".utf8) + Data([0, 0, 0, 0]))
+        #expect(DRMProbe.drm(of: url, format: .kfx) == nil)
+        #expect(DRMProbe.examined(of: url, format: .kfx))
+    }
+
+    /// A KFX-ZIP holding a `.voucher` entry announces protection through its
+    /// archive listing rather than through raw magic bytes.
+    @Test("a KFX-ZIP holding a .voucher entry is Kindle DRM")
+    func kfxZipWithVoucher() throws {
+        let folder = try TemporaryFolder()
+        let zip = ZipWriter().archive([
+            .init(path: "book.kdf", text: "not read"),
+            .init(path: "book.voucher", text: "not read either"),
+        ])
+        let url = try folder.write("a.kfx", data: zip)
+        #expect(DRMProbe.drm(of: url, format: .kfx) == .kfx)
+        #expect(DRMProbe.examined(of: url, format: .kfx))
+    }
+
+    /// A KFX-ZIP with no voucher is not *proof* of clean the way a `CONT`
+    /// container is – only the absence of the one signal this project reads –
+    /// so it stays unguessed rather than badged clean.
+    @Test("a KFX-ZIP with no voucher is not checked, not called clean")
+    func kfxZipWithoutVoucher() throws {
+        let folder = try TemporaryFolder()
+        let zip = ZipWriter().archive([.init(path: "book.kdf", text: "not read")])
+        let url = try folder.write("a.kfx", data: zip)
+        #expect(DRMProbe.drm(of: url, format: .kfx) == nil)
+        #expect(!DRMProbe.examined(of: url, format: .kfx))
+    }
+
+    /// Bytes that match none of the three known markers – the honest default.
+    @Test("a KFX with unrecognised bytes is not checked")
+    func kfxUnrecognised() throws {
+        let folder = try TemporaryFolder()
+        let url = try folder.write("a.kfx", data: Data("not a kfx container at all".utf8))
+        #expect(DRMProbe.drm(of: url, format: .kfx) == nil)
+        #expect(!DRMProbe.examined(of: url, format: .kfx))
+    }
+
+    /// A missing file is unreadable, not "not checked" in some new way – the
+    /// same "erring towards not protected" rule as every other format, stated
+    /// for `examined(of:format:)` too.
+    @Test("a missing KFX is not checked, the same as an unreadable one")
+    func kfxMissing() {
+        let missing = URL(fileURLWithPath: "/nowhere/at/all.kfx")
+        #expect(DRMProbe.drm(of: missing, format: .kfx) == nil)
+        #expect(!DRMProbe.examined(of: missing, format: .kfx))
     }
 
     @Test("an ordinary PDF is not called protected")
@@ -144,6 +208,32 @@ struct DRMProbeTests {
         #expect(!entry.drmWasFullyExamined)
     }
 
+    /// The whole point of the addendum: once a KFX's own container has been
+    /// classified, the book it belongs to can be "fully examined" too – a
+    /// `drmExamined` explicitly passed as `true` is what a real rebuild now
+    /// does for a `CONT`/`DRMION`/voucher-classified file (Sprint 18, Teil B4).
+    @Test("a classified KFX makes its book fully examined too")
+    func kfxOwnExaminationCountsToo() {
+        let id = UUID()
+        var entry = LibraryEntry(book: Book(id: id, title: "Solo", authors: ["A"]), number: 1, folder: "A/B")
+
+        entry.formats = [
+            BookFormat(
+                bookID: id, format: .kfx, fileName: "x.kfx", byteSize: 1, sha256: "d", drm: nil,
+                drmExamined: true)
+        ]
+        #expect(entry.drm == nil)
+        #expect(entry.drmWasFullyExamined)
+
+        entry.formats = [
+            BookFormat(
+                bookID: id, format: .kfx, fileName: "x.kfx", byteSize: 1, sha256: "d", drm: .kfx,
+                drmExamined: true)
+        ]
+        #expect(entry.drm == .kfx)
+        #expect(entry.drmWasFullyExamined)
+    }
+
     // MARK: The defect the proof run found
 
     /// **The regression this file exists for.** The importer detected DRM and
@@ -197,6 +287,34 @@ struct DRMProbeTests {
         #expect(Set(rebuiltDRM) == [.adobeADEPT, .kindle])
         // The clean book is still clean: the fix must not badge everything.
         #expect(rebuilt.entries.flatMap { $0.formats }.count == 4)
+    }
+
+    /// A rebuild is the one production path that ever asks `DRMProbe` about a
+    /// KFX (Sprint 18, Teil B4) — proof that the classification and the
+    /// per-file `drmExamined` flag both really reach `LibraryEntry`, not just
+    /// `DRMProbe` in isolation.
+    @Test("a rebuild classifies KFX files by their own container, three ways")
+    func kfxClassificationSurvivesARebuild() throws {
+        let folder = try TemporaryFolder()
+        let (library, _) = try Library.create(at: try folder.folder("Lib"))
+        try folder.write("Lib/A/Protected (1)/Protected - A.kfx", data: Data("DRMION".utf8) + Data([0, 0]))
+        try folder.write("Lib/A/Clean (2)/Clean - A.kfx", data: Data("CONT".utf8) + Data([0, 0]))
+        try folder.write("Lib/A/Unknown (3)/Unknown - A.kfx", data: Data("whatever".utf8))
+
+        let result = try IndexRebuilder(makeHasher: hasher()).rebuild(library)
+        let byTitle = Dictionary(uniqueKeysWithValues: result.entries.map { ($0.book.title, $0) })
+
+        let protectedFormat = try #require(byTitle["Protected"]?.formats.first)
+        #expect(protectedFormat.drm == .kfx)
+        #expect(protectedFormat.drmExamined)
+
+        let cleanFormat = try #require(byTitle["Clean"]?.formats.first)
+        #expect(cleanFormat.drm == nil)
+        #expect(cleanFormat.drmExamined)
+
+        let unknownFormat = try #require(byTitle["Unknown"]?.formats.first)
+        #expect(unknownFormat.drm == nil)
+        #expect(!unknownFormat.drmExamined)
     }
 
     /// The badge is a fact about the bytes, not a note somebody once made — so

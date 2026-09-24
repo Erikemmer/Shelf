@@ -443,8 +443,8 @@ final class ImportModel {
         }
         return ImportCandidate(
             source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: book,
-            cover: read.cover, coverName: read.coverName, drm: read.drm, modifiedAt: facts.modifiedAt,
-            warnings: read.warnings)
+            cover: read.cover, coverName: read.coverName, drm: read.drm, drmExamined: read.drmExamined,
+            modifiedAt: facts.modifiedAt, warnings: read.warnings)
     }
 
     /// Every book file in what was chosen: the files themselves, and the

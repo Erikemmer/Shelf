@@ -183,7 +183,13 @@ public struct IndexRebuilder: Sendable {
                     // import and lost it on the next rebuild, silently. The
                     // index is a cache (ADR 0001), so everything in it has to
                     // be re-derivable from the folder — and this was not.
-                    drm: DRMProbe.drm(of: url, format: format)))
+                    drm: DRMProbe.drm(of: url, format: format),
+                    // Explicit, not defaulted: KFX's own examined-ness is a
+                    // fact about this one file's bytes, not about the format
+                    // (ADR 0011, addendum) – `format.drmIsExaminable` alone
+                    // would say "never" regardless of what the container
+                    // actually turned out to say a moment ago.
+                    drmExamined: DRMProbe.examined(of: url, format: format)))
         }
         guard !formats.isEmpty else { return nil }
 

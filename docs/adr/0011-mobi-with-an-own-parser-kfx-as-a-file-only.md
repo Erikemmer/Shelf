@@ -83,3 +83,45 @@ is worse than one Shelf admits it cannot open.
 * [ADR 0012](0012-drm-is-recognised-and-nothing-else.md) — what happens when one
   of these files is protected.
 * CONCEPT §6, §13.
+
+## Addendum – 24 September 2026, Sprint 18, Teil B4
+
+**KFX's own container marker may now be read for DRM, on Erik's explicit
+instruction, while the rest of this ADR stands unchanged: KFX content is still
+never decoded.** `DRMProbe` reads only the first bytes of the file, or (for a
+KFX-ZIP) the archive's own entry list — never the KFX payload itself:
+
+* the bytes start with `DRMION` → protected (Kindle DRM)
+* the file is a KFX-ZIP holding an entry named `*.voucher` → protected
+* the bytes start with `CONT`, KFX's plain non-ZIP container → clean, and
+  confidently so — a raw container has no ZIP entries to hold a voucher in
+* anything else — unrecognised bytes, a KFX-ZIP with no voucher, a file that
+  cannot be opened — stays **"not checked"**, never guessed at and never
+  removed. A KFX-ZIP without a voucher is not treated as proof of "clean":
+  only the `CONT` case is a positive, structural absence of anywhere a voucher
+  could be; the ZIP case is just the one signal this project knows how to read
+  being missing, which is a weaker claim.
+
+Nothing decrypts, nothing is worked around, and every other line of this ADR —
+KFX still has no metadata, no cover, no text — is unchanged.
+
+`BookFileFormat.drmIsExaminable` stays a format-level constant, false for KFX
+always, because *metadata* reading did not change. What changed is file-level:
+`BookFormat.drmExamined` (new column `formats.drm_examined`, migration
+`v4-drm-examined`) says whether **this** file's container was actually
+classified, which for KFX now depends on its bytes rather than being a
+constant of the format. `DRMKind.kfx` is a distinct case from `.kindle` on
+purpose — the signal is a container marker on an undocumented format, not
+MOBI/AZW3's own documented EXTH record, and the two are worth keeping
+distinguishable in a test or a report even though both name the same
+account-tied scheme to a person.
+
+Existing KFX rows, indexed before this addendum, are migrated to
+`drm_examined = false` — honestly "not yet asked" until a re-import or
+`Rebuild Index from Folders` re-derives the real, per-file answer, which is
+the same path the original DRM-survives-a-rebuild fix already relies on
+(`Tests/ShelfCoreTests/DRMProbeTests.swift`).
+
+See `docs/BACKLOG.md`'s "Not building a KFX parser or a KFX DRM probe here,
+per instruction" — that instruction is superseded by this addendum, narrowly,
+for DRM detection only.

@@ -50,6 +50,21 @@ enum IndexSchema {
                 table.add(column: "cover_generation", .integer).notNull().defaults(to: 0)
             }
         }
+        // Sprint 18, Teil B4: KFX's own container marker can now say "found"
+        // or "clean" for some files, where before every KFX was simply never
+        // asked (ADR 0011, addendum, 24 September 2026). `ADD COLUMN` defaults
+        // every row to examined, which is right for every existing format but
+        // wrong for KFX specifically – the whole reason this column exists is
+        // that KFX rows written before this migration were never asked at
+        // all, so they are corrected to `false` in the same migration rather
+        // than left to claim an examination that never happened. A later
+        // rebuild or import re-derives the real, per-file answer.
+        migrator.registerMigration("v4-drm-examined") { database in
+            try database.alter(table: "formats") { table in
+                table.add(column: "drm_examined", .boolean).notNull().defaults(to: true)
+            }
+            try database.execute(sql: "UPDATE formats SET drm_examined = 0 WHERE format = 'kfx'")
+        }
         return migrator
     }()
 

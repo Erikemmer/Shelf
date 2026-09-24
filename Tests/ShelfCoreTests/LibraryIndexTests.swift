@@ -66,6 +66,39 @@ struct LibraryIndexTests {
         #expect(read.formatLine == "AZW3 · EPUB")
     }
 
+    /// `drm` and `drmExamined` are two different columns for a reason: a KFX
+    /// classified clean (`drm == nil`, `drmExamined == true`) has to stay
+    /// distinguishable from one nobody has asked yet (`drm == nil`,
+    /// `drmExamined == false`) after a save and a read, not just in memory.
+    @Test("drmExamined survives a save and a read, independent of drm itself")
+    func drmExaminedRoundTrip() async throws {
+        let index = try LibraryIndex(inMemory: "drm-examined")
+        let book = Book(title: "Solo", authors: ["Someone"])
+        let written = LibraryEntry(
+            book: book, number: 1, folder: "Someone/Solo (1)",
+            formats: [
+                BookFormat(
+                    bookID: book.id, format: .kfx, fileName: "a.kfx", byteSize: 1, sha256: "d1", drm: nil,
+                    drmExamined: true),
+                BookFormat(
+                    bookID: book.id, format: .kfx, fileName: "b.kfx", byteSize: 1, sha256: "d2", drm: .kfx,
+                    drmExamined: true),
+                BookFormat(
+                    bookID: book.id, format: .kfx, fileName: "c.kfx", byteSize: 1, sha256: "d3", drm: nil,
+                    drmExamined: false),
+            ])
+        try await index.save(written)
+
+        let read = try #require(try await index.entry(id: written.id))
+        let byName = Dictionary(uniqueKeysWithValues: read.formats.map { ($0.fileName, $0) })
+        #expect(byName["a.kfx"]?.drm == nil)
+        #expect(byName["a.kfx"]?.drmExamined == true)
+        #expect(byName["b.kfx"]?.drm == .kfx)
+        #expect(byName["b.kfx"]?.drmExamined == true)
+        #expect(byName["c.kfx"]?.drm == nil)
+        #expect(byName["c.kfx"]?.drmExamined == false)
+    }
+
     /// Author order is data – the first one decides the folder – so it has to
     /// survive a round trip through two tables.
     @Test("authors keep their order through the join table")

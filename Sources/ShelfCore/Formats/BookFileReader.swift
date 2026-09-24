@@ -25,6 +25,10 @@ public enum BookFileReader {
         public var cover: Data?
         public var coverName: String?
         public var drm: DRMKind?
+        /// `nil` defers to `BookFileFormat.drmIsExaminable` at `BookFormat`
+        /// construction, same as everywhere before KFX examination existed.
+        /// Only the `.kfx` case below ever sets this explicitly.
+        public var drmExamined: Bool?
         public var warnings: [String]
         /// Whether the metadata came out of the file or off its name. The
         /// import report says which, because "the file says so" and "Shelf
@@ -33,12 +37,13 @@ public enum BookFileReader {
 
         public init(
             book: Book, cover: Data? = nil, coverName: String? = nil, drm: DRMKind? = nil,
-            warnings: [String] = [], fromTheFile: Bool = false
+            drmExamined: Bool? = nil, warnings: [String] = [], fromTheFile: Bool = false
         ) {
             self.book = book
             self.cover = cover
             self.coverName = coverName
             self.drm = drm
+            self.drmExamined = drmExamined
             self.warnings = warnings
             self.fromTheFile = fromTheFile
         }
@@ -89,7 +94,13 @@ public enum BookFileReader {
                     "\(format.label) is read by the app, not by the core – this run has the file name only")
 
         case .kfx:
-            return fromName(stem, warning: format.unreadableNote ?? "Shelf cannot read this format")
+            // The metadata still comes from the file name – nothing about
+            // KFX's content is read (ADR 0011). Only the container's own DRM
+            // marker is asked, narrowly, the same way a rebuild already does.
+            var result = fromName(stem, warning: format.unreadableNote ?? "Shelf cannot read this format")
+            result.drm = DRMProbe.drm(of: url, format: format)
+            result.drmExamined = DRMProbe.examined(of: url, format: format)
+            return result
         }
     }
 

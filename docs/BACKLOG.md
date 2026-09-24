@@ -331,7 +331,7 @@ change of controls, not of layout.
       DRM-protected file to try the readers against. Everything above is
       measured against synthetic material only
 
-- [ ] **KFX DRM cannot be checked without reverse-engineering a format this
+- [x] **KFX DRM cannot be checked without reverse-engineering a format this
       project has deliberately never opened.** Sprint 17, Teil A, against a
       real Calibre library: 36 of its 78 files were KFX, and the import's own
       "DRM: 0" said nothing about any of them – `DRMProbe` never asks. KFX is
@@ -346,6 +346,14 @@ change of controls, not of layout.
       book with one) was never asked, and the window shows "DRM unknown"
       rather than silence where it would otherwise have looked clean.
       `CHANGELOG.md`, Sprint 17, Teil A.
+
+      **Superseded, narrowly, 24 September 2026, Sprint 18, Teil B4.** The
+      instruction above changed: Erik authorised reading KFX's own container
+      marker for DRM specifically — `DRMION`, a KFX-ZIP's `.voucher` entry, or
+      a plain `CONT` container read as clean — while KFX content itself is
+      still never decoded. See the addendum at the foot of [ADR
+      0011](adr/0011-mobi-with-an-own-parser-kfx-as-a-file-only.md) for the
+      three rules and what still counts as "not checked".
 
 ## Sprint 5 – Devices · done, against disk images
 

@@ -54,11 +54,74 @@ public enum DRMProbe {
             return nil
 
         case .kfx:
-            // Not opened at all – `BookFileFormat.drmIsExaminable` is false
-            // for exactly this reason. This `nil` means "not examined", not
-            // "no DRM" (Sprint 17, Teil A).
+            // The container's own announcement, and nothing else – no KFX
+            // content is decoded (ADR 0011, addendum, 24 September 2026).
+            // `nil` here still means either "examined and clean" or "not
+            // examined"; `examined(of:format:)` is the file-level answer to
+            // which one, the same split `drmIsExaminable` already draws for
+            // every other format.
+            if case .found = kfxClassification(of: url) { return .kfx }
             return nil
         }
+    }
+
+    /// Whether **this file** was actually asked, for the one format where
+    /// that is no longer a constant of the format alone. Every other format
+    /// answers `format.drmIsExaminable`, unconditionally; KFX answers by
+    /// reading its own container marker, because some KFX files can now be
+    /// classified and some still cannot (ADR 0011, addendum).
+    public static func examined(of url: URL, format: BookFileFormat) -> Bool {
+        guard format == .kfx else { return format.drmIsExaminable }
+        switch kfxClassification(of: url) {
+        case .found, .clean: return true
+        case .notChecked: return false
+        }
+    }
+
+    /// What a KFX container's own bytes say, and nothing more.
+    ///
+    /// Three markers, all documented in the task that asked for this and none
+    /// of them found by decoding KFX content:
+    /// - a `DRMION` container → protected
+    /// - a KFX-ZIP holding an entry named `*.voucher` → protected
+    /// - a `CONT` container (KFX's plain, non-ZIP form) → clean, because a raw
+    ///   container has no ZIP entries to hold a voucher in the first place
+    ///
+    /// Anything else – unrecognised bytes, a KFX-ZIP with no voucher, a file
+    /// that cannot be opened – is `.notChecked`. That last case matters as
+    /// much as the first two: a KFX-ZIP without a voucher is not *proof* of
+    /// "clean" the way a `CONT` container is, only an absence of the one
+    /// signal this project knows how to read, so it stays unguessed.
+    private enum KFXProtection {
+        case found
+        case clean
+        case notChecked
+    }
+
+    /// Bytes enough for the longest marker (`DRMION`) plus the ZIP local-file
+    /// signature, read once.
+    private static let kfxHeaderBytes = 8
+
+    private static func kfxClassification(of url: URL) -> KFXProtection {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return .notChecked }
+        defer { try? handle.close() }
+        guard let header = try? handle.read(upToCount: kfxHeaderBytes), !header.isEmpty else {
+            return .notChecked
+        }
+
+        if header.starts(with: Data("DRMION".utf8)) { return .found }
+        if header.starts(with: Data("CONT".utf8)) { return .clean }
+
+        // ZIP local-file-header signature (`PK\x03\x04`) or the empty-archive
+        // end-of-central-directory one (`PK\x05\x06`) – a KFX-ZIP either has
+        // at least one entry or is a package with none, and both start the
+        // file with one of these four bytes.
+        let zipSignatures: [[UInt8]] = [[0x50, 0x4B, 0x03, 0x04], [0x50, 0x4B, 0x05, 0x06]]
+        guard zipSignatures.contains(where: { header.starts(with: $0) }),
+            let archive = try? ZipReader(url: url)
+        else { return .notChecked }
+
+        return archive.entries.contains { $0.path.lowercased().hasSuffix(".voucher") } ? .found : .notChecked
     }
 
     /// How much of a PDF's tail is read looking for `/Encrypt`.

@@ -150,6 +150,15 @@ public struct BookFormat: Identifiable, Equatable, Hashable, Sendable, Codable {
     /// DRM found in the file. Shelf shows it as a badge and otherwise leaves
     /// the file alone – it is never removed, never worked around (CONCEPT §12).
     public var drm: DRMKind?
+    /// Whether this **file** was actually asked. `BookFileFormat.drmIsExaminable`
+    /// answers the question at the format's level – true for every format but
+    /// KFX, always – which stopped being the whole truth once KFX's own
+    /// container could sometimes be classified and sometimes not (ADR 0011,
+    /// addendum). This is the per-file answer: `nil` passed at `init` falls
+    /// back to the format-level one, so every call site that predates KFX
+    /// examination keeps its old meaning unchanged, and only `DRMProbe`'s own
+    /// KFX classification ever passes an explicit value.
+    public var drmExamined: Bool
 
     public init(
         bookID: UUID,
@@ -158,7 +167,8 @@ public struct BookFormat: Identifiable, Equatable, Hashable, Sendable, Codable {
         byteSize: Int64,
         sha256: String,
         modifiedAt: Date = Date(),
-        drm: DRMKind? = nil
+        drm: DRMKind? = nil,
+        drmExamined: Bool? = nil
     ) {
         self.bookID = bookID
         self.format = format
@@ -167,6 +177,7 @@ public struct BookFormat: Identifiable, Equatable, Hashable, Sendable, Codable {
         self.sha256 = sha256
         self.modifiedAt = modifiedAt
         self.drm = drm
+        self.drmExamined = drmExamined ?? format.drmIsExaminable
     }
 }
 
@@ -180,6 +191,13 @@ public enum DRMKind: String, Sendable, Codable, CaseIterable {
     case adobeADEPT
     /// Kindle's, announced by EXTH record 209.
     case kindle
+    /// Amazon's KFX container announcing itself protected – a `DRMION`
+    /// container, or a KFX-ZIP holding a `.voucher` entry. A different case
+    /// from `.kindle` on purpose: the signal is a container marker on an
+    /// undocumented format, not the EXTH record MOBI/AZW3 carry, and the two
+    /// should stay distinguishable in a test or a report even though both
+    /// name the same account-tied scheme to a person (ADR 0011, addendum).
+    case kfx
     /// Encrypted, but by something this app does not recognise.
     case unknown
 
@@ -187,6 +205,7 @@ public enum DRMKind: String, Sendable, Codable, CaseIterable {
         switch self {
         case .adobeADEPT: return "Adobe DRM"
         case .kindle: return "Kindle DRM"
+        case .kfx: return "Kindle DRM (KFX)"
         case .unknown: return "DRM"
         }
     }

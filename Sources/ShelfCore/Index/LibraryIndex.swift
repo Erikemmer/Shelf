@@ -57,7 +57,7 @@ public struct LibraryEntry: Identifiable, Equatable, Sendable {
     /// checked and found clean, when one of its two files was never asked
     /// (Sprint 17, Teil A).
     public var drmWasFullyExamined: Bool {
-        formats.allSatisfy(\.format.drmIsExaminable)
+        formats.allSatisfy(\.drmExamined)
     }
 }
 
@@ -256,12 +256,13 @@ public final class LibraryIndex: Sendable {
         for format in entry.formats {
             try database.execute(
                 sql: """
-                    INSERT INTO formats (book_id, format, file_name, byte_size, sha256, modified_at, drm)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO formats
+                        (book_id, format, file_name, byte_size, sha256, modified_at, drm, drm_examined)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     id, format.format.rawValue, format.fileName, format.byteSize, format.sha256,
-                    format.modifiedAt, format.drm?.rawValue,
+                    format.modifiedAt, format.drm?.rawValue, format.drmExamined,
                 ])
         }
 
@@ -601,7 +602,8 @@ public final class LibraryIndex: Sendable {
         let rows = try Row.fetchAll(
             database,
             sql: """
-                SELECT book_id, format, file_name, byte_size, sha256, modified_at, drm FROM formats
+                SELECT book_id, format, file_name, byte_size, sha256, modified_at, drm, drm_examined
+                FROM formats
                 WHERE book_id IN (\(databaseQuestionMarks(count: bookIDs.count)))
                 ORDER BY file_name
                 """,
@@ -617,7 +619,8 @@ public final class LibraryIndex: Sendable {
                         bookID: bookID, format: format, fileName: row["file_name"],
                         byteSize: row["byte_size"], sha256: row["sha256"],
                         modifiedAt: row["modified_at"],
-                        drm: (row["drm"] as String?).flatMap(DRMKind.init(rawValue:)))
+                        drm: (row["drm"] as String?).flatMap(DRMKind.init(rawValue:)),
+                        drmExamined: row["drm_examined"])
                 }
             }
     }
