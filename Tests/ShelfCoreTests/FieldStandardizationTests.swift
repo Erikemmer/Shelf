@@ -113,6 +113,12 @@ struct FieldStandardizationTests {
         #expect(change?.after.identifiers["isbn"] == nil)
     }
 
+    @Test("A language already carrying a region or script subtag is left alone")
+    func regionTaggedLanguageIsUntouched() {
+        let dirty = book(language: "en-US")
+        #expect(FieldStandardization.change(for: dirty, tagMerges: []) == nil)
+    }
+
     @Test("A book already standardized produces no change")
     func alreadyStandardizedIsUnchanged() {
         let clean = book(title: "Sturmlicht", language: "en", isbn: "9780306406157")

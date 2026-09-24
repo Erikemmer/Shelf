@@ -140,7 +140,14 @@ public enum FieldStandardization {
     /// a valid ISBN, and every tag merge already decided for the library.
     public static func standardize(_ book: inout Book, tagMerges: [NameMerge]) {
         book.title = TitleStandardization.standardized(book.title)
-        if let language = book.language, !language.isEmpty {
+        // Only a bare code ("eng", "ENG") goes through the fold. A tag that
+        // already carries a region or script subtag ("en-US") is already a
+        // structured BCP 47 value — lower-casing the whole thing would turn
+        // its canonical "US" into a non-canonical "us" for no reason the C3
+        // rule was ever asked to fix. Found running the read-only preview
+        // against the real library, not invented: a book stored exactly
+        // that region-tagged form.
+        if let language = book.language, !language.isEmpty, !language.contains("-") {
             book.language = LanguageCode.normalised(language)
         }
         if let isbn = book.identifiers["isbn"], !isbn.isEmpty {
