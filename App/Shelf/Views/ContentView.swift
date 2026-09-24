@@ -93,6 +93,13 @@ struct ContentView: View {
         }
         .sheet(
             isPresented: Binding(
+                get: { model.similarSpellingsPhase != nil },
+                set: { if !$0 { model.similarSpellingsPhase = nil } })
+        ) {
+            SimilarSpellingsSheet().environment(model)
+        }
+        .sheet(
+            isPresented: Binding(
                 get: { model.exportPhase != nil },
                 set: { if !$0 { model.exportPhase = nil } })
         ) {

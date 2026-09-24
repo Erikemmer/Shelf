@@ -3,6 +3,45 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 18, Teil C2 — "Ähnliche Schreibweisen…", proposed, never guessed · 24 September 2026
+
+The door ADR 0018 left open on purpose: "Shelf never guesses which
+spellings are the same person" stands as the execution rule, and this adds
+a *suggester* on top of it, in the same shape the ADR itself imagined — a
+proposal filling the preview list a person already fills by hand for
+`Merge into…`.
+
+**Two rules**, both narrower than "similar enough". The safe one reuses
+`AuthorNameFold` (Teil B3) as-is: case, accents, punctuation, word order.
+The riskier one — an initialed name against a full one sharing its
+surname — only proposes when *exactly one* full-name candidate exists
+**and** the two share a work or a series; two candidates for the same
+initial, or no corroborating evidence at all, is left alone and never
+guessed at. This is the ADR's own "J. Smith matches a dozen Smiths"
+warning, answered by requiring evidence rather than relaxing the match.
+Publishers get only the narrower rule that already existed informally:
+case, whitespace, punctuation and a legal-form suffix (GmbH, Verlag, KG,
+Ltd., Inc.).
+
+**Found and fixed before this ever ran against anything real:** the
+surname comparison first used `AuthorNameFold.normalized`'s own output,
+which sorts its words alphabetically to make the *safe* fold work — taking
+the last word of an alphabetically sorted name is not "the surname", it is
+"whichever word sorts last". Rewritten as its own fold, not reusing the
+sorted one. A second bug, caught by the same test run: the winner between
+two equally-complete spellings ("Ahlberg, Jonas" vs. "Jonas Ahlberg") was
+decided by iteration order, because "complete" never distinguished the
+sort form from the display one. Fixed — a comma now costs a point, so
+"Vorname Nachname" wins over "Nachname, Vorname" exactly as C1's own
+display rule says it should.
+
+Accepted groups execute through `NameEdit.replacing`, the identical
+function `Merge into…` already uses, wrapped in one undo step for however
+many groups were checked. 10 new tests, plus the two regressions above,
+each written from the bug it was caught catching. `docs/BACKLOG.md`'s
+"Wishes" entry for a suggester is marked done for spellings, still open
+for duplicates and covers.
+
 ## Sprint 18, Teil C1 — a stored, correctable `authorSort` · 24 September 2026
 
 The oldest item on `docs/HANDOFF.md`'s own "if next session is v1.1" list:

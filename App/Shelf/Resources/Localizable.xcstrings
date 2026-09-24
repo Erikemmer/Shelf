@@ -290,6 +290,23 @@
         }
       }
     },
+    "%1$@: “%2$@” wins": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: „%2$@“ gewinnt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: “%2$@” wins"
+          }
+        }
+      }
+    },
     "%1$lld folder(s) hold no readable book. Nothing was changed or removed – see %2$@.": {
       "extractionState": "manual",
       "localizations": {
@@ -320,6 +337,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld groups merged, %2$lld books became one each"
+          }
+        }
+      }
+    },
+    "%1$lld groups merged, %2$lld books changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld Gruppen zusammengeführt, %2$lld Bücher geändert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld groups merged, %2$lld books changed"
           }
         }
       }
@@ -1456,6 +1490,23 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "%lld group(s) proposed, checked ones merge into their winning spelling": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Gruppe(n) vorgeschlagen, angehakte werden in ihre Gewinner-Schreibweise zusammengeführt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld group(s) proposed, checked ones merge into their winning spelling"
           }
         }
       }
@@ -5387,6 +5438,23 @@
         }
       }
     },
+    "Merge %lld Group(s)": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Gruppe(n) zusammenführen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge %lld Group(s)"
+          }
+        }
+      }
+    },
     "Merge %lld Groups": {
       "extractionState": "manual",
       "localizations": {
@@ -5485,6 +5553,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Merge Series"
+          }
+        }
+      }
+    },
+    "Merge Similar Spellings": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ähnliche Schreibweisen zusammenführen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge Similar Spellings"
           }
         }
       }
@@ -6648,6 +6733,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nothing is selected."
+          }
+        }
+      }
+    },
+    "Nothing looks like the same author or publisher spelled differently.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts sieht aus wie derselbe Autor oder Verlag in anderer Schreibweise."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing looks like the same author or publisher spelled differently."
           }
         }
       }
@@ -8705,6 +8807,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Showing"
+          }
+        }
+      }
+    },
+    "Similar Spellings…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ähnliche Schreibweisen…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Similar Spellings…"
           }
         }
       }

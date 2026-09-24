@@ -145,3 +145,40 @@ after it.
 * **ADR 0007 is not deleted and is not wrong.** Its reasoning is the reason the
   switch is off by default. It is superseded only in its silence about the
   deliberate case.
+
+## Addendum – 24 September 2026, Sprint 18, Teil C2
+
+**The door this ADR left open is now open, on Erik's explicit instruction, for
+authors and publishers only.** "Shelf never guesses which spellings are the
+same person" still stands as the default and as the *execution* path — this
+addendum adds a *suggester*, exactly the shape imagined above: `SimilarSpellings`
+proposes groups into the same preview a person already fills by hand for
+`Merge into…`, and the accepted groups are carried out by `NameEdit.replacing`,
+the identical function that command already used. Nothing new writes a file;
+the new code only decides which names to put in front of a person, and every
+group can be unchecked before anything runs.
+
+Two rules, both narrower than "similar enough":
+
+* **The safe rule** — the exact fold `MergeMatching.swift`'s `AuthorNameFold`
+  already uses for matching two books as the same work: case, accents,
+  punctuation, word order. "Fitzek, Sebastian" and "Sebastian Fitzek" group;
+  two different people never do, because nothing about their names folds the
+  same way.
+* **The riskier rule** — an initialed given name ("J. Ahlberg") against a full
+  one sharing its surname, and *only* when exactly one full-name candidate
+  exists **and** the two share a work (B3's own title+author match) or a
+  series. Two candidates for the same initial, or no shared work or series at
+  all, is left alone and counted, not guessed at — this is the one rule this
+  ADR's own "J. Smith matches a dozen Smiths" warning is written about, and it
+  is answered by requiring corroborating evidence, not by relaxing the match.
+
+Publishers get only the narrower of the two rules that already existed
+informally for them: case, whitespace, punctuation and a legal-form suffix
+(GmbH, Verlag, KG, Ltd., Inc.) — never an editorial judgement about which
+imprint belongs to which larger house.
+
+The winning spelling is chosen, not asked for: the most complete display form
+(never the initialed one, never the sort form "Surname, Given" over "Given
+Surname"), the most frequent among ties. A person still sees it before
+anything merges, and can reject any one group without rejecting the rest.

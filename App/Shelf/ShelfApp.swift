@@ -210,6 +210,10 @@ struct ShelfApp: App {
             // sheet's own button is pressed.
             Button(Loc.string("Merge All Safe Groups…")) { model.beginMergeAllSafeGroups() }
                 .disabled(model.library == nil || model.isLoading)
+            // Proposes only; nothing merges until the sheet's own checked
+            // groups are confirmed (ADR 0018, addendum — docs/adr/0018-…).
+            Button(Loc.string("Similar Spellings…")) { model.beginSimilarSpellings() }
+                .disabled(model.library == nil || model.isLoading)
             Button(Loc.string("Close Library")) { model.closeLibrary() }
                 .shortcut(.closeLibrary)
                 .disabled(model.library == nil)

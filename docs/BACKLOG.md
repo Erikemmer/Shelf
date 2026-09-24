@@ -817,6 +817,12 @@ a proposal fills the same preview list a person fills by hand today, and the
 confirmation stays exactly where it is. A suggester never touches a file
 (CONCEPT §11).
 
+**The spelling half is done, for authors and publishers, 24 September 2026,
+Sprint 18, Teil C2** — `SimilarSpellings`, "Similar Spellings…", the addendum
+to [ADR 0018](adr/0018-renaming-merging-and-organising-are-deliberate-operations.md).
+Not a model: a plain fold plus a narrow, evidence-gated rule for an initialed
+name. Duplicates and covers are still open.
+
 ## Measurements still to take by hand
 
 These need the window open and a person watching, so they are listed here rather

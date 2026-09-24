@@ -2323,6 +2323,53 @@ final class LibraryModel {
     /// folders now?" once and then forget it. `nil` means nothing to offer.
     var organizeSuggestion: Int?
 
+    // MARK: Similar spellings (Sprint 18, Teil C2)
+
+    enum SimilarSpellingsPhase: Equatable {
+        case ready([SimilarSpellingGroup])
+        case done(mergedGroups: Int, mergedBooks: Int)
+    }
+
+    var similarSpellingsPhase: SimilarSpellingsPhase?
+
+    /// Opens the preview with every group `SimilarSpellings` proposes across
+    /// the whole library, authors and publishers together. Nothing is
+    /// merged by this — a proposal fills the same preview list a person
+    /// fills by hand (`docs/BACKLOG.md`'s own "Wishes" entry), and the
+    /// confirmation stays exactly where "Merge into…" already put it.
+    func beginSimilarSpellings() {
+        similarSpellingsPhase = .ready(
+            SimilarSpellings.authorGroups(among: entries) + SimilarSpellings.publisherGroups(among: entries))
+    }
+
+    /// Merges every accepted group as **one** undo step, through the same
+    /// `NameEdit.replacing` "Merge into…" already executes — a proposal
+    /// this sure of itself is still carried out by the one command Shelf
+    /// already trusted to fold spellings together, not by a second path.
+    func applySimilarSpellings(_ groups: [SimilarSpellingGroup], undoManager: UndoManager?) {
+        let merges = groups.map(\.asMerge)
+        guard !merges.isEmpty else {
+            similarSpellingsPhase = nil
+            return
+        }
+        let affected = entries.filter { entry in
+            merges.contains { merge in
+                merge.kind.names(of: entry.book).contains(where: Set(merge.sources).contains)
+            }
+        }
+        guard !affected.isEmpty else {
+            similarSpellingsPhase = .done(mergedGroups: 0, mergedBooks: 0)
+            return
+        }
+        edit(affected, actionName: Loc.string("Merge Similar Spellings"), undoManager: undoManager) { book in
+            for merge in merges {
+                if let updated = NameEdit.replacing(merge, in: book) { book = updated }
+            }
+        }
+        similarSpellingsPhase = .done(mergedGroups: merges.count, mergedBooks: affected.count)
+        organizeSuggestion = affected.count
+    }
+
     private func refreshFacets() async {
         guard let index else { return }
         do {
