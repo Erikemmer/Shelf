@@ -3,6 +3,70 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 16, Teil A — does the library stay open across an update? Yes · 24 September 2026
+
+The question that had to be answered before Shelf could self-update in
+production: ad-hoc signatures change with every build, and the library
+folder's access grant is a security-scoped bookmark (`RecentLibrariesStore`,
+`com.apple.security.files.bookmarks.app-scope`). If that grant were tied to
+the signature rather than the app, every update would silently lose access
+to the library folder and Erik would have to re-pick it by hand each time.
+
+**Method, live, not reasoned from documentation.** Two Debug builds, same
+bundle identifier (`de.erikemmer.shelf`), deliberately different ad-hoc
+signatures — build 101 (CDHash `bb7e9ce2…`) and build 102 (CDHash
+`ebcc2a20…`), confirmed different with `codesign -dvvv`. Build 101 (as
+"installed", at a fixed path under `~/Library/Caches/Shelf/`) created a
+library through a real Open panel — a real click on "New Library…", a real
+⌘⇧G to the folder, a real click on "Create Library", the same Powerbox path
+a person uses, since only that grants a genuine security-scoped bookmark.
+Quit. Relaunched, pointed at a throwaway local appcast
+(`SHELF_APPCAST_URL`, Debug-only per ADR 0022) serving build 102, signed
+with `sign_update --account shelf`. A real click on `Shelf ▸ Nach Updates
+suchen …`, a real click on "Installieren", a real click on "Installieren
+und App neu restarten" — Sparkle replaced the app bundle in place and
+relaunched it from the same path. Read back off disk before trusting the
+window: `CFBundleVersion` `102`, CDHash `ebcc2a20…` — the running app was
+genuinely build 102, not a relaunch of the same binary.
+
+**Result: the Recent Libraries row for the just-created library showed
+reachable, not greyed out, and a real click on it opened the library at
+once — no Open panel, no re-pick, no error.** The security-scoped bookmark
+survived the signature change. `com.apple.security.files.bookmarks.app-scope`
+is documented by Apple to let an app-scoped bookmark survive an app update;
+this is the first time that claim was checked against this project's own
+ad-hoc, no-Developer-ID build rather than assumed to also cover ad-hoc
+signing, which has no stable Team ID to anchor to. It does, empirically,
+for a bundle-identifier-stable rebuild-in-place through Sparkle's own
+installer — which is the only path a real update ever takes.
+
+**What this does not cover:** a Developer ID build was never tested (there
+is none), and neither was a library folder under `~/Library`,
+`~/Desktop` or `~/Downloads`, where TCC's own "Files and Folders" grant
+(a separate mechanism from the sandbox's own bookmark, keyed differently)
+might behave differently — the test library lived under
+`~/Library/Caches/Shelf/`, outside every TCC-gated location.
+
+Torn down completely afterward, named because this session made every byte
+of it: `~/Library/Caches/Shelf/update-persistence-test/` (1.7 GB — two
+Debug builds, two `DerivedData` trees, a zip, a throwaway 3-book synthetic
+folder that turned out not to be a Shelf library and an actual one made
+instead), and the local-only HTTP server (127.0.0.1:8793, this session's
+own pid, stopped, never reachable outside this Mac). Nothing was pushed to
+`Erikemmer/shelf-releases` for this test — the throwaway feed and its zip
+were served from the loopback address only, unlike Sprint 14 Teil C's own
+proof, which used the public repository for its (also throwaway, also
+removed) appcast file. `project.yml`'s `MARKETING_VERSION`/
+`CURRENT_PROJECT_VERSION` were changed twice for the two test builds and
+restored to `1.1.0-rc2`/`3` immediately after the second build was copied
+out — `git status --short` confirmed clean before this commit. One stray
+`recentLibraries` entry (the test library's own path, now gone from disk)
+stays in the shared `de.erikemmer.shelf` sandbox container's defaults,
+the same way older unreachable entries from previous sessions already did
+before this one touched anything — greyed out, harmless, not cleaned up
+because removing one entry from that store without a UI for it risks the
+real entries beside it.
+
 <!-- shelf-release: v1.1.0-rc1 · 23 September 2026 -->
 
 <!-- shelf-release: v1.1.0-rc2 · 24 September 2026 -->
