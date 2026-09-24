@@ -3,6 +3,55 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 18, Teil B3 — which books are "sicher genug zum Zusammenführen" · 24 September 2026
+
+The rule the coming merge feature needs, built and proven separately from
+it: `MergeCandidates.certainGroups` groups a library's books by the same
+valid ISBN, or the same normalised title and first author with nothing
+that contradicts it — different language, different ISBN, and a shared
+title with a genuinely different author all count against a match and are
+left for a person to look at, never guessed past.
+
+`TitleNormalization.matchable` strips a shop's own bracketed annotation
+("German Edition", "Kindle Edition", "Deutsche Ausgabe", "eBook", stacked
+or alone) on top of what `DuplicateKey.foldedTitle` already did.
+`AuthorNameFold.normalized` folds only the *safe* half of Teil C's own
+rule — order and punctuation ("Fitzek, Sebastian" / "Sebastian Fitzek") —
+never an initial standing for a full first name, which needs a shared work
+to confirm and belongs to "Ähnliche Schreibweisen…" itself.
+
+**Proven against the real library, not only against fixtures, and it found
+two real bugs before it found any real duplicates.** First measurement: 0
+groups, against a library where 330 of 372 books already hold several
+formats. Investigating *why* found that six pairs looking like the same
+book in two formats were being missed:
+
+- `LanguageCode.normalised` (already used for the online-metadata
+  comparison) was not being applied here — a MOBI's EXTH record saying
+  `eng` and an EPUB's `dc:language` saying `en` were read as a language
+  *conflict* rather than as two spellings of English. Fixed by folding
+  through the same table before comparing.
+- A book carrying an ISBN nothing else shared was being excluded from
+  title-and-author matching entirely, so a sibling with no ISBN at all
+  could never be compared to it — an ISBN present on one side and absent
+  on the other is a gap, not the conflict B3 actually asks to guard
+  against. Fixed: only books already grouped *by* a shared ISBN are held
+  back from the looser rule.
+
+With both fixed: **5 safe groups, 10 books**, on the real library — Das
+Geschenk, Schwindsucht, Nachtschatten, Ohne Erinnerung and Sternfall, each an EPUB
+and a MOBI of the same book that survived two separate import runs as two
+separate entries. A sixth pair ("Der Wintergarten: Thriller") was looked at
+by hand and left alone on purpose: its two entries disagree about the
+*author list itself* (one names one author, the other names two, in a
+different order) — not something either the safe fold or an initial-match
+should paper over.
+
+20 tests in `MergeMatchingTests.swift`, most of them the shape "found this
+exact case live, wrote the test for it". `shelf-tool merge-candidates
+<library>` prints what "Merge Books…" will offer, reads only, the same
+proof shape `duplicates` already has.
+
 ## Sprint 18, Teil B5 (built ahead of schedule) — a whole book to the Trash · 24 September 2026
 
 Found while working towards removing "My Clippings" from a real library:

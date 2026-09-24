@@ -48,6 +48,11 @@ let usage = """
       duplicates <library>          list what the Duplicates collection shows,
                                     and which of the three rules found each
                                     one. Reads only
+      merge-candidates <library>    list the groups "Merge Books…" would offer
+                                    to merge, per B3's own rule (same valid
+                                    ISBN, or same normalised title and author
+                                    with no conflicting language or ISBN).
+                                    Reads only
       rebuild <library>             erase the index and rebuild it from the folders
       shelve <library> <path> <count> [offset]
                                     put <count> books on the shelf at <path>,
@@ -265,6 +270,7 @@ case "calibre-dry": try Commands.calibreDry(Array(arguments.dropFirst()))
 case "calibre-import": try await Commands.calibreImport(Array(arguments.dropFirst()))
 case "orphans": try await Commands.orphans(Array(arguments.dropFirst()))
 case "duplicates": try await Commands.duplicates(Array(arguments.dropFirst()))
+case "merge-candidates": try await Commands.mergeCandidates(Array(arguments.dropFirst()))
 case "rebuild": try await Commands.rebuild(Array(arguments.dropFirst()))
 case "unshelve": try await Commands.unshelve(Array(arguments.dropFirst()))
 case "shelve": try await Commands.shelve(Array(arguments.dropFirst()))
@@ -700,6 +706,36 @@ enum Commands {
             }
             if ids.isEmpty { print("  (none)") }
         }
+    }
+
+    /// What "Merge Books…" would offer, from the command line. Reads only —
+    /// `MergeCandidates.certainGroups` is a pure function over what the index
+    /// already holds.
+    static func mergeCandidates(_ arguments: [String]) async throws {
+        guard let path = arguments.first else {
+            print("usage: shelf-tool merge-candidates <library folder>")
+            exit(2)
+        }
+        let libraryURL = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+        let (library, _) = try Library.open(libraryURL)
+        let index = try LibraryIndex(library: library)
+        let entries = try await index.allEntries()
+        let byID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
+        let groups = MergeCandidates.certainGroups(among: entries)
+
+        print("books: \(entries.count) · safe merge groups: \(groups.count)")
+        let membersByGroup = groups.map { group in
+            group.bookIDs.compactMap { byID[$0] }.sorted { $0.number < $1.number }
+        }
+        for members in membersByGroup.sorted(by: { ($0.first?.number ?? 0) < ($1.first?.number ?? 0) }) {
+            print("  group of \(members.count):")
+            for member in members {
+                print(
+                    "    \(member.number). \(member.book.title) — \(member.book.primaryAuthor)"
+                        + " [\(member.formatLine)]")
+            }
+        }
+        if groups.isEmpty { print("  (none)") }
     }
 
     /// What ShelfCore makes of the answers the two services gave.
