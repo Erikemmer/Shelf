@@ -3,6 +3,24 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 16, Teil D — Shelf, installed, in `/Applications` · 24 September 2026
+
+The session's own goal: nothing left to do by hand. `~/Library/Caches/Shelf/release/Shelf.app` (Teil C's own build, never downloaded — `xattr -lr` empty, confirmed before copying) went into `/Applications` with `ditto`, no prior copy to displace. Started once: no Gatekeeper question (nothing to bypass — a locally built, never-downloaded app carries no quarantine attribute in the first place), `Shelf ▸ Nach Updates suchen …` read "Du bist auf dem neuesten Stand! Shelf 1.1.0 ist zurzeit die neueste verfügbare Version." against the real, now-live `appcast.xml` — not a redirect, not a throwaway channel. Quit afterward, the one instance this session itself started.
+
+`docs/HANDOFF.md` says so at the top now: every future `make release` reaches Erik without him doing anything, down to the one click of his own on "Install".
+
+## Sprint 16, Teil C — 1.1.0, to the main channel — and a real bug the beta channel had never exercised · 24 September 2026
+
+The first real attempt crashed: `Scripts/release.sh` built, signed, zipped, dmg'd, signed the update and merged the new appcast item locally — then `gh release create` died with `GH_PRERELEASE_FLAG[@]: unbound variable`. `GH_PRERELEASE_FLAG=()` (empty, since `1.1.0` carries no `-rc`) is a genuine `unbound variable` under this Mac's `/bin/bash` 3.2 and `set -u` — a known bash-3.2 gotcha (fixed in 4.4+, which Apple never ships), and one this project had simply never hit: every real release before this one went to the beta channel, where the array always held `--prerelease`.
+
+**Checked before touching anything, not assumed:** `gh release view v1.1.0` — not found; `gh release list` — only the two rc's; `git status --short` in the `shelf-releases` checkout — one modified, uncommitted `appcast.xml` (the local merge, which happens before the crashed step) and nothing else. Nothing had been published, nothing partially uploaded, nothing to undo — the crash landed cleanly between "wrote a local file" and "told anyone about it." The local `appcast.xml` was discarded (`git checkout --`) rather than trusted stale, and the checkout re-synced.
+
+Fixed with the portable `${ARR[@]+"${ARR[@]}"}` idiom, which expands to nothing instead of erroring on a genuinely empty array. The same class of bug likely exists in a few other scripts that loop over an array under `set -u` — not audited here, `docs/BACKLOG.md` has the candidates found by a `grep`, each needing its own judgement about whether its array can really be empty.
+
+**The retry, verified end to end, not only by exit code:** `gh release view` shows exactly one `v1.1.0`, not a pre-release, four assets (zip, dmg, both language release-notes files); `appcast.xml` has exactly one `<item>`; its download address and both `sparkle:releaseNotesLink` addresses answer `200` after redirect (`curl -I -L`); the published zip, downloaded fresh and run back through `sign_update --account shelf`, produced the *exact same* `sparkle:edSignature` and `length` the appcast itself names — Ed25519 is deterministic, so this is the same check Sparkle's own updater makes before it would ever offer the update, done here by hand first. `git status --short` in the `shelf-releases` checkout: clean.
+
+Also decided here, not only mechanically executed: **one channel from now on, no more `-rc` versions** — Erik is the only person who installs Shelf, and testing happens in the building session, before a release, so the two-channel split that Sprint 15 built and proved was solving a problem this project does not have. `appcast-beta.xml` stays, with both rc entries, as a record that the mechanism was proved; nothing is added to it again. Full reasoning: ADR 0022's own Nachtrag. `MARKETING_VERSION` `1.1.0`, `CURRENT_PROJECT_VERSION` `4`. 797 core tests, `make test`/`make app`/`make lint`/`make smoke` all green, twice (once before the crash was found, once after the fix).
+
 <!-- shelf-release: v1.1.0 · 24 September 2026 -->
 
 ## Sprint 16, Teil B — release notes for a person, not a diff · 24 September 2026

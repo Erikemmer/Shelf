@@ -1,5 +1,10 @@
 # Handoff – where Shelf stands, and what is left
 
+**Shelf is installed, in `/Applications`, and updates itself.** Every
+future release published with `make release` reaches Erik without him
+doing anything — down to one click of his own, on "Install" — 24
+September 2026, Sprint 16.
+
 **`v1.1.0-rc1` is out, published for real, 23 September 2026 — Sparkle 2,
 end to end.** Sprint 14 gave Shelf its own update mechanism: `Shelf ▸ Check
 for Updates…`, a welcome-screen banner, and a second, separate public
