@@ -213,12 +213,19 @@ Three things were, until 19 September 2026, and all three are done:
   Calibre library was found and imported through the real, installed app
   — 40 of its 42 books (the other 2 were the same books catalogued twice
   inside Calibre's own database, correctly deduplicated), 78 files, 108.5
-  MB, 0 DRM found, every book with a cover, source folder proved untouched
-  by a before/after marker. Full numbers in `CHANGELOG.md`, Sprint 16,
-  Teil G — book titles and the library's own path stay out of this public
-  repo. The library was far smaller than Erik expected (1 000–10 000
-  books); what he remembers apparently lives outside what a read-only,
+  MB, every book with a cover, source folder proved untouched by a
+  before/after marker. Full numbers in `CHANGELOG.md`, Sprint 16, Teil G —
+  book titles and the library's own path stay out of this public repo.
+  The library was far smaller than Erik expected (1 000–10 000 books);
+  what he remembers apparently lives outside what a read-only,
   no-external-volumes search was allowed to reach this session.
+- **"DRM: 0" said nothing about 36 of that library's own files.** Fixed 24
+  September 2026, Sprint 17, Teil A: those 36 were KFX, a format Shelf's
+  `DRMProbe` never opens, so the honest count is 0 DRM found of 42
+  *examinable* files, 36 not checked at all. The window now says "DRM
+  unknown" wherever a file was never asked, rather than showing nothing —
+  `CHANGELOG.md`, Sprint 17, Teil A, has the numbers and the screenshots.
+  No KFX support was built; `docs/BACKLOG.md` has what was learned.
 
 ---
 

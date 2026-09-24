@@ -331,6 +331,22 @@ change of controls, not of layout.
       DRM-protected file to try the readers against. Everything above is
       measured against synthetic material only
 
+- [ ] **KFX DRM cannot be checked without reverse-engineering a format this
+      project has deliberately never opened.** Sprint 17, Teil A, against a
+      real Calibre library: 36 of its 78 files were KFX, and the import's own
+      "DRM: 0" said nothing about any of them – `DRMProbe` never asks. KFX is
+      Amazon's newer, undocumented Kindle container ([ADR
+      0011](adr/0011-mobi-with-an-own-parser-kfx-as-a-file-only.md)); unlike
+      MOBI/AZW3, its encryption announcement (if any) is not publicly
+      documented anywhere this project found, so "read the flag and stop"
+      (CONCEPT §12, the whole of what Shelf's DRM handling is) has nothing to
+      read. **Not building a KFX parser or a KFX DRM probe here, per
+      instruction.** What shipped instead: `BookFileFormat.drmIsExaminable`
+      and `LibraryEntry.drmWasFullyExamined` say plainly when a file (or a
+      book with one) was never asked, and the window shows "DRM unknown"
+      rather than silence where it would otherwise have looked clean.
+      `CHANGELOG.md`, Sprint 17, Teil A.
+
 ## Sprint 5 – Devices · done, against disk images
 
 - [x] Detection through `NSWorkspace` volume notifications and marker paths;
@@ -644,6 +660,19 @@ is currently assumed.
       another machine was never going to hide this again by accident
       either way; nothing needed changing there. `CHANGELOG.md`, Sprint 16,
       Teil F, has the full account.
+
+- [ ] **A KFX row's own unreadable-note caption never translates.** Found
+      by accident in Sprint 17, Teil A's own German screenshot:
+      `InspectorView.formatRow` draws `format.format.unreadableNote` as
+      `Text(note)` directly – never `Loc.core(note)` – so "Shelf cannot
+      read KFX. The file is kept, named and counted, and nothing more."
+      stays English in a German window while every other line around it
+      turned over. `LocalisationTests.nothingIsDrawnDirectly` cannot see
+      it: the scan only catches a literal handed to `Text(…)`, and this is
+      a variable. Not fixed here – out of Teil A's own scope – but the two
+      new DRM-unknown sentences beside it went through `Loc.string`
+      correctly, so the fix is the same one-line shape whenever this is
+      picked up.
 
 - [x] **Move the arrow keys off the menu bar.** Done in Sprint 7,
       [ADR 0017](adr/0017-the-arrow-keys-leave-the-menu-bar.md). Measured again

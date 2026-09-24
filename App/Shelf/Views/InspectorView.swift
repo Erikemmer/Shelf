@@ -665,6 +665,11 @@ struct InspectorView: View {
                 // carries the protection.
                 if let drm = format.drm {
                     DRMBadge(drm)
+                } else if !format.format.drmIsExaminable {
+                    // A missing badge here would say "no DRM" as loudly as
+                    // an explicit sentence would – Shelf never opened this
+                    // file to find out (Sprint 17, Teil A).
+                    DRMUnexaminedBadge()
                 }
                 Spacer(minLength: 4)
                 Text(ByteCount.format(format.byteSize))
@@ -701,6 +706,10 @@ struct InspectorView: View {
             }
             if let drm = format.drm {
                 Text(Loc.string("%@. Shelf shows it and does not touch it.", Loc.core(drm.label)))
+                    .font(.caption2)
+                    .foregroundStyle(Slate.textSecondary)
+            } else if !format.format.drmIsExaminable {
+                Text(Loc.string("Shelf does not open this format, so it could not check it for DRM."))
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
             }

@@ -77,6 +77,31 @@ struct DRMBadge: View {
     }
 }
 
+/// The badge for a file (or a book) Shelf never opens for DRM.
+///
+/// Not the same claim as `DRMBadge` and drawn differently on purpose: a
+/// question mark, not a padlock, because a padlock says "protected" and
+/// this says "unasked". Silence where this badge belongs would read as "no
+/// DRM", which is not something Shelf checked (Sprint 17, Teil A).
+struct DRMUnexaminedBadge: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "questionmark.circle").font(.system(size: 8))
+            Text(Loc.string("DRM unknown")).font(.caption2)
+        }
+        .foregroundStyle(Theme.drmBadge)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 1)
+        .background(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Slate.textSecondary.opacity(0.14))
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Loc.string("DRM unknown, not examined"))
+        .help(Loc.string("Shelf does not open this format, so it could not check it for DRM."))
+    }
+}
+
 /// The sidebar's sections, in the order CONCEPT §3.2 gives them.
 enum SidebarSection: String, CaseIterable, Identifiable {
     case shelves = "Shelves"

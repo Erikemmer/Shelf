@@ -307,6 +307,25 @@ struct BookFileFormatTests {
         #expect(!BookFileFormat.importable.contains(.kfx))
     }
 
+    /// Sprint 17, Teil A: a real import found "DRM: 0" said nothing about 36
+    /// KFX files nobody had actually looked at. `drmIsExaminable` is the fact
+    /// that lets the window tell "examined, clean" from "never asked" apart.
+    @Test("only KFX is never opened to look for DRM")
+    func drmIsExaminable() {
+        for format in BookFileFormat.allCases where format != .kfx {
+            #expect(format.drmIsExaminable, "\(format.label) should be examinable")
+        }
+        #expect(!BookFileFormat.kfx.drmIsExaminable)
+
+        // The two tables agree here too: nothing is examinable with no
+        // reader, and everything with one is.
+        for format in BookFileFormat.allCases {
+            #expect(
+                format.drmIsExaminable == (format.readerLayer != .none),
+                "\(format.label): drmIsExaminable and readerLayer disagree")
+        }
+    }
+
     /// One window wrote "epub" in the sidebar and "EPUB" in the inspector,
     /// because both call sites spelled the format themselves. There is one
     /// spelling now and every case has it.

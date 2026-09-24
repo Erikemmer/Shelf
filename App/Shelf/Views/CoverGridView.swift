@@ -212,6 +212,11 @@ struct BookCell: View {
         } bottomLeading: {
             if let drm = entry.drm {
                 SlateBadgePlate { Text(Loc.core(drm.label)).font(.caption2) }
+            } else if !entry.drmWasFullyExamined {
+                // At least one of this book's files is a format Shelf never
+                // opens (KFX today) – an empty corner here would say "no
+                // DRM" about a file nobody checked (Sprint 17, Teil A).
+                SlateBadgePlate { Text(Loc.string("DRM unknown")).font(.caption2) }
             }
         }
         .contentShape(Rectangle())
@@ -321,7 +326,11 @@ struct BookCell: View {
         if !entry.formatLine.isEmpty { parts.append(entry.formatLine) }
         if entry.book.stars > 0 { parts.append(Loc.string("%lld of 5", entry.book.stars)) }
         parts.append(entry.book.isRead ? Loc.string("Read") : Loc.string("Unread"))
-        if let drm = entry.drm { parts.append(Loc.core(drm.label)) }
+        if let drm = entry.drm {
+            parts.append(Loc.core(drm.label))
+        } else if !entry.drmWasFullyExamined {
+            parts.append(Loc.string("DRM unknown"))
+        }
         if isOnDevice { parts.append(Loc.string("On the device")) }
         return parts.joined(separator: ", ")
     }

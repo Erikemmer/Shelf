@@ -47,9 +47,16 @@ public enum DRMProbe {
         case .pdf:
             return pdfIsEncrypted(url) ? .unknown : nil
 
-        case .cbz, .cbr, .kfx:
-            // A comic archive carries no protection scheme Shelf recognises,
-            // and a KFX is not opened at all.
+        case .cbz, .cbr:
+            // A comic archive is opened; it carries no protection scheme
+            // Shelf recognises. Examined, not skipped – `nil` here is a
+            // real answer.
+            return nil
+
+        case .kfx:
+            // Not opened at all – `BookFileFormat.drmIsExaminable` is false
+            // for exactly this reason. This `nil` means "not examined", not
+            // "no DRM" (Sprint 17, Teil A).
             return nil
         }
     }

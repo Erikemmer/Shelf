@@ -3,6 +3,51 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 17, Teil A — "DRM: 0" was never asked about 36 of the files it counted · 24 September 2026
+
+Sprint 16, Teil G's own import summary said "DRM: 0 files flagged" and hedged
+in the same breath that KFX's own marker "was never exercised" — honest in
+the prose, but the number itself, and the window, said nothing of the kind.
+Investigated without changing anything first: `DRMProbe.drm(of:format:)`
+opens an EPUB, a MOBI/AZW3 or a PDF and asks a real question of the bytes;
+for KFX it returns `nil` without ever opening the file
+(`Sources/ShelfCore/Formats/DRMProbe.swift`, unchanged by this entry). The
+window drew nothing in that case — no badge in the grid, no badge in the
+inspector's format row — and a missing badge reads exactly like "checked,
+clean", which was never true for a file nobody looked at. The "4 skipped"
+from Teil G's own report were unrelated: two titles Calibre's own database
+had catalogued twice, byte-identical, caught by Shelf's same-file-twice
+check — not a KFX matter at all.
+
+**Fixed, at the fact rather than at the number:** `BookFileFormat` now
+carries `drmIsExaminable` (false only for KFX — the one format
+`readerLayer` already says Shelf never opens) and `LibraryEntry` carries
+`drmWasFullyExamined` (false the moment any one of a book's files is not
+examinable, however many others are). The grid badge, the inspector's
+per-file badge and caption, and the grid's spoken label now show "DRM
+unknown" wherever a file was never asked, instead of the silence that used
+to stand for "no DRM" there. Real DRM found on an examinable file still
+takes the badge over an unexamined sibling's uncertainty — a book is
+either protected or its worst-known state, never quietly rounded down to
+clean. Screenshotted live against a KFX-only fixture (`shelf-tool import`,
+never a borrowed book), both languages:
+`docs/screenshots/sprint-17/drm-unknown-{grid,inspector}.jpg` and the `de/`
+copies. **No KFX parser and no KFX DRM detection were built** — KFX's own
+encryption announcement, if it has one, is not documented anywhere this
+project found, and reverse-engineering it is out of scope here
+(`docs/BACKLOG.md`).
+
+**The honest number, for the library Sprint 16, Teil G already measured:**
+78 files total, 38 EPUB + 3 MOBI + 1 AZW3 = 42 examinable, 36 KFX not
+examinable. DRM found at 0 of 42 examinable files; 36 files, all KFX, not
+checked at all.
+
+Found by accident while taking the German screenshot: the KFX row's own
+"Shelf cannot read KFX…" caption stays English in a German window —
+`InspectorView` draws it without going through `Loc.core`. A pre-existing
+defect, not touched here; `docs/BACKLOG.md` has it, including why
+`LocalisationTests` cannot see it on its own.
+
 ## Sprint 16, Teil G — the Calibre import, proved against a real library · 24 September 2026
 
 Since Sprint 3 the Calibre import had only ever run against 2 000 synthetic

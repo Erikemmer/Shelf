@@ -49,6 +49,17 @@ public enum BookFileFormat: String, CaseIterable, Sendable, Codable, Comparable 
     /// Whether Shelf can pull a cover out of the file.
     public var hasReadableCover: Bool { hasReadableMetadata }
 
+    /// Whether `DRMProbe` ever opens this file's bytes to look for DRM.
+    ///
+    /// False means exactly one thing: the question was never asked. A comic
+    /// archive still answers true even though `DRMProbe` always says `nil`
+    /// for one – the archive is opened, and no protection scheme is
+    /// recognised there, which is a real answer. KFX is the one format
+    /// Shelf never opens at all (`readerLayer == .none`), so its `nil` is
+    /// "not examined", not "no DRM" – and anywhere that `nil` reaches a
+    /// person has to say which one it is (Sprint 17, Teil A).
+    public var drmIsExaminable: Bool { readerLayer != .none }
+
     /// Which part of the program reads it.
     ///
     /// A row per format rather than a chain of `if`s at the one place that has

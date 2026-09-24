@@ -110,6 +110,40 @@ struct DRMProbeTests {
         #expect(entry.drm == nil)
     }
 
+    /// Sprint 17, Teil A: found live in a real import — 36 KFX files, none of
+    /// them ever opened for DRM, sitting under a headline that just said
+    /// "DRM: 0". A book's own `drm == nil` cannot be trusted on its own; this
+    /// is the flag that says whether every file backing it up.
+    @Test("a book is 'fully examined' only when every one of its files is")
+    func drmWasFullyExamined() {
+        let id = UUID()
+        func format(_ kind: BookFileFormat, _ drm: DRMKind?) -> BookFormat {
+            BookFormat(bookID: id, format: kind, fileName: "x.\(kind.rawValue)", byteSize: 1, sha256: "d", drm: drm)
+        }
+        var entry = LibraryEntry(book: Book(id: id, title: "Solo", authors: ["A"]), number: 1, folder: "A/B")
+
+        // Every file examinable, none of them clean: fully examined either way.
+        entry.formats = [format(.epub, nil)]
+        #expect(entry.drmWasFullyExamined)
+
+        // A KFX-only book: the one case that made this necessary.
+        entry.formats = [format(.kfx, nil)]
+        #expect(entry.drm == nil, "DRMProbe never opens a KFX, so this is unchanged")
+        #expect(!entry.drmWasFullyExamined)
+
+        // A clean EPUB beside a KFX sibling – exactly the case that would
+        // otherwise leave no badge on a book nobody fully checked.
+        entry.formats = [format(.epub, nil), format(.kfx, nil)]
+        #expect(entry.drm == nil)
+        #expect(!entry.drmWasFullyExamined)
+
+        // Real DRM found on the examinable file still wins the badge, and
+        // is still not the whole truth about the book's other file.
+        entry.formats = [format(.epub, .adobeADEPT), format(.kfx, nil)]
+        #expect(entry.drm == .adobeADEPT)
+        #expect(!entry.drmWasFullyExamined)
+    }
+
     // MARK: The defect the proof run found
 
     /// **The regression this file exists for.** The importer detected DRM and

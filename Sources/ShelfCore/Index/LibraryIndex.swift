@@ -48,6 +48,17 @@ public struct LibraryEntry: Identifiable, Equatable, Sendable {
         guard kinds.count <= 1 else { return .unknown }
         return kinds.first
     }
+
+    /// Whether `drm == nil` here really means "examined, and clean".
+    ///
+    /// It does not when one of the files is a format `DRMProbe` never
+    /// opens (KFX today) – an EPUB with Kindle's own KFX sibling would
+    /// otherwise show no badge at all and look like a book that was
+    /// checked and found clean, when one of its two files was never asked
+    /// (Sprint 17, Teil A).
+    public var drmWasFullyExamined: Bool {
+        formats.allSatisfy(\.format.drmIsExaminable)
+    }
 }
 
 /// The SQLite index over a library folder.

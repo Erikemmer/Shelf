@@ -11265,6 +11265,57 @@
           }
         }
       }
+    },
+    "DRM unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DRM unbekannt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DRM unknown"
+          }
+        }
+      }
+    },
+    "DRM unknown, not examined": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DRM unbekannt, nicht untersucht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DRM unknown, not examined"
+          }
+        }
+      }
+    },
+    "Shelf does not open this format, so it could not check it for DRM.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shelf öffnet dieses Format nicht und konnte es daher nicht auf DRM prüfen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shelf does not open this format, so it could not check it for DRM."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
