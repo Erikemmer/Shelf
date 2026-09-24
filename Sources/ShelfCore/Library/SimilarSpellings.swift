@@ -152,8 +152,12 @@ public enum SimilarSpellings {
             spellings.max { a, b in
                 let completeness = (completenessScore(a, kind: kind), counts[a] ?? 0)
                 let otherCompleteness = (completenessScore(b, kind: kind), counts[b] ?? 0)
-                return completeness.0 == otherCompleteness.0
-                    ? completeness.1 < otherCompleteness.1 : completeness.0 < otherCompleteness.0
+                if completeness.0 != otherCompleteness.0 { return completeness.0 < otherCompleteness.0 }
+                if completeness.1 != otherCompleteness.1 { return completeness.1 < otherCompleteness.1 }
+                // Still tied on both: alphabetically first wins, deterministically —
+                // never left to a Dictionary's own (hash-randomised) iteration order,
+                // which is what `spellings.max` would otherwise fall back on.
+                return a > b
             } ?? spellings[0]
         return SimilarSpellingGroup(
             kind: kind, winner: winner, spellings: spellings.sorted(),
