@@ -33,11 +33,11 @@ settings:
     # Sparkle itself) and publishing that under "1.0.0" would put a different
     # app under the same number as the tag. The rule against touching
     # MARKETING_VERSION casually is lifted for a real release, and only for
-    # that. Raised again for Sprint 15, Teil C's second release, the one
-    # that proves a beta channel with two versions in it actually works —
-    # still a pre-release (beta channel only) until Erik promotes it.
-    MARKETING_VERSION: "1.1.0-rc2"
-    CURRENT_PROJECT_VERSION: "3"
+    # that. 1.1.0-rc1 and 1.1.0-rc2 proved the beta channel and the release
+    # path (Sprint 14/15); Sprint 16, Teil C promotes past both, to the main
+    # channel and no more "-rc" — see ADR 0022's own Nachtrag.
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "4"
     # Follows whether a Developer ID identity was found at build time –
     # `make app`/`Scripts/release.sh` set SHELF_HARDENED accordingly, the same
     # way they already choose between a real signature and an ad-hoc one. An

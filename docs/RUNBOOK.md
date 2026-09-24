@@ -634,15 +634,27 @@ and the download's name is plain (`Shelf-<version>.zip`); without one — every
 run so far, including `v1.1.0-rc1` — it signs ad hoc, skips notarising and
 stapling and says so, and the download is named `Shelf-<version>-unsigned.zip`.
 Either way it publishes: a `.dmg` beside the zip (a first download by hand,
-never read by Sparkle), both as assets on a GitHub release in
-`Erikemmer/shelf-releases`, the right appcast (`appcast-beta.xml` for an
-`-rc` version, `appcast.xml` otherwise) with this release's own entry
-merged in and pushed there — never wholesale-regenerated: every earlier
-entry's own download URL is moved untouched, not reconstructed
-(`Scripts/appcast-merge.py`, Sprint 15, Teil B, docs/RELEASE.md) — and a new
-`<!-- shelf-release: … -->` marker at the top of this repository's own
-`CHANGELOG.md` — reviewed and committed by hand afterwards, the same as any
-other change, never by the script itself.
+never read by Sparkle), the zip and both single-language release-notes
+files as assets on a GitHub release in `Erikemmer/shelf-releases`, the
+right appcast (`appcast-beta.xml` for an `-rc` version, `appcast.xml`
+otherwise) with this release's own entry merged in and pushed there —
+never wholesale-regenerated: every earlier entry's own download URL is
+moved untouched, not reconstructed (`Scripts/appcast-merge.py`, Sprint 15,
+Teil B, docs/RELEASE.md) — and a new `<!-- shelf-release: … -->` marker at
+the top of this repository's own `CHANGELOG.md` — reviewed and committed
+by hand afterwards, the same as any other change, never by the script
+itself.
+
+**Since `1.1.0` (Sprint 16, Teil C): every release goes to `appcast.xml`,
+the main channel, and there are no more `-rc` versions.** Erik is the only
+person who installs Shelf, and testing happens in the building session,
+before a release — a separate beta channel and rc-numbered pre-releases
+were proving the two-channel *mechanism* (Sprint 15), not serving a real
+second audience. `appcast-beta.xml` stays in the repository, with
+`1.1.0-rc1` and `1.1.0-rc2` still in it, but gets nothing new; an
+installed Shelf only ever reads `appcast.xml` (`SUFeedURL` in
+`project.yml`), so the beta channel simply stops being reached. See ADR
+0022's own Nachtrag for the full reasoning.
 
 ### Where the key lives
 

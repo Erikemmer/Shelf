@@ -134,3 +134,38 @@ against anything AppKit- or platform-specific.
   Gatekeeper on first launch (right-click ▸ Open) exactly as they did
   before Sparkle — this ADR does not change that, only documents that the
   update mechanism itself works either way.
+
+## Nachtrag, 24 September 2026 — one channel, no more `-rc` versions
+
+Sprint 15 published `1.1.0-rc1` and `1.1.0-rc2` to `appcast-beta.xml`
+specifically to prove the two-channel mechanism itself — that a beta
+install offered a second beta version, in order, without disturbing a
+stable channel it never touched. That proof is done, and it revealed the
+premise behind having two channels does not hold here: **Erik is the only
+person who ever installs Shelf, and testing happens in the building
+session, before a version is published, not by a separate group of
+beta users running a separate channel.** Two channels were solving a
+problem — a tester on `-rc` builds who should not disturb a stable
+audience — that this project does not have.
+
+**Decision: from `1.1.0` on, every release publishes to `appcast.xml`,
+the main channel, and there is no more `-rc` version number.**
+`appcast-beta.xml` is not deleted — `1.1.0-rc1` and `1.1.0-rc2` stay in
+it, a record that the mechanism was proved — but nothing is ever added to
+it again, and no installed Shelf reads it (`SUFeedURL` in `project.yml`
+has only ever pointed at `appcast.xml`; the beta channel existed for
+`Scripts/release.sh`'s own `-rc`-routing and Sprint 14 Teil C's own
+throwaway-channel test, never for a build Erik actually ran day to day).
+`Scripts/release.sh`'s own channel routing (`case "$VERSION" in *-rc*)
+...`) is unchanged — it still exists, correctly unreachable, rather than
+removed, so a future project with a real second audience for a beta
+channel has the mechanism already proven and does not have to rebuild it.
+
+### Consequences
+
+* + One fewer thing to check before trusting a release reached Erik: no
+  question of "did this go to the right channel."
+* + The two-channel mechanism is proven and kept, not thrown away — a
+  future need for it (a real second audience) does not start from zero.
+* − `appcast-beta.xml` is now a dead file that a future session could
+  mistake for still-active without reading this Nachtrag first.
