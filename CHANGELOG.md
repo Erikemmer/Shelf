@@ -3,6 +3,102 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 16, Teil E — every real release so far carries "unknown" as its build commit · 24 September 2026
+
+Found while tagging `v1.1.0` on the source repository, after the fact:
+`Info.plist`'s own `ShelfBuildCommit` — meant to say exactly which commit an
+app was built from, `project.yml`'s `SHELF_BUILD_COMMIT` build setting,
+read by `Scripts/current-shelf-app.sh` for every window-driving script
+already — read back `unknown` from both `/Applications/Shelf.app` and the
+archive `Scripts/release.sh` had just built in
+`~/Library/Caches/Shelf/release/`. Root cause: `Scripts/release.sh`'s two
+`xcodebuild … archive` calls never passed `SHELF_BUILD_COMMIT` at all,
+unlike `make app`/`make app-debug`, which always have (`Makefile`, every
+line that calls `xcodebuild` there ends `SHELF_BUILD_COMMIT="$(git
+rev-parse HEAD)"`).
+
+**Checked directly for every release still on this Mac, not assumed for
+any of them** — every archive `Scripts/release.sh` has ever built is still
+sitting in `~/Library/Caches/Shelf/release/`, so each one's own
+`Info.plist` could be read straight from disk:
+
+```
+0.1.0     -> Print: Entry, ":ShelfBuildCommit", Does Not Exist
+1.0.0     -> unknown
+1.1.0-rc1 -> unknown
+1.1.0-rc2 -> unknown
+1.1.0     -> unknown
+```
+
+`0.1.0` predates the stamping mechanism entirely (Sprint 1, before
+`SHELF_BUILD_COMMIT` existed in `project.yml`) — a different reason for
+the same absence. Every real release since carries the literal string
+`unknown`, because the build setting that should have overridden it was
+never passed.
+
+**`v1.1.0`'s own tag was set anyway, on the commit the evidence points to
+rather than on this gap** — `git tag -a v1.1.0 149a55b`, established from
+the reflog window `HEAD` sat at `149a55b` in (`2026-09-24 07:00:29`–
+`08:08:26` UTC) bracketing both the archive's own creation time
+(`07:02:22` UTC) and the GitHub release's `publishedAt`
+(`07:12:18` UTC — not its misleading `createdAt`, `06:19:53Z`, which turned
+out to be `shelf-releases`' own target-branch commit date, an artifact of
+a lightweight tag pointing at whatever that *other* repository's `main`
+happened to be at API-call time, nothing to do with when this build ran),
+and a `git diff --stat 149a55b <next commit>` showing only `CHANGELOG.md`
+changed afterward — the marker `Scripts/release.sh` itself writes, after
+publishing, never before.
+
+**Fixed for every release from here on**, two changes, together:
+
+1. Both `xcodebuild … archive` calls now pass `SHELF_BUILD_COMMIT="$(git
+   -C "$ROOT" rev-parse HEAD)"`, the same as the Makefile.
+2. `Scripts/release.sh` now refuses outright, before building anything, if
+   `git status --porcelain` on the source repository is not empty — a
+   dirty tree would still build, and the stamp would then name a commit
+   that does not contain everything actually built. Not gated by
+   `RELEASE_SKIP_CHECKS`: this is not one of "the four checks", it is what
+   makes the stamp meaningful at all. And after building, it reads the
+   stamp back off the finished app and refuses to continue if it is not
+   exactly `HEAD` — reusing `Scripts/current-shelf-app.sh`'s own
+   `verify_shelf_app_is_current`, the identical check every window-driving
+   script already trusts, rather than a second copy of it.
+
+Where release.sh's own write (the `CHANGELOG.md` marker) sits relative to
+building was already right and stays unchanged: it happens once, at the
+very end, after the archive is built, signed and published — so it was
+never what could make a build's own tree dirty in the first place. The
+gap this closes is a *caller* leaving something else uncommitted; the
+script now catches that itself rather than trusting whoever runs it to
+remember `git status --short` first.
+
+**Proved with `make release-dry`, three ways, live, not by reading the
+diff:**
+
+```
+$ git status --short                          (nothing)
+$ RELEASE_DRY_RUN=1 Scripts/release.sh
+release: archived: …/Shelf-1.1.0.xcarchive
+release: build-commit stamp verified: 14f5959435d3906ab69fb41892ab2e143b0eaf73
+…
+release: dry run complete. Everything up to notarisation is proved. Nothing published.
+
+$ echo "" >> README.md && git status --short
+ M README.md
+$ RELEASE_DRY_RUN=1 Scripts/release.sh; echo "exit: $?"
+release: FAILED – the working tree has uncommitted changes – commit them first, or the
+       build-commit stamp would name a commit that does not contain
+       everything actually built:
+        M README.md
+exit: 1
+
+$ git checkout -- README.md && git status --short          (nothing)
+```
+
+No new release. `1.1.0` stays exactly as published and exactly as tagged;
+the next version's own archive carries the stamp on its own, proved
+before it ever needs to be read back after the fact again.
+
 ## Sprint 16, Teil D — Shelf, installed, in `/Applications` · 24 September 2026
 
 The session's own goal: nothing left to do by hand. `~/Library/Caches/Shelf/release/Shelf.app` (Teil C's own build, never downloaded — `xattr -lr` empty, confirmed before copying) went into `/Applications` with `ditto`, no prior copy to displace. Started once: no Gatekeeper question (nothing to bypass — a locally built, never-downloaded app carries no quarantine attribute in the first place), `Shelf ▸ Nach Updates suchen …` read "Du bist auf dem neuesten Stand! Shelf 1.1.0 ist zurzeit die neueste verfügbare Version." against the real, now-live `appcast.xml` — not a redirect, not a throwaway channel. Quit afterward, the one instance this session itself started.
