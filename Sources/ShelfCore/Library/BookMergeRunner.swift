@@ -234,8 +234,17 @@ public struct BookMergeRunner: Sendable {
 
     /// Rebuilds the survivor's final format list from a manifest entry,
     /// whether it was just written or read back for a resumed group.
+    ///
+    /// **A discard can be the survivor's own file, not only an absorbed
+    /// one** — found live, the first time this ran against a real library:
+    /// two different EPUBs of the same format competing, and the survivor's
+    /// own copy loses `FormatPreference`'s tie-break to the absorbed book's.
+    /// The file is correctly gone from disk either way; leaving it in
+    /// `newFormats` would have the index still claim it exists.
     private func outcome(from entry: BookMergeManifest.Entry, survivorFormats: [BookFormat]) -> GroupOutcome {
-        var formats = survivorFormats
+        let discardedFromSurvivor = Set(
+            entry.discards.filter { $0.fromBookID == entry.survivingID }.map(\.fileName))
+        var formats = survivorFormats.filter { !discardedFromSurvivor.contains($0.fileName) }
         for move in entry.moves {
             guard
                 let original = entry.absorbedEntries

@@ -101,6 +101,54 @@ struct BookMergeRunnerTests {
         #expect(!outcome.manifest.isEmpty)
     }
 
+    /// **The defect this test exists for.** Found live against the real
+    /// library: two different EPUBs of the same book competing, and the
+    /// *survivor's own* copy loses `FormatPreference`'s tie-break to the
+    /// absorbed book's. The file was correctly gone from disk either way —
+    /// the index still claimed it existed, because the survivor's own
+    /// pre-existing formats were never filtered against what this same
+    /// group had just discarded.
+    @Test("a survivor's own file, discarded by a tie-break, is gone from the new format list too")
+    func discardedSurvivorFormatIsRemoved() async throws {
+        let folder = try TemporaryFolder()
+        let (library, _) = try Library.create(at: try folder.folder("Lib"))
+        try folder.write("Lib/A/Book (1)/survivor.epub", data: Data("weaker copy".utf8))
+        try folder.write("Lib/A/Book (2)/winner.epub", data: Data("stronger copy, no DRM".utf8))
+
+        let survivorBook = Book(title: "Book", authors: ["A"])
+        let survivorFormat = BookFormat(
+            bookID: survivorBook.id, format: .epub, fileName: "survivor.epub", byteSize: 11,
+            sha256: try FileDigest.sha256(
+                of: library.root.appendingPathComponent("A/Book (1)/survivor.epub"), makeHasher: hasher()),
+            drm: .adobeADEPT)
+        let survivor = LibraryEntry(book: survivorBook, number: 1, folder: "A/Book (1)", formats: [survivorFormat])
+
+        let absorbedBook = Book(title: "Book", authors: ["A"])
+        let winnerFormat = BookFormat(
+            bookID: absorbedBook.id, format: .epub, fileName: "winner.epub", byteSize: 21,
+            sha256: try FileDigest.sha256(
+                of: library.root.appendingPathComponent("A/Book (2)/winner.epub"), makeHasher: hasher()))
+        let absorbed = LibraryEntry(book: absorbedBook, number: 2, folder: "A/Book (2)", formats: [winnerFormat])
+
+        let bin = try Bin(in: folder.url)
+        let runner = BookMergeRunner(makeHasher: hasher(), disposal: bin.disposal)
+        let groupPlan = BookMergeGroupPlan(
+            survivingID: survivor.id, survivingTitle: "Book", absorbedIDs: [absorbed.id],
+            moves: [BookMergeMove(sourceBookID: absorbed.id, format: winnerFormat)],
+            discards: [
+                BookMergeDiscard(sourceBookID: survivor.id, format: survivorFormat, reason: .losingTiebreak)
+            ], fills: [], conflicts: [], coverFromBookID: nil)
+        let options = BookMergeRunner.Options(
+            library: library, plan: BookMergePlan(groups: [groupPlan]),
+            entries: [survivor.id: survivor, absorbed.id: absorbed])
+
+        let outcome = try await runner.run(options)
+
+        let newFormats = outcome.groups[0].newFormats
+        #expect(newFormats.map(\.fileName) == ["winner.epub"])
+        #expect(!newFormats.contains { $0.fileName == "survivor.epub" })
+    }
+
     @Test("resuming with a manifest from a partial run does not redo the group that already happened")
     func resumesWithoutRedoing() async throws {
         let folder = try TemporaryFolder()

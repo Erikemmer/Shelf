@@ -3,6 +3,34 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 18, Teil B1 — the index kept a file the merge had just trashed · 24 September 2026
+
+**Found live, the first time "Merge All Safe Groups…" actually ran against
+the real library.** "Nachtschatten" — Sprint 18's one real group with a same-format
+tie-break — merged correctly on disk: the survivor's own weaker EPUB was
+hashed, moved to the Trash, and the absorbed book's copy took its place.
+But the index still listed both afterwards, claiming a file that no
+longer existed. The folder was right the whole time (ADR 0001); the cache
+was not.
+
+**Cause:** `BookMergeRunner`'s `GroupOutcome.newFormats` started from the
+survivor's *original* format list and only ever added moved-in files — it
+never subtracted a discard when the discard happened to be one of the
+survivor's own pre-existing files rather than an absorbed one, which is
+exactly what a same-format tie-break the survivor loses looks like.
+
+**Fixed** by filtering the survivor's own discards out of `newFormats`
+before adding anything in, with a regression test built from the exact
+shape found live: a survivor whose own file loses `FormatPreference`'s
+tie-break to the absorbed book's.
+
+**The real library was already merged with the buggy code** by the time
+this was found — files and Trash correct throughout, only the cached
+index wrong for book 254. Fixed the only way this project fixes a stale
+cache: `Rebuild Index from Folders`, through the app, not a script
+(ADR 0001; CLAUDE.md's own rule that the index is never touched by
+anything but the human path). Verified after.
+
 ## Sprint 18, Teil B1 — a spurious language conflict, found live · 24 September 2026
 
 The first real preview against the real library ("Merge All Safe Groups…",
