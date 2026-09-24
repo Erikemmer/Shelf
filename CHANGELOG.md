@@ -6,7 +6,7 @@ on and what was *not* measured.
 ## Sprint 18, Teil B1 — the index kept a file the merge had just trashed · 24 September 2026
 
 **Found live, the first time "Merge All Safe Groups…" actually ran against
-the real library.** "Nachtschatten" — Sprint 18's one real group with a same-format
+the real library.** One of the five real groups had a same-format
 tie-break — merged correctly on disk: the survivor's own weaker EPUB was
 hashed, moved to the Trash, and the absorbed book's copy took its place.
 But the index still listed both afterwards, claiming a file that no
@@ -34,7 +34,7 @@ anything but the human path). Verified after.
 ## Sprint 18, Teil B1 — a spurious language conflict, found live · 24 September 2026
 
 The first real preview against the real library ("Merge All Safe Groups…",
-cancelled before anything moved) showed "Nachtschatten" disagreeing on 2 fields
+cancelled before anything moved) showed one group disagreeing on 2 fields
 where only 1 was real: `BookMetadataMerge` compared `language` as a raw
 string, so a MOBI's EXTH `eng` beside an EPUB's `dc:language` `en` read as
 a conflict — the exact pair `MergeCandidates` already treats as the same
@@ -149,14 +149,13 @@ book in two formats were being missed:
   against. Fixed: only books already grouped *by* a shared ISBN are held
   back from the looser rule.
 
-With both fixed: **5 safe groups, 10 books**, on the real library — Das
-Geschenk, Schwindsucht, Nachtschatten, Ohne Erinnerung and Sternfall, each an EPUB
-and a MOBI of the same book that survived two separate import runs as two
-separate entries. A sixth pair ("Der Wintergarten: Thriller") was looked at
-by hand and left alone on purpose: its two entries disagree about the
-*author list itself* (one names one author, the other names two, in a
-different order) — not something either the safe fold or an initial-match
-should paper over.
+With both fixed: **5 safe groups, 10 books**, on the real library, each an
+EPUB and a MOBI of the same book that survived two separate import runs
+as two separate entries. A sixth pair was looked at by hand and left
+alone on purpose: its two entries disagree about the *author list itself*
+(one names one author, the other names two, in a different order) — not
+something either the safe fold or an initial-match should paper over.
+(Titles and authors themselves stay out of this file — CLAUDE.md.)
 
 20 tests in `MergeMatchingTests.swift`, most of them the shape "found this
 exact case live, wrote the test for it". `shelf-tool merge-candidates

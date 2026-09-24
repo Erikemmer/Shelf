@@ -52,7 +52,8 @@ struct BookMergeRunnerTests {
                     bookID: survivorBook.id, format: .epub, fileName: "Schattenpfad - A.epub",
                     byteSize: Int64(epubData.count),
                     sha256: try FileDigest.sha256(
-                        of: library.root.appendingPathComponent("A/Schattenpfad (1)/Schattenpfad - A.epub"), makeHasher: hasher()))
+                        of: library.root.appendingPathComponent("A/Schattenpfad (1)/Schattenpfad - A.epub"),
+                        makeHasher: hasher()))
             ])
         let absorbedBook = Book(title: "Schattenpfad", authors: ["A"])
         let absorbed = LibraryEntry(
@@ -62,7 +63,8 @@ struct BookMergeRunnerTests {
                     bookID: absorbedBook.id, format: .mobi, fileName: "Schattenpfad - A.mobi",
                     byteSize: Int64(mobiData.count),
                     sha256: try FileDigest.sha256(
-                        of: library.root.appendingPathComponent("A/Schattenpfad (2)/Schattenpfad - A.mobi"), makeHasher: hasher()))
+                        of: library.root.appendingPathComponent("A/Schattenpfad (2)/Schattenpfad - A.mobi"),
+                        makeHasher: hasher()))
             ])
         return (library, survivor, absorbed)
     }
@@ -91,7 +93,8 @@ struct BookMergeRunnerTests {
         let outcome = try await runner.run(options)
 
         let survivorFolder = library.root.appendingPathComponent("A/Schattenpfad (1)")
-        #expect(FileManager.default.fileExists(atPath: survivorFolder.appendingPathComponent("Schattenpfad - A.mobi").path))
+        #expect(
+            FileManager.default.fileExists(atPath: survivorFolder.appendingPathComponent("Schattenpfad - A.mobi").path))
         #expect(!FileManager.default.fileExists(atPath: library.root.appendingPathComponent("A/Schattenpfad (2)").path))
         #expect(bin.folderExists("Schattenpfad (2)"))
 
@@ -225,9 +228,13 @@ struct BookMergeRunnerTests {
 
         let survivorFolder = library.root.appendingPathComponent("A/Schattenpfad (1)")
         let absorbedFolder = library.root.appendingPathComponent("A/Schattenpfad (2)")
-        #expect(!FileManager.default.fileExists(atPath: survivorFolder.appendingPathComponent("Schattenpfad - A.mobi").path))
-        #expect(FileManager.default.fileExists(atPath: survivorFolder.appendingPathComponent("Schattenpfad - A.epub").path))
-        #expect(FileManager.default.fileExists(atPath: absorbedFolder.appendingPathComponent("Schattenpfad - A.mobi").path))
+        #expect(
+            !FileManager.default.fileExists(atPath: survivorFolder.appendingPathComponent("Schattenpfad - A.mobi").path)
+        )
+        #expect(
+            FileManager.default.fileExists(atPath: survivorFolder.appendingPathComponent("Schattenpfad - A.epub").path))
+        #expect(
+            FileManager.default.fileExists(atPath: absorbedFolder.appendingPathComponent("Schattenpfad - A.mobi").path))
         #expect(undone.manifest.isEmpty)
         #expect(undone.undone.count == 1)
         #expect(undone.undone[0].restoredEntries.map(\.id) == [absorbed.id])
