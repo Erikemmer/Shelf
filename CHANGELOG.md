@@ -3,6 +3,37 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 18, Teil C3 — "Standardize Fields…", one right answer per rule · 24 September 2026
+
+Unlike C2's spellings, nothing here is a proposal to accept or reject —
+title whitespace and a merchant's bracketed suffix ("(German Edition)",
+"[eBook]"), a language code folded to its short form, an ISBN upgraded to
+ISBN-13 or dropped when its check digit is simply wrong, and a tag's pure
+case-or-whitespace variants folded together are each a pure function with
+exactly one right answer. The preview is still ADR 0018's: one sheet, one
+confirm, nothing written until it is pressed, and what runs is exactly
+what was shown.
+
+`TitleStandardization` is deliberately not `MergeMatching`'s
+`TitleNormalization` reused: that fold is match-only (case, accents,
+punctuation all gone), and editing a title must keep its own
+capitalisation and accents — only the whitespace and the merchant
+annotation are this rule's business. `TagFold` is narrower again than
+`DuplicateKey.fold` for the same reason C2's publisher rule is narrower
+than its author one: only a case or whitespace variant folds, never an
+accent or a punctuation difference.
+
+**Found while writing the tests, not against the real library:** the
+similar-spellings winner comparator (`SimilarSpellings.build`, Teil C2)
+could still tie all the way down — same completeness score *and* same
+book count — and silently fell back on `Dictionary`'s own hash-randomised
+iteration order. Fixed as its own commit: alphabetically first wins when
+completeness and count both tie, for every kind this suggester already
+proposes, not only for tags.
+
+17 new tests. Reachable from `Library ▸ Standardize Fields…` and
+`shelf-tool standardize-fields <library>` (read-only preview).
+
 ## Sprint 18, Teil C2 — "Ähnliche Schreibweisen…", proposed, never guessed · 24 September 2026
 
 The door ADR 0018 left open on purpose: "Shelf never guesses which
