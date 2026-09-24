@@ -619,24 +619,31 @@ is currently assumed.
 
 ## Housekeeping, when it is next convenient
 
-- [ ] **`"${ARR[@]}"` on a genuinely empty array is an `unbound variable`
+- [x] **`"${ARR[@]}"` on a genuinely empty array is an `unbound variable`
       error under `set -u` in this Mac's `/bin/bash` (3.2.57 — Apple ships
       the last GPLv2 release, never 4.4+, which fixed this).** Found live in
       Sprint 16, Teil C: `Scripts/release.sh`'s `GH_PRERELEASE_FLAG=()` on
-      the stable channel (empty, since only an `-rc` version gets
-      `--prerelease`) crashed `gh release create` outright — every earlier
-      real release had gone through the beta channel, where the array
-      always had one element, so this never fired before. Fixed there with
-      the portable idiom, `${ARR[@]+"${ARR[@]}"}`, which expands to nothing
-      instead of erroring when the array is empty. **Not checked in every
-      other script that loops or expands an array under `set -u`** —
-      `grep -n '\[@\]' Scripts/*.sh` after `grep -l 'set -u' Scripts/*.sh`
-      finds the candidates: `ax-proof.sh` (`DUMPED`/`SKIPPED`, either could
-      plausibly be empty), `device-images.sh`, `online-proof.sh`,
-      `proof-run.sh` (`DELETE_PATHS` in particular). Each needs its own
-      "can this array actually be empty at runtime" judgement, not a
-      blanket fix — worth an afternoon, not urgent, since none of them is
-      known to have hit it yet.
+      the stable channel crashed `gh release create` outright. Sprint 16,
+      Teil F went through every other candidate `grep -l 'set -u'
+      Scripts/*.sh` found, one by one: `ax-proof.sh`'s `DUMPED` and
+      `proof-run.sh`'s `DELETE_PATHS` really could be empty at runtime,
+      fixed with the same `${ARR[@]+"${ARR[@]}"}` idiom; `ax-proof.sh`'s
+      `SKIPPED`, `device-images.sh`'s `DEVICES`, `online-proof.sh`'s
+      `ISBNS`/`ROWS` and `proof-run.sh`'s `SHELF_PATHS`/`SPELLINGS` are
+      either literal, reference-data arrays or provably non-empty by
+      construction — left as the plain form, each with a comment at the
+      declaration saying so ("never empty under set -u"). Every fixed case
+      demonstrated under `/bin/bash` 3.2 itself, not another Bash, with an
+      empty array, not crashing. `Scripts/check-array-guard.sh`, a fourth
+      guard in `make lint` alongside the other three, now catches a plain
+      `"${NAME[@]}"` in a future `set -u` script that has neither the guard
+      nor the comment — shown red against a deliberately reintroduced
+      unprotected case, then green again. Every script meant to run
+      directly already used `#!/bin/bash`, never `#!/usr/bin/env bash` —
+      checked, not assumed, across all 38 of them — so a newer Bash on
+      another machine was never going to hide this again by accident
+      either way; nothing needed changing there. `CHANGELOG.md`, Sprint 16,
+      Teil F, has the full account.
 
 - [x] **Move the arrow keys off the menu bar.** Done in Sprint 7,
       [ADR 0017](adr/0017-the-arrow-keys-leave-the-menu-bar.md). Measured again

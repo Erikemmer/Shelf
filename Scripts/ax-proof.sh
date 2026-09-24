@@ -435,9 +435,15 @@ fi
 # ── The report ───────────────────────────────────────────────────────────────
 echo
 say "trees written to $OUT: ${#DUMPED[@]}"
-for name in "${DUMPED[@]}"; do echo "    $name"; done
+# DUMPED can genuinely be empty – every capture() call could fail before a
+# single tree is judged (a run against a broken environment, say) – so this
+# needs the form that survives that under set -u (Sprint 16, Teil F).
+for name in ${DUMPED[@]+"${DUMPED[@]}"}; do echo "    $name"; done
 if [ "${#SKIPPED[@]}" -gt 0 ]; then
     say "not reached, and why: ${#SKIPPED[@]}"
+    # never empty under set -u: the "-gt 0" above already proved it, so
+    # protecting the plain "${SKIPPED[@]}" too would claim a risk this
+    # guard already ruled out.
     for note in "${SKIPPED[@]}"; do echo "    $note"; done
 fi
 echo

@@ -38,6 +38,10 @@ DEVICES=(
     "tolino|HFS+|64m|.tolino Books|Books"
     "PocketBook|MS-DOS FAT32|64m|system applications Books|Books"
 )
+# Literal, four rows, never computed or filtered – every "${DEVICES[@]}"
+# below is never empty under set -u: it cannot be empty unless this
+# declaration itself is edited down to nothing, a different, visible
+# change (Sprint 16, Teil F).
 
 say() { echo "device-images: $1"; }
 fail() { echo "device-images: FAILED – $1" >&2; exit 1; }

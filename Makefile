@@ -44,6 +44,7 @@ lint: ## Check formatting with swift-format, and that no script can start Shelf 
 	Scripts/check-shelf-guard.sh
 	Scripts/check-current-app-guard.sh
 	Scripts/check-screen-awake-guard.sh
+	Scripts/check-array-guard.sh
 
 format: ## Reformat sources in place
 	swift format --in-place --recursive Sources Tests App

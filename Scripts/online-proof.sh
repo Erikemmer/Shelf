@@ -41,6 +41,8 @@ ISBNS=(
     9781449355739  # Learning Python — O'Reilly
     9780132350884  # Clean Code — Robert C. Martin
 )
+# Literal, ten ISBNs, never computed or filtered – "${ISBNS[@]}" below is
+# never empty under set -u (Sprint 16, Teil F).
 
 say() { echo "online-proof: $1"; }
 mkdir -p "$OUT"
@@ -154,6 +156,10 @@ printf "  Google Books: %s of 10 · %ss in total\n" "$GB_HITS" "$GB_TIME"
 echo
 say "where the two disagree"
 printf "  %-14s %-34s %-4s %-34s %s\n" ISBN "OPEN LIBRARY" "SUBJ" "GOOGLE BOOKS" "DESC"
+# ROWS is built above by one unconditional "ROWS+=(...)" per loop iteration,
+# and that loop runs exactly ${#ISBNS[@]} times (ISBNS is literal) with no
+# "continue" in its body. "${ROWS[@]}" below is never empty under set -u
+# (Sprint 16, Teil F).
 for ROW in "${ROWS[@]}"; do
     IFS='|' read -r I OT OA OS GT GD <<<"$ROW"
     printf "  %-14s %-34.34s %-4s %-34.34s %s\n" "$I" "$OT" "$OS" "$GT" "$GD"

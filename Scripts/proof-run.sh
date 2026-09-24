@@ -231,6 +231,8 @@ SHELF_PATHS=(
     "Reference/Dictionaries"
     "To Read"
 )
+# Literal, ten paths, never computed or filtered – "${SHELF_PATHS[@]}"
+# below is never empty under set -u (Sprint 16, Teil F).
 PER_SHELF=$((SHELVED / ${#SHELF_PATHS[@]}))
 OFFSET=0
 ASSIGN_LOG="$ROOT/shelf-timings.txt"
@@ -585,12 +587,19 @@ say "deleting on the device – the confirmation names every file"
 DELETE_PATHS=()
 while IFS= read -r NAME; do DELETE_PATHS+=("documents/$NAME"); done \
     < <(ls "$SMALL/documents" | head -3)
+# Unlike the other arrays in this file, DELETE_PATHS is not literal – it
+# depends on the device actually holding files at this point in the run,
+# which an earlier failure could leave empty. Both call sites below use the
+# empty-array-safe form under set -u (Sprint 16, Teil F); an empty
+# DELETE_PATHS still fails this section correctly, further down, on
+# "the wrong number of files" against BEFORE_DELETE/AFTER_DELETE, rather
+# than crashing the script itself on an unrelated error.
 BEFORE_DELETE=$(ls "$SMALL/documents" | wc -l | tr -d ' ')
-"$TOOL" device-delete "$SMALL" "${DELETE_PATHS[@]}"
+"$TOOL" device-delete "$SMALL" ${DELETE_PATHS[@]+"${DELETE_PATHS[@]}"}
 STILL=$(ls "$SMALL/documents" | wc -l | tr -d ' ')
 [ "$STILL" = "$BEFORE_DELETE" ] || device_fail "SOMETHING WAS DELETED WITHOUT A CONFIRMATION"
 echo "  nothing went without the confirmation ✓"
-SHELF_CONFIRM_DELETE=yes "$TOOL" device-delete "$SMALL" "${DELETE_PATHS[@]}" | tail -2
+SHELF_CONFIRM_DELETE=yes "$TOOL" device-delete "$SMALL" ${DELETE_PATHS[@]+"${DELETE_PATHS[@]}"} | tail -2
 AFTER_DELETE=$(ls "$SMALL/documents" | wc -l | tr -d ' ')
 echo "  on the card: $BEFORE_DELETE before, $AFTER_DELETE after"
 [ "$AFTER_DELETE" = "$((BEFORE_DELETE - 3))" ] || device_fail "THE DELETION REMOVED THE WRONG NUMBER OF FILES"
@@ -689,6 +698,8 @@ echo "  a copy of the library: $BOOKS_BEFORE EPUBs"
 # so one is made: 40 books get their author set to one of three spellings of
 # the same person, and then the three are folded into one.
 say "one author under three spellings, over 40 books"
+# Literal, three spellings, never computed or filtered – "${SPELLINGS[@]}"
+# below is never empty under set -u (Sprint 16, Teil F).
 SPELLINGS=("Sebastian Fitzek" "Fitzek, Sebastian" "S. Fitzek")
 N=0
 while IFS= read -r TITLE; do

@@ -3,6 +3,91 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 16, Teil F — the empty-array crash, closed everywhere it could hide · 24 September 2026
+
+Teil C fixed one instance (`Scripts/release.sh`'s `GH_PRERELEASE_FLAG`) and
+`docs/BACKLOG.md` listed the other candidates rather than auditing them on
+the spot. Closed properly now, all four parts of what was asked.
+
+**Every `set -u` script, not only the four named in the backlog** — 34 of
+them (`grep -rl "set -u" Scripts/*.sh`). Of those, five carry a genuine
+`"${NAME[@]}"` array-value expansion (`${#NAME[@]}`, a length, never
+crashes either way and needed no attention): `ax-proof.sh`,
+`device-images.sh`, `online-proof.sh`, `proof-run.sh`, and `release.sh`
+(already fixed in Teil C).
+
+**Judged individually, not fixed in bulk:**
+
+- `ax-proof.sh`'s `DUMPED` and `proof-run.sh`'s `DELETE_PATHS` really can
+  be empty at runtime — `DUMPED` if every `capture()` call failed before a
+  single tree was judged; `DELETE_PATHS` if the device transfer above it
+  left nothing to delete. Both now use `${ARR[@]+"${ARR[@]}"}`.
+- `ax-proof.sh`'s `SKIPPED` (only reached inside `[ "${#SKIPPED[@]}" -gt 0
+  ]`), `device-images.sh`'s `DEVICES` (a literal, four-row reference
+  table), `online-proof.sh`'s `ISBNS` (a literal, ten-ISBN list) and its
+  own `ROWS` (built by one unconditional append per iteration of a loop
+  that always runs exactly `${#ISBNS[@]}` times), and `proof-run.sh`'s
+  `SHELF_PATHS` and `SPELLINGS` (both literal) are all provably never
+  empty — left as the plain form, each with a comment at the declaration:
+  the fixed phrase "never empty under set -u", chosen so a person and the
+  new guard (below) are looking for the same words.
+
+**Demonstrated under `/bin/bash` itself (3.2.57), not another Bash, for
+every case that changed:**
+
+```
+$ /bin/bash --version | head -1
+GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)
+
+$ /bin/bash -c 'set -uo pipefail; DUMPED=(); for name in ${DUMPED[@]+"${DUMPED[@]}"}; do echo "    $name"; done; echo "survived, no crash"'
+survived, no crash
+
+$ /bin/bash -c 'set -uo pipefail; DELETE_PATHS=(); fake_tool() { echo "  called with $# path argument(s): $*"; }; fake_tool "device-delete" "SMALL" ${DELETE_PATHS[@]+"${DELETE_PATHS[@]}"}'
+  called with 2 path argument(s): device-delete SMALL
+
+$ /bin/bash -c 'set -uo pipefail; DELETE_PATHS=(); fake_tool() { :; }; fake_tool "device-delete" "SMALL" "${DELETE_PATHS[@]}"'
+/bin/bash: line 1: DELETE_PATHS[@]: unbound variable   ← the bug, for contrast, on the same Bash
+```
+
+**`Scripts/check-array-guard.sh`, a fourth guard in `make lint`**, the same
+shape as the other three (`check-shelf-guard.sh`,
+`check-current-app-guard.sh`, `check-screen-awake-guard.sh`): a two-pass
+grep over every `set -u` script — pass one collects which array names a
+"never empty under set -u" comment covers, anywhere in the file, not only
+right above the one place that happened to need it that day; pass two
+fails on any plain `"${NAME[@]}"` that is neither `${ARR[@]+"..."}`-guarded
+nor named by pass one, and says the file and the line. Shown red first —
+`proof-run.sh`'s own `DELETE_PATHS` guard removed by hand, on purpose —
+then green again once restored:
+
+```
+$ Scripts/check-array-guard.sh
+array-guard: Scripts/proof-run.sh:598 expands "${DELETE_PATHS[@]}" without the
+  ${ARR[@]+"${ARR[@]}"} guard, and no comment in the file says
+  "never empty under set -u" for DELETE_PATHS:
+  "$TOOL" device-delete "$SMALL" "${DELETE_PATHS[@]}"
+array-guard: every array a set -u script expands as "${NAME[@]}" must either
+  use ${NAME[@]+"${NAME[@]}"} (it can be empty at runtime) or have a comment
+  saying "never empty under set -u" (it provably cannot).
+
+$ Scripts/check-array-guard.sh          (after restoring the guard)
+array-guard: every array expansion in a set -u script is either empty-safe or provably never empty.
+```
+
+**Every script meant to run directly already used `#!/bin/bash`, never
+`#!/usr/bin/env bash`** — checked across all 38 of them, not assumed,
+`head -1 Scripts/*.sh`. `#!/usr/bin/env bash` would pick up whatever
+`bash` is first on `PATH`, which could be a newer Bash (Homebrew's, say)
+on a Mac other than this one, and a newer Bash would run right through
+every one of these arrays without ever hitting the bug this whole Teil is
+about — hiding it again rather than fixing it. The three files with no
+shebang at all (`app-language.sh`, `no-foreign-shelf.sh`,
+`current-shelf-app.sh`) are sourced, never run directly (`grep -rn` for
+`no-foreign-shelf\.sh\|current-shelf-app\.sh\|app-language\.sh` across
+every script and the Makefile: every hit is `. "$HERE/…"`) — a shebang on
+them would never take effect either way, so nothing needed changing
+there. `docs/BACKLOG.md`'s own entry closed.
+
 ## Sprint 16, Teil E — every real release so far carries "unknown" as its build commit · 24 September 2026
 
 Found while tagging `v1.1.0` on the source repository, after the fact:
