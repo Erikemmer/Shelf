@@ -3,6 +3,53 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 16, Teil B — release notes for a person, not a diff · 24 September 2026
+
+The update window showed `CHANGELOG.md`'s own technical prose — for
+`1.1.0-rc2`, literally "Sprint 15, Teil C … MARKETING_VERSION is
+1.1.0-rc2, CURRENT_PROJECT_VERSION is 3". That is developer protocol,
+never written for whoever clicks "Check for Updates…".
+
+**`docs/RELEASE-NOTES.md`, new**, one `## <version>` heading per release,
+`### Deutsch` then `### English` underneath — separate from
+`CHANGELOG.md` on purpose (see that file's own top for the one-sentence
+reasoning: the changelog's sections are bounded by extraction position,
+not keyed by version, and a version's technical log usually spans several
+Sprints). `Scripts/changelog-notes.py` now reads this file instead, and
+`make release` refuses to run for a version with no section there —
+verified with a deliberately wrong version number, which fails loudly
+rather than showing an older release's text.
+
+**Sparkle follows the system language with its own mechanism, checked
+against its own source rather than assumed:** `generate_appcast` embeds a
+plain `<description>` (both languages, German first — what a GitHub
+release page shows, and what the appcast falls back to for a system
+language matching neither) but *also*, when it finds
+`<archive-basename>.<language-code>.html` siblings next to the archive,
+adds one `sparkle:releaseNotesLink xml:lang="…"` per language
+(`generate_appcast/ArchiveItem.swift`, `localizedReleaseNotes()`). The
+parsing side, `SUAppcast.m`'s `bestNodeInNodes:name:`, picks the best
+match for the system's own preferred languages
+(`NSBundle.preferredLocalizationsFromArray:`) among those and shows that
+one instead of the plain description — Sparkle's own mechanism end to
+end, nothing built here to imitate it. `Scripts/release.sh` now renders
+three files per release (`changelog-notes.py`, plain and `--lang
+de`/`--lang en`), uploads the two language ones as GitHub release assets
+beside the zip and dmg, and passes `generate_appcast` a
+`--release-notes-url-prefix` matching the zip's own `--download-url-prefix`
+(without it, the localised links would resolve relative to
+`generate_appcast`'s own local `-o` path — a temp file nothing downloads
+from).
+
+**Checked against a throwaway archive before trusting it in a real
+release:** a minimal ad-hoc-signed fake `.app` (`Info.plist` only, ZIP'd
+the same way `ditto -c -k --keepParent` does), `generate_appcast` run
+against it with the real flags — the resulting item carried both
+`sparkle:releaseNotesLink` entries at the expected URLs alongside the
+combined `<description>`, exactly as read from the source. Removed
+completely afterward, named because this session made every byte of it:
+`~/Library/Caches/Shelf/release-notes-mechanism-check/`.
+
 ## Sprint 16, Teil A — does the library stay open across an update? Yes · 24 September 2026
 
 The question that had to be answered before Shelf could self-update in

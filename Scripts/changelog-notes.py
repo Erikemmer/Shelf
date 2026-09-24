@@ -1,48 +1,51 @@
 #!/usr/bin/env python3
-"""Renders the CHANGELOG.md section for the version about to be released as
-the plain HTML Sparkle's `generate_appcast` picks up as an update's release
-notes (same filename as the archive, `.html` extension).
+"""Renders the release notes for the version about to be released, from
+`docs/RELEASE-NOTES.md` — not `CHANGELOG.md`, which stays the technical,
+developer-facing log. See the top of that file for why they are separate.
 
-Shelf's CHANGELOG.md is not keyed by version (it reads "Sprint 14, Teil B",
-not "[1.1.0-rc1]") — entries are written before a version number for that
-work exists. So "the section for this version" is not found by matching a
-version string; it is everything newest-first down to the last release's
-own marker: an HTML comment, `<!-- shelf-release: v<version> · <date> -->`,
-that `make release` inserts *below* whatever it just published, once
-publishing succeeds (see Scripts/release.sh). The first one was backfilled
-by hand at the v1.0.0/Sprint 9 boundary, in the same commit that added this
-script.
+Three outputs, all from the same `## <version>` section:
+- no `--lang`: both languages, German first — the GitHub release page
+  (no per-viewer language there) and the appcast's own unlabelled
+  `<description>`, which is what Sparkle falls back to when it cannot
+  match the system language to a `sparkle:releaseNotesLink`.
+- `--lang de` / `--lang en`: one language alone, plain prose with no
+  language heading — these become `sparkle:releaseNotesLink[xml:lang]`
+  siblings of the zip (Sprint 16, Teil B), which Sparkle's own
+  `bestNodeInNodes:name:` picks between by the system's language.
 
-Not a general Markdown renderer — just enough for this file's own style:
-headings, bold, inline code, links, nested bullet lists, paragraphs. A
-markdown table passes through as a paragraph per row rather than a real
-<table> – good enough to read, not meant to be byte-identical to a full
-CommonMark implementation.
+Exits 1, loudly, when the version has no section — `make release` must
+stop rather than publish with the previous version's text or none at all.
 
-Usage: changelog-notes.py <version> [changelog-path]
-Prints HTML to stdout; exits 1 if no marker is found (nothing to bound the
-section, which means either the marker was removed or this is the very
-first release and the backfill above is missing).
+Usage: changelog-notes.py <version> [--lang de|en] [--path docs/RELEASE-NOTES.md]
+Prints HTML to stdout.
 """
 
+import argparse
 import html
 import re
 import sys
 
-MARKER = re.compile(r"<!--\s*shelf-release:.*?-->", re.DOTALL)
+LANGUAGE_HEADINGS = {"de": "Deutsch", "en": "English"}
 
 
-def find_section(text: str) -> str | None:
-    # The file opens with a title and a one-paragraph preamble before the
-    # first "## " heading — that is never part of any release's notes.
-    first_heading = re.search(r"^##\s", text, re.MULTILINE)
-    if not first_heading:
+def find_version_section(text: str, version: str) -> str | None:
+    heading = re.search(rf"^## {re.escape(version)}\s*$", text, re.MULTILINE)
+    if not heading:
         return None
-    start = first_heading.start()
-    marker = MARKER.search(text, start)
-    if not marker:
+    start = heading.end()
+    next_heading = re.search(r"^## ", text[start:], re.MULTILINE)
+    end = start + next_heading.start() if next_heading else len(text)
+    return text[start:end].strip("\n")
+
+
+def find_language_subsection(section: str, language_heading: str) -> str | None:
+    heading = re.search(rf"^### {re.escape(language_heading)}\s*$", section, re.MULTILINE)
+    if not heading:
         return None
-    return text[start : marker.start()].strip("\n")
+    start = heading.end()
+    next_heading = re.search(r"^### ", section[start:], re.MULTILINE)
+    end = start + next_heading.start() if next_heading else len(section)
+    return section[start:end].strip("\n")
 
 
 def inline(line: str) -> str:
@@ -53,78 +56,54 @@ def inline(line: str) -> str:
     return escaped
 
 
-def render(section: str) -> str:
-    lines = section.split("\n")
-    out: list[str] = []
-    in_list = False
-    # A bullet's text wraps across indented continuation lines (this file's
-    # own soft-wrap convention) rather than each line being its own bullet,
-    # so those lines extend the current <li>/<p> instead of starting a new one.
-    current: list[str] | None = None
-    current_is_item = False
-
-    def flush() -> None:
-        nonlocal current, current_is_item
-        if current:
-            text = " ".join(inline(p) for p in current)
-            out.append(f"<li>{text}</li>" if current_is_item else f"<p>{text}</p>")
-        current = None
-        current_is_item = False
-
-    for raw in lines:
-        stripped = raw.strip()
-        if stripped.startswith("## ") or stripped.startswith("### "):
-            flush()
-            if in_list:
-                out.append("</ul>")
-                in_list = False
-            level = 2 if stripped.startswith("## ") else 3
-            text = stripped[level + 1 :]
-            out.append(f"<h{level}>{inline(text)}</h{level}>")
-        elif stripped.startswith("- "):
-            flush()
-            if not in_list:
-                out.append("<ul>")
-                in_list = True
-            current = [stripped[2:]]
-            current_is_item = True
-        elif stripped == "" or stripped == "---":
-            flush()
-            if in_list:
-                out.append("</ul>")
-                in_list = False
-        elif current is not None:
-            current.append(stripped)
-        else:
-            current = [stripped]
-
-    flush()
-    if in_list:
-        out.append("</ul>")
-    return "\n".join(out)
+def render_paragraphs(text: str) -> str:
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    return "\n".join(f"<p>{inline(' '.join(p.split()))}</p>" for p in paragraphs)
 
 
 def main() -> int:
-    if len(sys.argv) < 2:
-        print("usage: changelog-notes.py <version> [changelog-path]", file=sys.stderr)
-        return 2
-    version = sys.argv[1]
-    path = sys.argv[2] if len(sys.argv) > 2 else "CHANGELOG.md"
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("version")
+    parser.add_argument("path", nargs="?", default="docs/RELEASE-NOTES.md")
+    parser.add_argument("--lang", choices=sorted(LANGUAGE_HEADINGS), default=None)
+    args = parser.parse_args()
 
-    with open(path, encoding="utf-8") as f:
+    with open(args.path, encoding="utf-8") as f:
         text = f.read()
 
-    section = find_section(text)
+    section = find_version_section(text, args.version)
     if section is None:
         print(
-            "changelog-notes: no shelf-release marker found in "
-            f"{path} – nothing bounds the section for {version!r}",
+            f"changelog-notes: no “## {args.version}” section in {args.path} – "
+            "add the release's own What's New text before running make release",
             file=sys.stderr,
         )
         return 1
 
-    print(f"<h2>Shelf {html.escape(version)}</h2>")
-    print(render(section))
+    if args.lang:
+        subsection = find_language_subsection(section, LANGUAGE_HEADINGS[args.lang])
+        if subsection is None:
+            print(
+                f"changelog-notes: “## {args.version}” in {args.path} has no "
+                f"“### {LANGUAGE_HEADINGS[args.lang]}” subsection",
+                file=sys.stderr,
+            )
+            return 1
+        print(render_paragraphs(subsection))
+        return 0
+
+    print(f"<h2>Shelf {html.escape(args.version)}</h2>")
+    for lang in ("de", "en"):
+        subsection = find_language_subsection(section, LANGUAGE_HEADINGS[lang])
+        if subsection is None:
+            print(
+                f"changelog-notes: “## {args.version}” in {args.path} has no "
+                f"“### {LANGUAGE_HEADINGS[lang]}” subsection",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"<h3>{LANGUAGE_HEADINGS[lang]}</h3>")
+        print(render_paragraphs(subsection))
     return 0
 
 

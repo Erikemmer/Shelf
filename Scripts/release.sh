@@ -383,10 +383,24 @@ case "$VERSION" in
 esac
 say "channel: $CHANNEL ($APPCAST_FILE)"
 
-say "release notes from CHANGELOG.md"
+say "release notes from docs/RELEASE-NOTES.md"
+# Three files, not one (Sprint 16, Teil B): the combined, both-languages
+# text is what a GitHub release page shows (no per-viewer language there)
+# and what the appcast's own unlabelled <description> falls back to; the
+# two single-language ones become sparkle:releaseNotesLink[xml:lang]
+# siblings once generate_appcast sees them next to the zip below, using
+# its own naming convention (<archive-basename>.<language>.html) – that is
+# Sparkle's own mechanism for following the system language
+# (SUAppcast.m's bestNodeInNodes:name:), not something built here.
 NOTES_HTML="$OUT/$NAME$SUFFIX.html"
-python3 "$HERE/changelog-notes.py" "$VERSION" "$ROOT/CHANGELOG.md" >"$NOTES_HTML" \
+NOTES_HTML_DE="$OUT/$NAME$SUFFIX.de.html"
+NOTES_HTML_EN="$OUT/$NAME$SUFFIX.en.html"
+python3 "$HERE/changelog-notes.py" "$VERSION" "$ROOT/docs/RELEASE-NOTES.md" >"$NOTES_HTML" \
     || fail "changelog-notes.py could not find this release's own section – see its own message above"
+python3 "$HERE/changelog-notes.py" "$VERSION" "$ROOT/docs/RELEASE-NOTES.md" --lang de >"$NOTES_HTML_DE" \
+    || fail "changelog-notes.py (--lang de) failed – see its own message above"
+python3 "$HERE/changelog-notes.py" "$VERSION" "$ROOT/docs/RELEASE-NOTES.md" --lang en >"$NOTES_HTML_EN" \
+    || fail "changelog-notes.py (--lang en) failed – see its own message above"
 
 # The channel's own archive directory keeps every release's zip and notes,
 # across runs (~/Library/Caches/Shelf/, unlike $OUT which this script
@@ -411,17 +425,26 @@ ARCHIVE_DIR="$HOME/Library/Caches/Shelf/appcast-archives/$CHANNEL"
 mkdir -p "$ARCHIVE_DIR"
 cp "$ZIP" "$ARCHIVE_DIR/"
 cp "$NOTES_HTML" "$ARCHIVE_DIR/$(basename "$ZIP" .zip).html"
+cp "$NOTES_HTML_DE" "$ARCHIVE_DIR/$(basename "$ZIP" .zip).de.html"
+cp "$NOTES_HTML_EN" "$ARCHIVE_DIR/$(basename "$ZIP" .zip).en.html"
 
 NEW_ITEM_DIR="$OUT/appcast-new-item"
 rm -rf "$NEW_ITEM_DIR"
 mkdir -p "$NEW_ITEM_DIR"
 cp "$ZIP" "$NEW_ITEM_DIR/"
 cp "$NOTES_HTML" "$NEW_ITEM_DIR/$(basename "$ZIP" .zip).html"
+cp "$NOTES_HTML_DE" "$NEW_ITEM_DIR/$(basename "$ZIP" .zip).de.html"
+cp "$NOTES_HTML_EN" "$NEW_ITEM_DIR/$(basename "$ZIP" .zip).en.html"
 
 say "generating this release's own appcast entry"
+# --release-notes-url-prefix, same URL as the zip's own --download-url-prefix
+# (both GitHub release assets under the same tag): without it,
+# generate_appcast would resolve the two localised links relative to its
+# own -o path, a local temp file nothing downloads from.
 "$GENERATE_APPCAST" --account "$SPARKLE_ACCOUNT" \
     --maximum-deltas 0 \
     --download-url-prefix "https://github.com/Erikemmer/shelf-releases/releases/download/v$VERSION/" \
+    --release-notes-url-prefix "https://github.com/Erikemmer/shelf-releases/releases/download/v$VERSION/" \
     -o "$NEW_ITEM_DIR/appcast.xml" \
     "$NEW_ITEM_DIR" | sed 's/^/    /' \
     || fail "generate_appcast failed"
@@ -433,15 +456,18 @@ python3 "$HERE/appcast-merge.py" \
 cp "$ARCHIVE_DIR/appcast.xml" "$RELEASES_REPO/$APPCAST_FILE"
 
 say "creating the GitHub release in Erikemmer/shelf-releases"
-# Two assets: the zip, which the appcast names and Sparkle fetches; the dmg
-# beside it, for someone choosing their first download by hand rather than
-# through the updater. The appcast never names the dmg.
+# Four assets: the zip, which the appcast names and Sparkle fetches; the
+# dmg beside it, for someone choosing their first download by hand rather
+# than through the updater; the two single-language release-notes files,
+# which the appcast's own sparkle:releaseNotesLink[xml:lang] entries point
+# at (above) — named so they land next to the zip under the same tag,
+# matching --release-notes-url-prefix. The appcast never names the dmg.
 gh release create "v$VERSION" \
     --repo Erikemmer/shelf-releases \
     --title "Shelf $VERSION" \
     --notes-file "$NOTES_HTML" \
     "${GH_PRERELEASE_FLAG[@]}" \
-    "$ZIP" "$DMG" \
+    "$ZIP" "$DMG" "$NOTES_HTML_DE" "$NOTES_HTML_EN" \
     || fail "gh release create failed"
 
 say "pushing the updated $APPCAST_FILE"
