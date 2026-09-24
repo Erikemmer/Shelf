@@ -667,6 +667,21 @@ is currently assumed.
       `App/Shelf` does not, so a `ZipWriter` in the window would not compile;
       two tests say the same thing by name, so a copy pasted in fails too.
 
+- [ ] **A single dead entry in "Recent" cannot be removed — only all of
+      them at once.** `RecentLibrariesStore` (`App/Shelf/Services/
+      RecentLibrariesStore.swift`) offers `record(_:bookCount:)` and
+      `clear()` and nothing between: a folder that is gone is marked
+      `unreachablePaths` and greyed out forever (deliberately, per the
+      comment on that property), never dropped from the list itself, and
+      neither the welcome screen nor File ▸ Open Recent's "Clear Menu"
+      offers a per-row way out. Found in Sprint 16's real-library import
+      session, where eight dead entries from earlier proof runs — all
+      under `~/Library/Caches/Shelf/` — had to be cleared as one batch via
+      "Clear Menu" because there was no other way to reach the same end
+      state without also risking a live entry. Ships a `removeRecent(path:)`
+      on the store, a row-level control in both places it is read from —
+      not built here, per instruction for this session.
+
 ## Sprint 8 – ordering the library, and the way out of it · done
 
 - [x] **Rename and merge** an author, a series, a publisher or a tag, from the
