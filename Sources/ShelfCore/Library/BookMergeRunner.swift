@@ -43,6 +43,12 @@ public struct BookMergeRunner: Sendable {
         public var done: Int
         public var total: Int
         public var currentTitle: String
+
+        public init(done: Int, total: Int, currentTitle: String) {
+            self.done = done
+            self.total = total
+            self.currentTitle = currentTitle
+        }
     }
 
     /// What one group's merge actually did, resolved down to what the

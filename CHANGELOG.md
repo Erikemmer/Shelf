@@ -3,6 +3,28 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 18, Teil B1 (window) — "Merge Books…" and "Merge All Safe Groups…" · 24 September 2026
+
+The window half of the merge engine committed just before this one.
+`Library ▸ Merge All Safe Groups…` runs B3's own rule over the whole
+library and previews every group it finds; a book's context menu offers
+`Merge Books…` on a multiple selection, merging exactly that selection
+(the lowest book number survives — nothing yet lets a person pick a
+different one on purpose, `docs/BACKLOG.md`). Both open the same
+`MergeSheet`: what will be added to the surviving book, what goes to the
+Trash and why, how many fields disagree — the `BookMergePlan` the runner
+is then handed verbatim (ADR 0018).
+
+`MergeQuality` is the one place that actually opens a file to answer B3's
+tie-break questions — through `FileReader`, so PDF and CBR are asked too,
+not only what `ShelfCore` alone can read. `LibraryModel.applyMergeOutcome`
+writes each survivor's merged metadata through `MetadataEditor.apply` (a
+change is only ever the fields that actually differ, merged onto whatever
+is currently in the OPF) and removes every absorbed book through
+`LibraryIndex.delete` — the runner itself touches neither.
+
+17 new catalogue entries, English and German.
+
 ## Sprint 18, Teil B1 (core) — the merge engine: preview, run, resume, undo · 24 September 2026
 
 The planner, the manifest and the runner behind "Merge Books…" — the UI

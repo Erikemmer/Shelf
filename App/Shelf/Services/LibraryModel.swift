@@ -1043,6 +1043,157 @@ final class LibraryModel {
         selection.remove(id)
     }
 
+    // MARK: Merging books
+
+    enum MergePhase: Equatable {
+        case planning
+        /// The preview. Nothing has moved.
+        case ready(BookMergePlan)
+        case running(BookMergeRunner.Progress)
+        case done(groupCount: Int, bookCount: Int)
+    }
+
+    var mergePhase: MergePhase?
+    /// Whether there is a manifest to undo, so a sheet can offer it.
+    private(set) var canUndoMerge = false
+
+    /// Opens the preview for an explicit multi-selection — "Merge Books…".
+    /// The lowest book number survives, the same default the bulk command
+    /// uses; nothing here yet lets a person choose a different one on
+    /// purpose (`docs/BACKLOG.md`).
+    func beginMerge(_ selected: [LibraryEntry]) {
+        guard selected.count > 1 else { return }
+        mergePhase = .planning
+        Task { await planMerge(groups: [MergeGroup(bookIDs: selected.map(\.id))]) }
+    }
+
+    /// Opens the preview for every group B3's own rule finds safe across the
+    /// *whole* library — "Merge All Safe Groups…", offered from the
+    /// Duplicates collection.
+    func beginMergeAllSafeGroups() {
+        mergePhase = .planning
+        Task {
+            guard let index else {
+                mergePhase = nil
+                return
+            }
+            do {
+                let allEntries = try await index.allEntries()
+                await planMerge(groups: MergeCandidates.certainGroups(among: allEntries))
+            } catch {
+                mergePhase = nil
+                show(error, doing: Loc.string("look for books that are safe to merge"))
+            }
+        }
+    }
+
+    private func planMerge(groups: [MergeGroup]) async {
+        guard let library, let index else { return }
+        do {
+            let allEntries = try await index.allEntries()
+            let entriesByID = Dictionary(uniqueKeysWithValues: allEntries.map { ($0.id, $0) })
+            let plan = await Task.detached(priority: .userInitiated) {
+                BookMergePlanner.plan(
+                    groups: groups, entries: entriesByID, library: library,
+                    quality: { url, format in MergeQuality.probe(url: url, format: format) },
+                    hasCover: { folder in CoverFile.url(in: folder) != nil })
+            }.value
+            canUndoMerge = !BookMergeManifest.read(in: library).isEmpty
+            mergePhase = .ready(plan)
+        } catch {
+            mergePhase = nil
+            show(error, doing: Loc.string("work out which books can be merged"))
+        }
+    }
+
+    /// Carries out the preview exactly as shown (ADR 0018) and writes the
+    /// survivors' metadata through `MetadataEditor`, the mechanism already
+    /// trusted to merge a change onto whatever is currently in the OPF.
+    func runMerge(_ plan: BookMergePlan) {
+        guard let library, let index else { return }
+        mergePhase = .running(BookMergeRunner.Progress(done: 0, total: plan.groups.count, currentTitle: ""))
+        let manifest = BookMergeManifest.read(in: library)
+        let entriesByID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
+        Task {
+            do {
+                let onProgress: @Sendable (BookMergeRunner.Progress) -> Void = { [weak self] progress in
+                    Task { @MainActor in self?.mergePhase = .running(progress) }
+                }
+                let outcome = try await Task.detached(priority: .userInitiated) {
+                    try await BookMergeRunner(makeHasher: SHA256Hasher.factory)
+                        .run(
+                            .init(library: library, plan: plan, entries: entriesByID, manifest: manifest),
+                            progress: onProgress)
+                }.value
+
+                try await applyMergeOutcome(outcome.groups, plan: plan, entriesByID: entriesByID, in: index)
+                canUndoMerge = !outcome.manifest.isEmpty
+                let bookCount = outcome.groups.reduce(0) { $0 + 1 + $1.absorbedIDs.count }
+                mergePhase = .done(groupCount: outcome.groups.count, bookCount: bookCount)
+                await reload()
+            } catch {
+                mergePhase = nil
+                show(error, doing: Loc.string("merge the books"))
+            }
+        }
+    }
+
+    /// Writes every survivor's merged metadata and complete format list, and
+    /// removes every absorbed book from the index — folder first, index
+    /// second, as everywhere else (ADR 0001). The runner itself never
+    /// touched either.
+    private func applyMergeOutcome(
+        _ groupOutcomes: [BookMergeRunner.GroupOutcome], plan: BookMergePlan,
+        entriesByID: [UUID: LibraryEntry], in index: LibraryIndex
+    ) async throws {
+        guard let library else { return }
+        let editor = MetadataEditor(library: library)
+        for groupOutcome in groupOutcomes {
+            guard let groupPlan = plan.groups.first(where: { $0.survivingID == groupOutcome.survivingID }),
+                let survivorBefore = entriesByID[groupOutcome.survivingID]
+            else { continue }
+            let absorbedBooks = groupPlan.absorbedIDs.compactMap { entriesByID[$0] }.map { ($0.id, $0.book) }
+            let merged = BookMetadataMerge.merge(surviving: survivorBefore.book, absorbed: absorbedBooks)
+
+            var updated = survivorBefore
+            updated.formats = groupOutcome.newFormats
+            let change = MetadataChange.make(from: survivorBefore.book) { $0 = merged.book }
+            try await editor.apply(change, to: updated, in: index)
+
+            for absorbedID in groupOutcome.absorbedIDs {
+                try await index.delete(id: absorbedID)
+            }
+        }
+    }
+
+    /// Puts every merged group back: every absorbed book's folder and index
+    /// entry, every moved or discarded file, the survivor's own prior
+    /// metadata and format list.
+    func undoMerge() {
+        guard let library, let index else { return }
+        mergePhase = .running(BookMergeRunner.Progress(done: 0, total: 0, currentTitle: ""))
+        let manifest = BookMergeManifest.read(in: library)
+        Task {
+            do {
+                let outcome = try await Task.detached(priority: .userInitiated) {
+                    try await BookMergeRunner(makeHasher: SHA256Hasher.factory).undo(manifest, in: library)
+                }.value
+                for undone in outcome.undone {
+                    try await index.save(undone.priorSurvivorEntry)
+                    for restored in undone.restoredEntries {
+                        try await index.save(restored)
+                    }
+                }
+                canUndoMerge = !outcome.manifest.isEmpty
+                mergePhase = nil
+                await reload()
+            } catch {
+                mergePhase = nil
+                show(error, doing: Loc.string("bring the merged books back"))
+            }
+        }
+    }
+
     /// Choose a Calibre library, count it, and show the counting protocol.
     ///
     /// The folder with `metadata.db` in it, which is what Calibre calls the

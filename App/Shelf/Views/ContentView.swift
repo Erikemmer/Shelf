@@ -86,6 +86,13 @@ struct ContentView: View {
         }
         .sheet(
             isPresented: Binding(
+                get: { model.mergePhase != nil },
+                set: { if !$0 { model.mergePhase = nil } })
+        ) {
+            MergeSheet().environment(model)
+        }
+        .sheet(
+            isPresented: Binding(
                 get: { model.exportPhase != nil },
                 set: { if !$0 { model.exportPhase = nil } })
         ) {

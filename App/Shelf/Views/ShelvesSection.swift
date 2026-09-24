@@ -337,6 +337,14 @@ struct BookMenu: View {
         }
         .disabled(model.hasMultipleSelection || !model.coversOnDisk.contains(entry.id))
 
+        // `subject`, not just `entry`: this is the one command in this menu
+        // that a multiple selection is exactly what it is for — merging one
+        // book with itself would be nonsense, so it only offers itself when
+        // two or more are actually selected.
+        if subject.count > 1 {
+            Button(Loc.string("Merge Books…")) { model.beginMerge(subject) }
+        }
+
         Divider()
         // Always this one book, never `subject`: removing several books at
         // once from a context menu with no per-book list to check against is

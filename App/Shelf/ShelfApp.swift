@@ -204,6 +204,12 @@ struct ShelfApp: App {
             // (ADR 0018).
             Button(Loc.string("Organize Library…")) { model.beginOrganize() }
                 .disabled(model.library == nil || model.isLoading)
+            // Every book already grouped by B3's own safe rule (Sprint 18),
+            // across the whole library, not only what is currently visible.
+            // The preview is the plan (ADR 0018): nothing merges until the
+            // sheet's own button is pressed.
+            Button(Loc.string("Merge All Safe Groups…")) { model.beginMergeAllSafeGroups() }
+                .disabled(model.library == nil || model.isLoading)
             Button(Loc.string("Close Library")) { model.closeLibrary() }
                 .shortcut(.closeLibrary)
                 .disabled(model.library == nil)

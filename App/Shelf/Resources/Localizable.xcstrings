@@ -307,6 +307,23 @@
         }
       }
     },
+    "%1$lld groups merged, %2$lld books became one each": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld Gruppen zusammengeführt, je %2$lld Bücher wurden eins"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld groups merged, %2$lld books became one each"
+          }
+        }
+      }
+    },
     "%@ Click to dismiss": {
       "extractionState": "manual",
       "localizations": {
@@ -1258,6 +1275,23 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "%lld field(s) disagree; the surviving book's own value is kept": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Feld(er) widersprechen sich; der Wert des verbleibenden Buchs bleibt erhalten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld field(s) disagree; the surviving book's own value is kept"
           }
         }
       }
@@ -2567,6 +2601,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Added"
+          }
+        }
+      }
+    },
+    "Adding: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommt hinzu: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adding: %@"
           }
         }
       }
@@ -4469,6 +4520,23 @@
         }
       }
     },
+    "Files move into the surviving book's folder; the absorbed folders go to the Trash, empty. Every file is hashed before and after, and there is a way back.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dateien wandern in den Ordner des verbleibenden Buchs; die aufgenommenen Ordner gehen leer in den Papierkorb. Jede Datei wird vorher und nachher geprüft, und es gibt einen Weg zurück."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files move into the surviving book's folder; the absorbed folders go to the Trash, empty. Every file is hashed before and after, and there is a way back."
+          }
+        }
+      }
+    },
     "Find Orphaned Folders…": {
       "extractionState": "manual",
       "localizations": {
@@ -5302,6 +5370,40 @@
         }
       }
     },
+    "Merge %lld Groups": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Gruppen zusammenführen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge %lld Groups"
+          }
+        }
+      }
+    },
+    "Merge All Safe Groups…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle sicheren Gruppen zusammenführen…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge All Safe Groups…"
+          }
+        }
+      }
+    },
     "Merge Authors": {
       "extractionState": "manual",
       "localizations": {
@@ -5315,6 +5417,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Merge Authors"
+          }
+        }
+      }
+    },
+    "Merge Books…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bücher zusammenführen…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge Books…"
           }
         }
       }
@@ -5383,6 +5502,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Merge into…"
+          }
+        }
+      }
+    },
+    "Merging…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird zusammengeführt…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merging…"
           }
         }
       }
@@ -6087,6 +6223,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "No formats yet"
+          }
+        }
+      }
+    },
+    "No group of books here is safe enough to merge on its own.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Gruppe von Büchern ist hier sicher genug, um von selbst zusammengeführt zu werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No group of books here is safe enough to merge on its own."
           }
         }
       }
@@ -9600,6 +9753,23 @@
         }
       }
     },
+    "To the Trash: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In den Papierkorb: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To the Trash: %@"
+          }
+        }
+      }
+    },
     "Toggle Read": {
       "extractionState": "manual",
       "localizations": {
@@ -9647,6 +9817,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Undo / Redo"
+          }
+        }
+      }
+    },
+    "Undo Merge": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zusammenführen widerrufen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo Merge"
           }
         }
       }
@@ -9885,6 +10072,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Working out where every book's folder should be. Nothing is being moved."
+          }
+        }
+      }
+    },
+    "Working out which books are the same work. Nothing is being merged.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es wird ermittelt, welche Bücher dasselbe Werk sind. Es wird noch nichts zusammengeführt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working out which books are the same work. Nothing is being merged."
           }
         }
       }
@@ -10144,6 +10348,23 @@
         }
       }
     },
+    "bring the merged books back": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "die zusammengeführten Bücher zurückzuholen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bring the merged books back"
+          }
+        }
+      }
+    },
     "cannot be sent: no compatible format": {
       "extractionState": "manual",
       "localizations": {
@@ -10382,6 +10603,23 @@
         }
       }
     },
+    "look for books that are safe to merge": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nach Büchern zu suchen, die sicher zusammengeführt werden können"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "look for books that are safe to merge"
+          }
+        }
+      }
+    },
     "look for orphaned folders": {
       "extractionState": "manual",
       "localizations": {
@@ -10412,6 +10650,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "matched by name"
+          }
+        }
+      }
+    },
+    "merge the books": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "die Bücher zusammenzuführen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "merge the books"
           }
         }
       }
@@ -11028,6 +11283,23 @@
         }
       }
     },
+    "work out which books can be merged": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "herauszufinden, welche Bücher zusammengeführt werden können"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "work out which books can be merged"
+          }
+        }
+      }
+    },
     "would add": {
       "extractionState": "manual",
       "localizations": {
@@ -11092,6 +11364,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "“%1$@” could not be ejected: %2$@"
+          }
+        }
+      }
+    },
+    "“%1$@” — %2$lld books become one": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%1$@“ — %2$lld Bücher werden eins"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%1$@” — %2$lld books become one"
           }
         }
       }
