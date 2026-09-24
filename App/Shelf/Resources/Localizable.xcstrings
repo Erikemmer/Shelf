@@ -5547,6 +5547,23 @@
         }
       }
     },
+    "Move to Trash": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In den Papierkorb legen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move to Trash"
+          }
+        }
+      }
+    },
     "Move to Trash…": {
       "extractionState": "manual",
       "localizations": {
@@ -5560,6 +5577,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Move to Trash…"
+          }
+        }
+      }
+    },
+    "Move “%@” to the Trash?": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ in den Papierkorb legen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move “%@” to the Trash?"
           }
         }
       }
@@ -8852,6 +8886,23 @@
         }
       }
     },
+    "The book keeps its other files. This can be undone with ⌘Z.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Buch behält seine anderen Dateien. Das lässt sich mit ⌘Z rückgängig machen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The book keeps its other files. This can be undone with ⌘Z."
+          }
+        }
+      }
+    },
     "The books stay in the library. Only the shelf goes.": {
       "extractionState": "manual",
       "localizations": {
@@ -10871,6 +10922,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "unreadable image"
+          }
+        }
+      }
+    },
+    "update the index after bringing back “%@”": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "den Index zu aktualisieren, nachdem „%@“ zurückgeholt wurde"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "update the index after bringing back “%@”"
+          }
+        }
+      }
+    },
+    "update the index after moving “%@” to the Trash": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "den Index zu aktualisieren, nachdem „%@“ in den Papierkorb gelegt wurde"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "update the index after moving “%@” to the Trash"
           }
         }
       }

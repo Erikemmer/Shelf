@@ -3,6 +3,41 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 18, Teil B2 — one format file to the Trash, keeping the book · 24 September 2026
+
+A book with several files (a KFX beside an EPUB, a stray MOBI a Calibre
+import left over) had a way to *add* a format — `Add Format…`, through the
+same planner a drag onto the window uses — and no way to remove just one
+while keeping the book. `FormatDisposal` is the new core type: it refuses,
+untouched, when the file asked for is the book's only one
+(`Refusal.lastFormat`), otherwise moves it through `FolderDisposal` (the
+Trash, never `removeItem`) and hands back a `Result` carrying the Trash
+path `FileManager.trashItem` itself reports, the format row's own hash, and
+the file's path relative to the library root.
+
+**Real ⌘Z, not "look in the Trash yourself".** `EPUBFileReplacement`
+deliberately answers the second way, because it *swaps* a book's own
+content in place and undoing that safely is a harder claim. This type only
+ever removes a whole, unmodified file and puts nothing where it was, so a
+hash-verified move back is both simple and honest — `FormatDisposal.restore`
+refuses just as plainly when it cannot honour that: no Trash location to
+go on, the Trash copy gone, changed, or something new already sitting at
+the file's old path. Nothing is ever silently treated as restored.
+
+The inspector's per-file context menu gets "Move to Trash…", disabled the
+moment a book has only one file, behind a confirmation naming the file
+("The book keeps its other files. This can be undone with ⌘Z."). Wired at
+the app layer the same way `CoverReplacement`'s ⇧⌘Z is — `registerUndo`
+called synchronously, before the write itself is dispatched into a `Task`
+— with the redo side doing the same removal again rather than replaying a
+stale plan.
+
+7 new tests in `FormatDisposalTests.swift`: the two-file and one-file
+cases, a clean restore verified by hash, and all four ways `restore` can
+honestly refuse. This was a genuine gap, not a known-and-deferred one:
+Sprint 18's own survey of what already exists found "Add Format…" but
+nothing symmetrical to remove one.
+
 ## Sprint 18, Teil B4 — KFX's own container marker, read for DRM only · 24 September 2026
 
 Sprint 17, Teil A stopped at "DRM unknown" for every KFX, deliberately, per

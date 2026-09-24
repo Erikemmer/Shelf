@@ -806,6 +806,126 @@ final class LibraryModel {
         NSWorkspace.shared.open(url)
     }
 
+    // MARK: Sending one format file to the Trash
+
+    /// What went wrong the last time a format file was sent to the Trash or
+    /// brought back, shown under the formats list in the inspector. Cleared
+    /// by the next attempt, in either direction.
+    private(set) var formatDisposalMessage: (text: String, detail: String?)?
+
+    func clearFormatDisposalMessage() { formatDisposalMessage = nil }
+
+    /// Sends one of a book's format files to the Trash, keeping the book.
+    ///
+    /// The core refuses on its own when this would take the book's last file
+    /// (`FormatDisposal.Refusal.lastFormat`) — the context menu also disables
+    /// itself in that case (`InspectorView`), so reaching the refusal here
+    /// would mean the two disagreed, not that a person did something wrong.
+    /// Unlike a cover, the file's bytes are never held in memory: `restore`
+    /// works from the Trash path `FormatDisposal.remove` reports, hashed
+    /// before it is trusted (ADR 0002), which is what makes this undoable at
+    /// all for a file that can be tens of megabytes.
+    func removeFormat(_ format: BookFormat, from entry: LibraryEntry, undoManager: UndoManager?) {
+        guard let library else { return }
+        formatDisposalMessage = nil
+        do {
+            let result = try FormatDisposal.remove(format, from: entry, library: library)
+            registerFormatRemovalUndo(result, undoManager: undoManager)
+            Task { await self.applyFormatRemoval(result, to: entry) }
+        } catch let refusal as FormatDisposal.Refusal {
+            formatDisposalMessage = (Loc.core(refusal.message), refusal.detail)
+        } catch {
+            formatDisposalMessage = (error.localizedDescription, nil)
+        }
+    }
+
+    /// Puts the matching restoration on the opposite stack, named the same
+    /// way every other undo in this file is: synchronously, before the write
+    /// itself is dispatched (`registerCoverUndo` explains why the order
+    /// matters for ⇧⌘Z).
+    private func registerFormatRemovalUndo(_ result: FormatDisposal.Result, undoManager: UndoManager?) {
+        undoManager?.registerUndo(withTarget: self) { model in
+            MainActor.assumeIsolated {
+                model.performFormatRestoration(result, undoManager: undoManager)
+            }
+        }
+        undoManager?.setActionName(Loc.string("Move to Trash"))
+    }
+
+    /// The write half of `removeFormat`: takes the format out of the index
+    /// and out of what the window shows. The file itself is already gone —
+    /// `FormatDisposal.remove` moved it synchronously — so registering the
+    /// undo before this runs can never race a write that has not happened
+    /// yet.
+    private func applyFormatRemoval(_ result: FormatDisposal.Result, to entry: LibraryEntry) async {
+        guard let index else { return }
+        var updated = entry
+        updated.formats.removeAll { $0.id == result.format.id }
+        do {
+            try await index.save(updated)
+            replace(updated)
+            totals = try await index.totals(coversOnDisk: coversOnDisk)
+            refilter()
+        } catch {
+            show(error, doing: Loc.string("update the index after moving “%@” to the Trash", result.format.fileName))
+        }
+    }
+
+    /// What the registered undo calls: puts the file back at exactly its old
+    /// path, verified by hash against the Trash copy, and puts a matching
+    /// redo (removing it again) on the opposite stack.
+    private func performFormatRestoration(_ result: FormatDisposal.Result, undoManager: UndoManager?) {
+        guard let library else { return }
+        formatDisposalMessage = nil
+        do {
+            try FormatDisposal.restore(result, library: library, makeHasher: PortableSHA256Hasher.factory)
+        } catch let failure as FormatDisposal.RestoreFailure {
+            formatDisposalMessage = (Loc.core(failure.message), failure.detail)
+            return
+        } catch {
+            formatDisposalMessage = (error.localizedDescription, nil)
+            return
+        }
+        undoManager?.registerUndo(withTarget: self) { model in
+            MainActor.assumeIsolated {
+                model.performFormatRemoval(result, undoManager: undoManager)
+            }
+        }
+        undoManager?.setActionName(Loc.string("Move to Trash"))
+        Task { await self.applyFormatRestoration(result) }
+    }
+
+    /// The redo half of `performFormatRestoration`: removes the file again,
+    /// the same write `removeFormat` does, without re-showing the
+    /// confirmation — a redo is not a fresh request.
+    private func performFormatRemoval(_ result: FormatDisposal.Result, undoManager: UndoManager?) {
+        guard let library, let entry = entries.first(where: { $0.id == result.format.bookID }) else { return }
+        formatDisposalMessage = nil
+        do {
+            let redone = try FormatDisposal.remove(result.format, from: entry, library: library)
+            registerFormatRemovalUndo(redone, undoManager: undoManager)
+            Task { await self.applyFormatRemoval(redone, to: entry) }
+        } catch let refusal as FormatDisposal.Refusal {
+            formatDisposalMessage = (Loc.core(refusal.message), refusal.detail)
+        } catch {
+            formatDisposalMessage = (error.localizedDescription, nil)
+        }
+    }
+
+    private func applyFormatRestoration(_ result: FormatDisposal.Result) async {
+        guard let index, let entry = entries.first(where: { $0.id == result.format.bookID }) else { return }
+        var updated = entry
+        updated.formats.append(result.format)
+        do {
+            try await index.save(updated)
+            replace(updated)
+            totals = try await index.totals(coversOnDisk: coversOnDisk)
+            refilter()
+        } catch {
+            show(error, doing: Loc.string("update the index after bringing back “%@”", result.format.fileName))
+        }
+    }
+
     /// Choose a Calibre library, count it, and show the counting protocol.
     ///
     /// The folder with `metadata.db` in it, which is what Calibre calls the

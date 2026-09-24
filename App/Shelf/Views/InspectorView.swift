@@ -32,6 +32,9 @@ struct InspectorView: View {
     /// Raised after each identifier added, to give the value field a fresh
     /// draft. See where it is used.
     @State private var identifierAdds = 0
+    /// The format row a "Move to Trash" was clicked on, while the
+    /// confirmation naming it is on screen. `nil` the rest of the time.
+    @State private var pendingFormatRemoval: (format: BookFormat, entry: LibraryEntry)?
 
     var body: some View {
         ScrollViewReader { scroller in
@@ -81,6 +84,23 @@ struct InspectorView: View {
             }
         }
         .background(Slate.panelBackground)
+        .confirmationDialog(
+            pendingFormatRemoval.map { Loc.string("Move “%@” to the Trash?", $0.format.fileName) } ?? "",
+            isPresented: isAskingToRemoveFormat, titleVisibility: .visible
+        ) {
+            Button(Loc.string("Move to Trash"), role: .destructive) {
+                if let pending = pendingFormatRemoval {
+                    model.removeFormat(pending.format, from: pending.entry, undoManager: undoManager)
+                }
+                pendingFormatRemoval = nil
+            }
+            Button(Loc.string("Cancel"), role: .cancel) { pendingFormatRemoval = nil }
+        } message: {
+            // Says what stays, because "Trash" beside a book's own file is
+            // the one word that makes a person hesitate, and the book's
+            // remaining files answer exactly that hesitation.
+            Text(Loc.string("The book keeps its other files. This can be undone with ⌘Z."))
+        }
     }
 
     private static let tagsAnchor = "tags"
@@ -649,6 +669,17 @@ struct InspectorView: View {
                 SlateSecondaryButton(Loc.string("Add Format…")) { model.presentAddFormatPanel() }
                     .help(Loc.string("Adds another file to this book – it is never written over one that is there"))
                     .padding(.top, 2)
+
+                if let message = model.formatDisposalMessage {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(message.text)
+                        if let detail = message.detail {
+                            Text(detail).foregroundStyle(Slate.textSecondary)
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(Slate.accent)
+                }
             }
         }
     }
@@ -723,8 +754,20 @@ struct InspectorView: View {
         .contextMenu {
             Button(Loc.string("Show in Finder")) { model.revealInFinder(format, of: entry) }
             Button(Loc.string("Open in Default App")) { model.open(format, of: entry) }
+            Divider()
+            // Disabled rather than hidden: a book with one file still shows
+            // the row, so the reason the command cannot run should be as
+            // visible as the command itself.
+            Button(Loc.string("Move to Trash…"), role: .destructive) {
+                pendingFormatRemoval = (format, entry)
+            }
+            .disabled(entry.formats.count <= 1)
         }
         .help(Loc.string("%@ · right-click to show it in the Finder", format.fileName))
+    }
+
+    private var isAskingToRemoveFormat: Binding<Bool> {
+        Binding(get: { pendingFormatRemoval != nil }, set: { if !$0 { pendingFormatRemoval = nil } })
     }
 
     private func actions(for entry: LibraryEntry) -> some View {
