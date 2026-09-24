@@ -180,10 +180,6 @@ All of these are in `docs/BACKLOG.md` with what each would settle:
 - **A real MOBI, AZW3, CBR and a genuinely DRM-protected file.** Everything is
   measured against generated ones, and no genuine `.cbr` has ever been read:
   nothing on this Mac can write a RAR.
-- **Erik's real Calibre library.** Sprint 3 is measured against a synthetic one
-  of 2 000 books. `~/Downloads/Calibre Library Erik` holds a `metadata.db` with
-  no book folders, which exercises the schema and not the import. **Erik has to
-  name the path.**
 - **A real Calibre reading one of Shelf's exports.** The OPFs are quoted, the
   schema is Calibre's own, and the "For Calibre" mapping has a test — but
   running Calibre's importer over an export would mean writing into Erik's own
@@ -212,6 +208,17 @@ Three things were, until 19 September 2026, and all three are done:
   `CHANGELOG.md`.
 - **Sprint 8's tests had not run on Linux.** They have: 679 green, in the
   container, against the commit they are quoted for.
+- **Erik's real Calibre library had never been imported.** Fixed 24
+  September 2026: of the reachable candidates on Erik's own Mac, one real
+  Calibre library was found and imported through the real, installed app
+  — 40 of its 42 books (the other 2 were the same books catalogued twice
+  inside Calibre's own database, correctly deduplicated), 78 files, 108.5
+  MB, 0 DRM found, every book with a cover, source folder proved untouched
+  by a before/after marker. Full numbers in `CHANGELOG.md`, Sprint 16,
+  Teil G — book titles and the library's own path stay out of this public
+  repo. The library was far smaller than Erik expected (1 000–10 000
+  books); what he remembers apparently lives outside what a read-only,
+  no-external-volumes search was allowed to reach this session.
 
 ---
 

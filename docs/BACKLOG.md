@@ -682,6 +682,23 @@ is currently assumed.
       on the store, a row-level control in both places it is read from —
       not built here, per instruction for this session.
 
+- [ ] **A library's "Recent" book count goes stale the moment something is
+      imported into it, and stays stale until the library is closed and
+      opened again.** `recents.record(library, bookCount: entries.count)`
+      (`App/Shelf/Services/LibraryModel.swift:328`) has exactly one call
+      site, inside `open(_:)`, right after `reload()`. Nothing calls it
+      again when the entry count changes under an already-open library —
+      an import included. Seen live in Sprint 16's real-library import: a
+      brand-new library recorded itself with `bookCount: 0` the moment it
+      was created, 40 books were imported into it in the same session
+      without ever closing it, and the welcome screen went on showing
+      "0 books" next to it — correct only once, stale from the first
+      import onward, until the next full close-and-reopen re-runs `open`.
+      Not fixed here, per instruction for this session (measurement, not a
+      building session) — a fix belongs where `ImportRunner`'s outcome is
+      applied, re-recording the open library rather than waiting for the
+      next `open(_:)`.
+
 ## Sprint 8 – ordering the library, and the way out of it · done
 
 - [x] **Rename and merge** an author, a series, a publisher or a tag, from the

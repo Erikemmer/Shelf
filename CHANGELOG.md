@@ -3,6 +3,64 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 16, Teil G — the Calibre import, proved against a real library · 24 September 2026
+
+Since Sprint 3 the Calibre import had only ever run against 2 000 synthetic
+books (`Scripts/synthetic-clean.sh` material). Run today for the first time
+against a real, reachable Calibre library — read through a copy of
+`metadata.db` under `~/Library/Caches/Shelf/`, as ADR 0009 requires, never
+in place.
+
+Of three named candidates on Erik's own Mac, only one was a real, active
+Calibre library (`metadata.db` plus matching author folders); one was an
+empty shell (`metadata.db`, no book folders at all); the third had no
+`metadata.db` and so is not a Calibre library by the definition this
+project uses. The real one held far fewer books than the 1 000–10 000
+Erik expected — the rest of what he remembered evidently lives outside
+what this session was allowed to search (an external NAS is excluded by
+instruction; a merged folder found nearby has 355 books but no
+`metadata.db` of its own, so it cannot feed this import path either).
+Session halted and asked before importing, per its own instruction for
+exactly this situation — book titles and the chosen library's path stay
+out of this public repo.
+
+**Numbers, from the library's own `.shelf/Import-Report.txt` and the app's
+own census, not eyeballed:**
+
+- 42 books known to `metadata.db`; 40 became Shelf books. The other 2 were
+  not lost — two titles were each catalogued **twice** in Calibre's own
+  database (byte-identical files under two different book folders); Shelf's
+  same-file-twice check caught both and kept one copy of each, exactly as
+  designed, not as a defect.
+- 78 files copied and verified (copy → hash → read back → hash again,
+  ADR 0002), 108.5 MB, 0 s by the report's own clock. 4 files skipped as
+  the duplicates above.
+- Formats: EPUB 38, KFX 36, MOBI 3, AZW3 1.
+- DRM: 0 files flagged. Whether that means the library is genuinely
+  DRM-free or that KFX's own DRM marker was never exercised by this
+  particular library is not established here — no DRM-carrying file was
+  available to test against.
+- Cover: 40 of 40 books have one (`cover.jpg` next to every book folder,
+  copied byte-identical — checked by hash for 5 of them).
+- Title/author guessed from a filename: 0. The Calibre import path always
+  takes these from `metadata.db`'s own fields; the filename-guessing
+  fallback (`FileNameMetadata`) is never reached from this path.
+- New library: 114 MB on disk (114 MB books + covers + `metadata.opf`
+  against 108.5 MB of copied book files — the rest is covers and OPFs,
+  not a discrepancy).
+- Calibre folder untouched: a marker file was written before the import;
+  `find <calibre folder> -newer <marker>` found nothing changed inside it,
+  afterwards. Calibre itself was not running during the import.
+- Quit-and-reopen: closing Shelf and relaunching reopens the library from
+  Recent with no permission prompt. Its "0 books" caption there is stale
+  (`docs/BACKLOG.md`) — the library itself shows the correct count, 40, the
+  moment it opens.
+
+Not measured: DRM detection against a genuinely protected file (none was
+available); behaviour above roughly 40 books, since that is what the one
+reachable real library held — the 2 000-synthetic-book run from Sprint 3
+still stands as the volume proof.
+
 ## Sprint 16, Teil F — the empty-array crash, closed everywhere it could hide · 24 September 2026
 
 Teil C fixed one instance (`Scripts/release.sh`'s `GH_PRERELEASE_FLAG`) and
