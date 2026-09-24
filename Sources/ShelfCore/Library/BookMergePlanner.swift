@@ -86,10 +86,15 @@ public enum BookMetadataMerge {
             absorbed: absorbed.map { ($0.id, nonEmpty($0.book.publisher)) }, display: { $0 }, into: &fills,
             &conflicts
         ) { book.publisher = $0 }
+        // Normalised before comparing, not only before grouping (`MergeCandidates`
+        // does the same): a MOBI's EXTH record saying `eng` beside an EPUB's
+        // `dc:language` saying `en` is the same language, not a conflict, and
+        // filling from it should write the canonical two-letter form C3 asks
+        // for rather than whichever raw spelling happened to be read first.
         resolve(
-            .language, survivor: nonEmpty(surviving.language),
-            absorbed: absorbed.map { ($0.id, nonEmpty($0.book.language)) }, display: { $0 }, into: &fills,
-            &conflicts
+            .language, survivor: nonEmpty(surviving.language).map(LanguageCode.normalised),
+            absorbed: absorbed.map { ($0.id, nonEmpty($0.book.language).map(LanguageCode.normalised)) },
+            display: { $0 }, into: &fills, &conflicts
         ) { book.language = $0 }
         resolve(
             .description, survivor: nonEmpty(surviving.description),

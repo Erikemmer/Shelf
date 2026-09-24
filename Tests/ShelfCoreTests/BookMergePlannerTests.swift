@@ -71,6 +71,32 @@ struct BookMergePlannerTests {
         #expect(result.book.isbn == "9783404178926")
     }
 
+    /// Found live against the real library: a MOBI's EXTH record says `eng`,
+    /// an EPUB's `dc:language` says `en` — the same language, not a
+    /// disagreement, and the same normalisation `MergeCandidates` already
+    /// uses for grouping.
+    @Test("a language code and its ISO equivalent are not a conflict")
+    func normalisesLanguageBeforeComparing() {
+        let survivor = Book(title: "Schattenpfad", authors: ["A"], language: "eng")
+        let absorbed = Book(title: "Schattenpfad", authors: ["A"], language: "en")
+        let result = BookMetadataMerge.merge(surviving: survivor, absorbed: [(UUID(), absorbed)])
+        // The survivor's own value is never overwritten just because it was
+        // compared through the normalised form — only the false conflict is
+        // what the normalisation exists to prevent.
+        #expect(result.book.language == "eng")
+        #expect(result.conflicts.isEmpty)
+        #expect(result.fills.isEmpty)
+    }
+
+    @Test("an empty language is filled with the canonical two-letter code")
+    func fillsLanguageNormalised() {
+        let survivor = Book(title: "Schattenpfad", authors: ["A"])
+        let absorbed = Book(title: "Schattenpfad", authors: ["A"], language: "deu")
+        let result = BookMetadataMerge.merge(surviving: survivor, absorbed: [(UUID(), absorbed)])
+        #expect(result.book.language == "de")
+        #expect(result.fills.count == 1)
+    }
+
     @Test("a description already present is never overwritten by a merge")
     func neverOverwritesADescription() {
         let survivor = Book(title: "Schattenpfad", authors: ["A"], description: "The survivor's own words.")

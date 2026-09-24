@@ -3,6 +3,18 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 18, Teil B1 — a spurious language conflict, found live · 24 September 2026
+
+The first real preview against the real library ("Merge All Safe Groups…",
+cancelled before anything moved) showed "Nachtschatten" disagreeing on 2 fields
+where only 1 was real: `BookMetadataMerge` compared `language` as a raw
+string, so a MOBI's EXTH `eng` beside an EPUB's `dc:language` `en` read as
+a conflict — the exact pair `MergeCandidates` already treats as the same
+language for grouping, via `LanguageCode.normalised`. Fixed by normalising
+both sides before comparing here too; a non-empty survivor value is still
+never rewritten just because it was compared through its normalised
+form — only the false conflict is what this prevents. 2 new tests.
+
 ## Sprint 18, Teil B1 (window) — "Merge Books…" and "Merge All Safe Groups…" · 24 September 2026
 
 The window half of the merge engine committed just before this one.
