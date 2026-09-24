@@ -3,6 +3,8 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+<!-- shelf-release: v1.1.0 · 24 September 2026 -->
+
 ## Sprint 16, Teil B — release notes for a person, not a diff · 24 September 2026
 
 The update window showed `CHANGELOG.md`'s own technical prose — for
