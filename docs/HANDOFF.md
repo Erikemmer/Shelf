@@ -21,6 +21,47 @@ fallback — not inspected further, since the on-disk backup above already
 answers the question. No Time Machine network destination was reachable
 (`tmutil listbackups`: "No machine directory found for host").
 
+## Sprint 19, Teil B2/B3 — run for real against the real library: still 0 fields filled, and why this time is on record · 25 September 2026
+
+**Backed up first, proof kept, per RUNBOOK §2**
+(`~/Library/Caches/Shelf/sprint19-fillmissing-2026-09-25/`): the index
+copied through SQLite's own `.backup` call, `PRAGMA integrity_check` on
+the copy = `ok`, 366 books; 366 `metadata.opf` copied at their own paths,
+matching; a 1 450-line manifest (path, size, SHA-256) matching the exact
+file count found on disk. Run started only once that lined up.
+
+**Run through the app itself, real clicks** (`File ▸ Fill Missing
+Fields…`, English, current build verified stamped with this session's own
+HEAD `fc33ea7`): the search phase made 348 real Open Library requests
+(cached under the app's own sandbox container,
+`~/Library/Containers/de.erikemmer.shelf/Data/Library/Caches/Shelf/
+online/` — not the plain `~/Library/Caches/Shelf/online/` ADR-0015's own
+comment names, which is where a future script checking this cache should
+look for a sandboxed build) and, on its very first request, one refusal
+from Google Books (429) — this session's new "stop asking that service
+for the rest of the run" (Teil B2) took over from there: every one of the
+remaining ~347 requests asked Open Library only, Google Books skipped
+outright and not logged again, one line said once rather than 348 times.
+
+**Still 0 fields filled — measured this time, not only stated.** Of the
+348 Open Library answers, 265 came back with no candidate at all; 83 had
+at least one, 57 of those exactly one — and every one of those 57 still
+failed either the ISBN pass's edition-trust rule or `DescriptionFill`'s
+exact title-and-every-author match, the known-language check, or the
+80-character/plain-text check (ADR 0015). Which of those four stopped
+which of the 57 is not broken out further — the rule already refuses on
+the first mismatch and does not keep checking to report which one it
+was, and re-running with that added is exactly the "would spend the same
+population's goodwill twice" this file's own A3 entry above already
+declined to do.
+
+**Control, not just a claim: 0 files with a different hash.** The same
+1 450-file manifest taken again after the run (book files and all 366
+`metadata.opf` alike) diffs to nothing against the before manifest —
+expected, since nothing was ticked to apply, but checked rather than
+assumed. Before/after per field is therefore identical to A3's own
+count above: nothing moved from empty to filled, in either direction.
+
 ## Sprint 19, Teil B1 — Calibre as a second source: still unreachable, checked a different way this time · 25 September 2026
 
 **Not mounted under `/Volumes`** (checked once: only `music` and `home`
