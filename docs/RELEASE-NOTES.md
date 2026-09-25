@@ -24,6 +24,41 @@ preferredLocalizationsFromArray:`); the combined, both-languages text
 below is what a GitHub release page shows (no per-viewer language there)
 and what any system language Sparkle cannot match falls back to.
 
+## 1.2.0
+
+### Deutsch
+
+Shelf trägt ein neues Symbol. Bücher, die doppelt in der Bibliothek stehen,
+lassen sich jetzt zusammenführen — einzeln geprüft oder auf einen Schlag
+für alle sicheren Gruppen — und ein einzelnes Format oder ein ganzes Buch
+wandert auf Wunsch in den Papierkorb, nie ins Nichts. „Ähnliche
+Schreibweisen…" schlägt vor, wenn derselbe Autor oder Verlag unter
+mehreren Namen auftaucht, ohne je selbst etwas zusammenzuführen; „Felder
+vereinheitlichen…" bringt Titel, Sprache, ISBN und Tags auf eine einzige,
+richtige Schreibweise. „Fehlende Felder ergänzen…" fragt Open Library und
+Google Books nach fehlenden Angaben — streng nur über die ISBN, mit einer
+engen Ausnahme für die Beschreibung über Titel und Autor — und zeigt eine
+gemeinsame Vorschau für die ganze Bibliothek, bevor irgendetwas
+geschrieben wird. „Bibliothek ordnen…" bringt die Ordnerstruktur der
+ganzen Sammlung in eine einheitliche Form. KFX-Dateien werden jetzt auf
+ihre eigene Container-Kennung hin auf DRM geprüft.
+
+### English
+
+Shelf has a new icon. Books that show up twice in the library can now be
+merged — checked one at a time or all at once for every safe group — and
+a single format or a whole book can go to the Trash, never into the
+void. "Similar Spellings…" proposes it when the same author or publisher
+appears under more than one name, without ever merging anything itself;
+"Standardize Fields…" brings title, language, ISBN and tags to one
+correct spelling. "Fill Missing Fields…" asks Open Library and Google
+Books for whatever is missing — strictly by ISBN, with a narrow
+exception for the description via title and author — and shows one
+combined preview for the whole library before anything is written.
+"Organize Library…" brings the whole collection's folder structure into
+one consistent shape. KFX files are now checked for DRM by their own
+container marker.
+
 ## 1.1.0
 
 ### Deutsch

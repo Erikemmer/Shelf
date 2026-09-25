@@ -36,8 +36,8 @@ settings:
     # that. 1.1.0-rc1 and 1.1.0-rc2 proved the beta channel and the release
     # path (Sprint 14/15); Sprint 16, Teil C promotes past both, to the main
     # channel and no more "-rc" — see ADR 0022's own Nachtrag.
-    MARKETING_VERSION: "1.1.0"
-    CURRENT_PROJECT_VERSION: "4"
+    MARKETING_VERSION: "1.2.0"
+    CURRENT_PROJECT_VERSION: "5"
     # Follows whether a Developer ID identity was found at build time –
     # `make app`/`Scripts/release.sh` set SHELF_HARDENED accordingly, the same
     # way they already choose between a real signature and an ad-hoc one. An
