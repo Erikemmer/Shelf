@@ -1,5 +1,123 @@
 # Handoff – where Shelf stands, and what is left
 
+## Sprint 20, Teil A — why 0, broken down by condition, and one real bug found · 25 September 2026
+
+**Erik's own `/Applications/Shelf.app` had `~/Bücher` open for this whole
+session** (`lsof`: `library.sqlite`/`-wal`/`-shm` held by pid 59239, started
+12:52:26, `1.2.0 (5)`). Per instruction, only Teil A and Teil C1 were
+attempted; Teil B (building the two new sources) and Teil C2–C4 (running
+against the real library through the app) were not touched this session —
+none of it needs Erik to do anything differently, it is simply what is left
+for a session that finds the app free.
+
+**A1, the 83-candidate breakdown, from a temporary analysis driver** (built
+on `ShelfCore`'s own public reader and comparison functions —
+`OpenLibraryReader`, `MetadataMerge`, `EditionMatch`, `TitleNormalization`,
+`AuthorNameFold`, `LanguageCode` — never committed, its numbers are here and
+nowhere else) **run once, read-only, against the real 366-book library and
+Sprint 19's own 348 cached Open Library answers**
+(`~/Library/Containers/de.erikemmer.shelf/Data/Library/Caches/Shelf/online/`
+— no cache entry was missing, so no new request was needed for A1 itself).
+The driver's own totals check out against Sprint 19's report before trusting
+its breakdown: 312 books eligible for the description route (matches "of the
+314 empty descriptions, 312 pass every precondition" above) and 66 + 17 = 83
+books with at least one raw candidate (matches "83 mit Kandidat" exactly).
+
+*Description route (Title+Author), 312 eligible → 246 no candidate → 66 with
+≥1 candidate:*
+
+| failed at | count | what it means |
+|---|---|---|
+| (b) title/author not uniquely equal | 25 | 10 with zero exact matches after folding, 15 with more than one — an exact match, not a score, is the whole of this route's identity check |
+| (c) language missing or disagrees | 13 | see the bug below — 1 of these 13 was a false disagreement |
+| (d) description missing or too short | 28 | **every one of these 28**, structurally, not book by book: `OpenLibraryReader.candidate` hard-codes `summary: nil` on every candidate it builds (source comment: "the search carries no description at all") — Open Library's `/search.json` is never asked for one at all (`openLibraryFields` in `MetadataEndpoint.swift` has no description-shaped field) and never could answer with one |
+| would have filled | 0 | |
+
+**So "0 filled" for descriptions is over-determined by one further fact, not
+only by the 66 above: Google Books answered *zero* times in the whole Sprint
+19 run.** `~/Library/Containers/.../online/` holds exactly 348 `openlibrary-
+*.json` files and **0** `googlebooks-*.json` ones — the first Google Books
+question of the run (HANDOFF's own "on its very first request, one refusal")
+was answered with a 429 (429 answers are never cached, so this leaves no
+file behind) and the service was then skipped for the rest of the run
+(Teil B2). Since Google Books is the *only* service `GoogleBooksReader`
+ever asks for a `description`, and Open Library structurally never carries
+one, condition (d) was unwinnable for all 312 eligible books this run, not
+only the 28 that reached it — the 246 "no candidate" and 25 "(b)" books
+would have failed at (d) too, had they reached it.
+
+*ISBN route, 36 valid-ISBN books → 19 no candidate → 17 with ≥1 candidate,
+0 ticked:* not a per-book coincidence either. `OpenLibraryReader` hard-codes
+`describesOneEdition: false` on every candidate regardless of whether the
+question was an ISBN or a title — so `publisher`/`published`/`language`
+(the three ADR-0015 calls "edition-level") are *never* trusted from an
+Open-Library-only answer (offered anyway, so the preview would still show
+them, unticked: publisher 16/17, date 17/17, language 12/17). It never sets
+`series` at all, so a series can never be offered from Open Library either.
+`title`/`authors` were offered 9 and 4 times respectively, but only as a
+*replacement* for a value the book already has — never ticked by the same
+rule that protects every other field. Tags are never ticked by policy.
+**With Google Books blocked, there was structurally nothing left an
+Open-Library-only ISBN pass could have filled**, independent of any
+particular book's own data.
+
+**The one real bug found, fixed in `066cc15`:** `DescriptionFill`'s language
+check (condition c) compared `LanguageCode.normalised` on both sides, which
+folds a bare three-letter code (`eng` → `en`) but — correctly, on
+`FieldStandardization`'s own account — leaves a *region*-tagged code
+(`en-GB`) exactly as the file said it, so it is never folded and never again
+equals a service's bare `en`/`eng`. Found against one real book in the
+library, not invented: stored `en-GB`, Open Library's only candidate
+answering the bare `eng` it always does — the same language, compared as if
+it were not. `LanguageCode.matches(_:_:)` now compares the primary subtag on
+both sides; `DescriptionFill` uses it. 2 new tests, 918 total, `make test`
+green. **Does not change Sprint 19's own outcome** — the rescued book still
+fails at (d) immediately afterwards, for the same structural reason above.
+
+**A2, five real ASINs, one question each, cached, through
+`openlibrary.org/search.json?q=id_amazon:<ASIN>`** (not through
+`MetadataFetcher`'s own actor — its `answer(to:)` is internal to
+`ShelfCore`, and this was five single questions, not a batch needing its
+pacing loop; a manual 1 s wait between the two that were not already
+answered by the first one's own cache kept the same "one request per
+second" manners; `NetworkPolicy.standard`'s own User-Agent and 15 s
+timeout were used throughout). **Result: 1 of 5 found anything at all, and
+that one found exactly one work with exactly one edition listed** — a
+clean, unambiguous hit when there was a hit. The other 4 answered
+`numFound: 0`: Open Library simply does not carry that ASIN under
+`id_amazon` at all, for the large majority of what was tried. **Decision:
+Teil B2 (ASIN treated like an ISBN) is not built.** One sample is not enough
+to call a 1-in-5 hit rate either "reliable" or "unreliable", but it is
+enough to say the *coverage* question — not the *uniqueness* question ADR
+0015's own addendum would need answered — is the one still open, and it
+needs a larger sample (fifteen to twenty ASINs, still capped and cached)
+before Teil B2 is worth building at all. The five ASINs and the one title
+found are named only in the report to Erik, never in this file (public
+repo). The 5 proof answers are cached at
+`~/Library/Caches/Shelf/online/asin-proof-*.json` — a new folder this
+session created and named, per `CLAUDE.md`.
+
+**What A1/A2 do *not* answer, on purpose:** whether the ISO 639-2→639-1
+table itself (`LanguageCode.twoLetter`) is complete or correct beyond the
+one bug above — not re-audited this session, no sign of a second case in
+366 real books' worth of comparisons. Whether Google Books would behave any
+differently on a day its quota is not already exhausted — unanswered since
+Sprint 6, still open in `docs/BACKLOG.md`.
+
+**Not attempted this session, and why:** Teil B (Open-Library-work
+description, ASIN-as-ISBN, Calibre-as-a-source) and Teil C2–C4 (a real run
+against the real library) all need either changing what "Fill Missing
+Fields…" does or driving it through the real app — both require the app
+Erik is using, which stayed untouched all session. `make smoke` could not
+be run either, for the same reason: it refuses outright while a foreign
+Shelf instance is running (`Scripts/no-foreign-shelf.sh`), by design, and
+this session never considered ending Erik's own instance to get around it.
+`make test`, `make lint` and `make app` (Release) are all green for
+`066cc15`; `make smoke` is the one check still owed before this commit's
+build is trusted the same way every other one on `main` is.
+
+---
+
 ## Shelf 1.2.0, installed · 25 September 2026
 
 **Released and installed, both proven rather than stated.** `v1.2.0` is

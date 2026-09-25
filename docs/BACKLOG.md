@@ -1557,3 +1557,26 @@ window was really there, not to skip the question — and not enough
 evidence yet to say the retry budget itself should grow; if it recurs
 after `make app`/`make release`, that is the next thing to try before
 assuming a real regression.
+
+## Sprint 20, Teil A — two things found while asking "why 0 filled", neither fixed here · 25 September 2026
+
+- **`OpenLibraryReader` treats every candidate as work-level
+  (`describesOneEdition: false`), even one answering an ISBN question.**
+  ADR 0015's own addendum already argues an ISBN search "names one edition
+  by construction" — the same reasoning that lets the ISBN pass trust an
+  ISBN candidate at all. Whether that reasoning should also extend to
+  *trusting* the same candidate's publisher/date/language (not only its
+  identity) is a real design question this session did not decide, only
+  found: right now, with Google Books blocked or simply not asked, an
+  ISBN-only Open Library answer can never fill any of the three
+  edition-level fields, no matter how confident the ISBN match is. Worth a
+  decision, not a quiet change — narrowing what `describesOneEdition`
+  means is exactly the kind of thing ADR 0015 asks to be dated and reasoned
+  about explicitly, not defaulted into.
+- **A2 (Sprint 20, `docs/HANDOFF.md`): Open Library's `id_amazon` search
+  field found 1 of 5 real ASINs, and that one cleanly.** Too small a sample
+  to build "ASIN like an ISBN" (ADR 0015's own Teil B2) on. A fifteen-to-
+  twenty-ASIN sample, still capped and cached, is what the next session
+  needs before deciding either way — this one's own 5 answers are cached
+  at `~/Library/Caches/Shelf/online/asin-proof-*.json` and can be read
+  again rather than re-asked.
