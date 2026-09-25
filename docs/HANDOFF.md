@@ -1,5 +1,45 @@
 # Handoff – where Shelf stands, and what is left
 
+## Shelf 1.2.0, installed · 25 September 2026
+
+**Released and installed, both proven rather than stated.** `v1.2.0` is
+tagged on `a8928d3`, published to `Erikemmer/shelf-releases`
+(`gh release view v1.2.0`: not a pre-release, four assets), and its
+appcast entry's EdDSA signature is the one `sign_update --account shelf`
+actually produced during the real, non-dry run — checked against a fresh
+download of the published zip, byte-identical to the one signed.
+`/Applications/Shelf.app` was then updated the human way — its own
+Sparkle "Nach Updates suchen …", "Installieren", "Installieren und App
+neu starten" — and reads back `1.2.0 (5)`, `ShelfBuildCommit` matching
+the tagged commit exactly; `~/Bücher` opens from it with no prompt, 366
+books, matching the index. Both the Dock and the About panel already
+show the new icon — the LaunchServices staleness Sprint 18 hit after a
+plain rebuild did not recur through a real Sparkle install. No Gatekeeper
+prompt appeared; the installed app carries no quarantine attribute,
+untouched.
+
+**Sprint 19's own work, folded into this release:** the last two real
+titles left the test fixtures (Teil A1); the KFX container census (268
+`CONT`, 0 of anything else — Teil A2) and why "Fill Missing Fields…"
+found nothing to fill, both the first time and re-measured for real
+against the live library this sprint (Teil A3/B2/B3, 0 fields filled
+either way — full numbers further down); Calibre as a second source
+stayed unreachable, a cloud-sync placeholder this session has no grant
+for, checked a different way than Sprint 18's plain "not mounted" (Teil
+B1); a service that answers 429 now stops being asked for the rest of
+one batch run rather than every book after it (Teil B2, tested and run
+for real). One thing not attempted this sprint: `make smoke` flaked
+twice, real, right after a fresh build — explained, not fixed, in
+`docs/BACKLOG.md`.
+
+**Still open, carried from Sprint 18 and unchanged by this sprint:** the
+Dock/About icon staleness after a *plain rebuild* (distinct from the
+real install above, which did not show it); what launched two
+unexplained `Shelf.app` instances a past session found; an automated,
+technical check that a batch run has a proven backup before it starts.
+
+---
+
 **Sprint 18's pre-change backup, checked 25 September 2026: complete, not
 missing.** `~/Library/Caches/Shelf/standardize-2026-09-24/` was believed to
 hold only `manifest.tsv` (a hash list of 1 845 files) with no folder copy
