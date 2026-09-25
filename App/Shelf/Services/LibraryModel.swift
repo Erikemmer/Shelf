@@ -1461,6 +1461,22 @@ final class LibraryModel {
         fillMissingFields?.begin(over: entries)
     }
 
+    /// "Calibre-Bibliothek als Quelle wählen…" (Teil B4) — the same Open
+    /// panel path as importing from Calibre (`presentCalibrePanel`), but
+    /// this one only ever reads: nothing is imported, nothing is written
+    /// until the combined preview's own Apply is pressed.
+    func chooseCalibreSourceForFillMissingFields() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = Loc.string("Choose")
+        panel.message = Loc.string(
+            "Choose your Calibre library – the folder that holds metadata.db. Shelf only reads it.")
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        Task { await fillMissingFields?.chooseCalibreSource(folder) }
+    }
+
     /// Writes every book's plan and fetches every gap's cover, as **one**
     /// undo step — the same discipline `Standardize Fields…` and `Similar
     /// Spellings…` already keep: the value shown is the value written, and

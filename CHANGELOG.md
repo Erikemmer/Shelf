@@ -3,6 +3,25 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 21, Teil B4 — Calibre as a second source for "Fill Missing Fields…" · 25 September 2026
+
+"Fill Missing Fields…" gains "Calibre Library as a Source…", the same Open
+panel path importing from Calibre already uses (ADR 0009's own copy-first
+read, unchanged). Matched only by the UUID Calibre gave a book at import or
+an equal, checksum-valid ISBN — never a title. `CalibreSourceAvailability`
+reads a chosen folder's resource values, never its bytes, so a cloud-sync
+placeholder is refused with a sentence rather than silently downloaded.
+`CalibreFieldSource` fills only six fields plus tags, only where empty,
+description reduced from Calibre's own rich HTML to plain paragraphs
+(`HTMLToPlainParagraphs`) rather than rejected the way an online guess's
+markup would be. Calibre runs before every online source in the same pass,
+so its own priority is enforced by ordering rather than a rule of its own —
+and a book that gains an ISBN from Calibre this way is then also eligible
+for the online ISBN pass in the same run. 18 new core tests (967 total).
+Verified with a real click against the current build (a synthetic
+five-book library, screenshot kept locally rather than committed — not
+staged for this repository). Full reasoning: ADR 0015's Teil B4 addendum.
+
 ## Sprint 21, Teil B4 — a `metadata.opf` beside a book file, on a fresh import, is no longer thrown away · 25 September 2026
 
 Found while checking, as instructed, whether Sprint 16's own import had

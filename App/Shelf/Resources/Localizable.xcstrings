@@ -12268,6 +12268,142 @@
           }
         }
       }
+    },
+    "%@ holds no metadata.db, so it is not a Calibre library.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In %@ liegt keine metadata.db, also ist das keine Calibre-Bibliothek."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ holds no metadata.db, so it is not a Calibre library."
+          }
+        }
+      }
+    },
+    "metadata.db in %@ is not fully downloaded. Shelf does not open a placeholder file, and did not start a download.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "metadata.db in %@ ist nicht vollständig heruntergeladen. Shelf öffnet keine Platzhalterdatei und hat keinen Download gestartet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "metadata.db in %@ is not fully downloaded. Shelf does not open a placeholder file, and did not start a download."
+          }
+        }
+      }
+    },
+    "Could not read %@ as a Calibre library.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ konnte nicht als Calibre-Bibliothek gelesen werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read %@ as a Calibre library."
+          }
+        }
+      }
+    },
+    "Calibre library chosen: %lld book(s)": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calibre-Bibliothek gewählt: %lld Buch/Bücher"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calibre library chosen: %lld book(s)"
+          }
+        }
+      }
+    },
+    "Calibre library chosen — %lld book(s), checked before every online source.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calibre-Bibliothek gewählt — %lld Buch/Bücher, vor jeder Online-Quelle geprüft."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calibre library chosen — %lld book(s), checked before every online source."
+          }
+        }
+      }
+    },
+    "Choose a Calibre library as a second source, or search online only.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wählen Sie eine Calibre-Bibliothek als zweite Quelle, oder suchen Sie nur online."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a Calibre library as a second source, or search online only."
+          }
+        }
+      }
+    },
+    "Calibre Library as a Source…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calibre-Bibliothek als Quelle wählen…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calibre Library as a Source…"
+          }
+        }
+      }
+    },
+    "Reading the Calibre library…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calibre-Bibliothek wird gelesen…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the Calibre library…"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

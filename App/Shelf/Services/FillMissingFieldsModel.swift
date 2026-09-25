@@ -14,18 +14,28 @@ final class FillMissingFieldsModel {
     enum Phase: Equatable {
         static func == (one: Phase, other: Phase) -> Bool {
             switch (one, other) {
+            case (.choosingSource, .choosingSource): return true
+            case (.readingCalibre, .readingCalibre): return true
             case (.searching(let a, let b), .searching(let c, let d)): return a == c && b == d
             case (.ready, .ready): return true
             case (.done(let a, let b), .done(let c, let d)): return a == c && b == d
             default: return false
             }
         }
+        /// Teil B4: before anything is asked, a choice — search online only,
+        /// or choose a Calibre library first, which then runs ahead of it.
+        case choosingSource
+        case readingCalibre
         case searching(done: Int, total: Int)
         case ready(FillMissingFields.Result)
         case done(booksFilled: Int, coversFilled: Int)
     }
 
-    private(set) var phase: Phase?
+    private(set) var phase: Phase? = .choosingSource
+    private(set) var calibreLibrary: CalibreLibrary?
+    /// What choosing a Calibre folder said, shown once and then out of the
+    /// way — never blocking the online-only path a person can still take.
+    private(set) var calibreMessage: String?
     private let fetcher: MetadataFetcher
     private let coverTransport = URLSessionTransport()
     private let libraryRoot: URL
@@ -35,14 +45,63 @@ final class FillMissingFieldsModel {
         self.libraryRoot = libraryRoot
     }
 
+    /// Teil B4: "Calibre-Bibliothek als Quelle wählen…". `folder` is
+    /// whatever the person chose in the Open panel — the human way, never a
+    /// path guessed or remembered. Only ever read, and only once its own
+    /// availability check (`CalibreSourceAvailability`) says the file is
+    /// fully local: choosing a cloud-sync placeholder never starts a
+    /// download, it says so and leaves the online-only path open.
+    func chooseCalibreSource(_ folder: URL) async {
+        phase = .readingCalibre
+        switch CalibreSourceAvailability.status(ofMetadataDB: folder) {
+        case .missing:
+            calibreMessage = Loc.string(
+                "%@ holds no metadata.db, so it is not a Calibre library.", folder.lastPathComponent)
+            phase = .choosingSource
+            return
+        case .placeholder:
+            calibreMessage = Loc.string(
+                "metadata.db in %@ is not fully downloaded. Shelf does not open a placeholder file, "
+                    + "and did not start a download.", folder.lastPathComponent)
+            phase = .choosingSource
+            return
+        case .available:
+            break
+        }
+
+        let cache = Self.calibreCacheDirectory
+        let outcome = await Task.detached(priority: .userInitiated) { () -> Result<CalibreLibrary, any Error> in
+            Result { try CalibreReader().read(folder: folder, cacheDirectory: cache) }
+        }.value
+
+        switch outcome {
+        case .failure:
+            calibreMessage = Loc.string("Could not read %@ as a Calibre library.", folder.lastPathComponent)
+            phase = .choosingSource
+        case .success(let library):
+            calibreLibrary = library
+            calibreMessage = Loc.count("Calibre library chosen: %lld book(s)", library.books.count)
+            phase = .choosingSource
+        }
+    }
+
+    /// Never under `~/Documents`, which is synced — the same rule and the
+    /// same folder `ImportModel.calibreCacheDirectory` already uses.
+    private static var calibreCacheDirectory: URL {
+        let url = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Caches/Shelf")
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
     /// Runs the ISBN pass and the description exception across every entry,
     /// reporting progress as it goes — a real library at one request per
-    /// second per service can take minutes.
+    /// second per service can take minutes. Calibre, when chosen, is asked
+    /// first for every book (`FillMissingFields.plan`'s own priority rule).
     func begin(over entries: [LibraryEntry]) {
         phase = .searching(done: 0, total: entries.count)
         Task {
             let result = await FillMissingFields.plan(
-                over: entries, fetcher: fetcher,
+                over: entries, fetcher: fetcher, calibreLibrary: calibreLibrary,
                 progress: { [weak self] done, total in
                     Task { @MainActor in self?.phase = .searching(done: done, total: total) }
                 })

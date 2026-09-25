@@ -30,6 +30,11 @@ public enum FillMissingFields {
             /// exactly one edition, trusted the same way an ISBN is.
             case asin(MetadataSource)
             case titleAuthor(MetadataSource)
+            /// Teil B4: a Calibre library chosen as a second source, matched
+            /// by UUID or ISBN. Takes priority over every online source —
+            /// enforced by running first, so a field it fills is no longer
+            /// empty by the time an online pass would otherwise offer it.
+            case calibre
         }
         public var label: String
         public var current: String
@@ -84,8 +89,14 @@ public enum FillMissingFields {
     /// been asked about so far — a real library paced at one request per
     /// second per service can take minutes, and a window with nothing moving
     /// in it for minutes is indistinguishable from one that has hung.
+    /// `calibreLibrary`, when given (Teil B4), is asked for every book
+    /// before any online source is — Calibre's own priority over online is
+    /// enforced by this ordering alone: a field it fills is no longer empty
+    /// by the time the ISBN/ASIN/Title+Author passes below would otherwise
+    /// offer it.
     public static func plan(
         over entries: [LibraryEntry], fetcher: MetadataFetcher, at now: Date = Date(),
+        calibreLibrary: CalibreLibrary? = nil,
         progress: (@Sendable (Int, Int) -> Void)? = nil
     ) async -> Result {
         var plans: [BookPlan] = []
@@ -103,7 +114,14 @@ public enum FillMissingFields {
             var proposals: [Proposal] = []
             var reason: UnchangedReason = .nothingToAskWith
 
-            if let query = MetadataQuery.about(entry.book), case .isbn(let isbn) = query {
+            // Teil B4, first: Calibre over online, by running before it.
+            if let calibreLibrary, let match = CalibreFieldSource.matching(entry.book, in: calibreLibrary) {
+                let filled = CalibreFieldSource.fill(working, from: match)
+                working = filled.book
+                proposals += filled.proposals
+            }
+
+            if let query = MetadataQuery.about(working), case .isbn(let isbn) = query {
                 reason = .noAnswer
                 let result = await fetcher.candidates(for: query, skipping: blockedSources)
                 problems.formUnion(result.problems)
@@ -158,7 +176,7 @@ public enum FillMissingFields {
                                 proposed: found.summary, source: .isbn(.openLibrary)))
                     }
                 }
-            } else if let asin = AmazonASIN.valid(in: entry.book.identifiers) {
+            } else if let asin = AmazonASIN.valid(in: working.identifiers) {
                 // Teil B3: the same trust rule as B2, reached through an ASIN
                 // instead of an ISBN — only when the search named exactly
                 // one work with exactly one edition (`OpenLibraryASINSearch`,

@@ -20,14 +20,16 @@ struct FillMissingFieldsSheet: View {
                 .foregroundStyle(Slate.textPrimary)
 
             switch model.fillMissingFields?.phase {
+            case .choosingSource, nil:
+                choosingSource
+            case .readingCalibre:
+                readingCalibre
             case .searching(let done, let total):
                 searching(done: done, total: total)
             case .ready(let result):
                 preview(result)
             case .done(let booksFilled, let coversFilled):
                 finished(booksFilled: booksFilled, coversFilled: coversFilled)
-            case nil:
-                EmptyView()
             }
 
             buttons
@@ -35,10 +37,43 @@ struct FillMissingFieldsSheet: View {
         .padding(20)
         .frame(width: 680)
         .background(Slate.windowBackground)
-        .onAppear {
-            if model.fillMissingFields?.phase == nil {
-                model.beginFillMissingFieldsSearch()
+    }
+
+    /// Teil B4's own first step: online only, or Calibre first. Neither
+    /// asks anything over the network or reads anything beyond a chosen
+    /// folder's own resource values until a button here is pressed.
+    private var choosingSource: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let library = model.fillMissingFields?.calibreLibrary {
+                Text(
+                    Loc.count(
+                        "Calibre library chosen — %lld book(s), checked before every online source.",
+                        library.books.count)
+                )
+                .font(.caption)
+                .foregroundStyle(Slate.textPrimary)
+            } else {
+                Text(Loc.string("Choose a Calibre library as a second source, or search online only."))
+                    .font(.callout)
+                    .foregroundStyle(Slate.textPrimary)
+                Button(Loc.string("Calibre Library as a Source…")) {
+                    model.chooseCalibreSourceForFillMissingFields()
+                }
             }
+            if let message = model.fillMissingFields?.calibreMessage {
+                Text(message)
+                    .font(.caption2)
+                    .foregroundStyle(Slate.textSecondary)
+            }
+        }
+    }
+
+    private var readingCalibre: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text(Loc.string("Reading the Calibre library…"))
+                .font(.caption)
+                .foregroundStyle(Slate.textSecondary)
         }
     }
 
@@ -99,6 +134,7 @@ struct FillMissingFieldsSheet: View {
         case .isbn: sourceLabel = "ISBN"
         case .asin: sourceLabel = "ASIN"
         case .titleAuthor: sourceLabel = Loc.string("Title+Author")
+        case .calibre: sourceLabel = "Calibre"
         }
         let current = proposal.current.isEmpty ? "–" : proposal.current
         let change = "“\(current)” → “\(proposal.proposed)”"
@@ -119,6 +155,10 @@ struct FillMissingFieldsSheet: View {
                 dismiss()
             }
             .keyboardShortcut(.cancelAction)
+            if case .choosingSource = model.fillMissingFields?.phase ?? .choosingSource {
+                Button(Loc.string("Search")) { model.beginFillMissingFieldsSearch() }
+                    .keyboardShortcut(.defaultAction)
+            }
             if case .ready(let result) = model.fillMissingFields?.phase {
                 Button(Loc.string("Apply")) {
                     isApplying = true

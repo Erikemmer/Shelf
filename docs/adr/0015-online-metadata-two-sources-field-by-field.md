@@ -268,6 +268,58 @@ probes above ran against the real library and are named, with counts, only
 in the report to Erik and in `docs/HANDOFF.md`; nothing from them is
 quoted here.
 
+## Addendum – 25 September 2026, Sprint 21, Teil B4 — Calibre as a second
+source for "Fill Missing Fields…"
+
+**Matched by identity, never by a guess — the same standard rule 5 already
+holds a title search to.** `CalibreFieldSource.matching` accepts a book only
+by the UUID Calibre itself gave it at import (CONCEPT §5.3 — "the identity
+is a UUID, taken over from Calibre when there is one") or, failing that, an
+equal, checksum-valid ISBN. A title is never enough on its own, the same
+line this ADR already draws for an online Title+Author search.
+
+**Read exactly the way ADR 0009 already requires — a copy, never the live
+`metadata.db`, and this addendum adds nothing to that mechanism.** What is
+new is *when* it is asked at all: `CalibreSourceAvailability.status` reads
+only the chosen folder's own resource values — never its bytes — before
+`CalibreReader` is ever called, so a cloud-sync placeholder (iCloud Drive, or
+a third-party File Provider such as Synology Drive, unified under
+`~/Library/CloudStorage/` since macOS put every provider behind one
+framework) is refused with a plain sentence rather than silently starting a
+download. `CLAUDE.md` is explicit that choosing this folder must never
+trigger one.
+
+**Only six fields, plus tags, never title or authors — narrower than an
+online source's own field list.** Description (Calibre's `comments`, HTML
+reduced to plain paragraphs by `HTMLToPlainParagraphs` — a *transform*,
+deliberately not the stricter *check* `DescriptionFill.isPlainEnough`
+already applies to an online Title+Author guess, because rich HTML is what
+Calibre's own comments field almost always is, and refusing all of it would
+refuse nearly every real one), series and its index, publisher, language,
+the date, and the ISBN identifier — plus tags, but only where the book has
+**none of its own at all**, never added alongside them. Every value still
+goes through the same field rule an online source's does (`BookField`,
+`TagEdit`, `IdentifierEdit`): an ISBN with a wrong check digit is refused
+whether Calibre, a service, or a person typed it, and only an empty field is
+ever filled.
+
+**Calibre outranks online, enforced by running first rather than by a rule
+of its own.** `FillMissingFields.plan` asks the chosen Calibre library for
+every book before it asks Open Library or Google Books anything; a field
+Calibre already filled is no longer empty by the time an online pass would
+otherwise offer it, and — found worth keeping, not designed in from the
+start — a book that had no ISBN of its own but gets one from Calibre is then
+also eligible for the ISBN-only online pass in the very same run, on the
+strength of exactly that ISBN.
+
+**Found on the way, fixed in its own commit first: a fresh import had been
+silently discarding a `metadata.opf` already sitting beside a book file.**
+`IndexRebuilder.readFolder` already treats that file as the authority for a
+book already *in* a library; `ImportModel.candidate(for:)` never looked for
+one at all. `SidecarOPF` closes that gap — unrelated to Calibre-as-a-source
+in its mechanism, but found while checking, as instructed, whether Sprint
+16's own import had ever thrown a Calibre field away.
+
 ## Alternatives not taken
 
 - **An API key for Google Books.** It would fix the 429, and it would be a

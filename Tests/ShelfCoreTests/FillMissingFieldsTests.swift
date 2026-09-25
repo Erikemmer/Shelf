@@ -519,4 +519,70 @@ struct FillMissingFieldsTests {
         let result = await FillMissingFields.plan(over: [withUUID], fetcher: fetcher([]))
         #expect(result.unchanged.first?.reason == .nothingToAskWith)
     }
+
+    // MARK: - Teil B4: Calibre, chosen as a second source, runs before online
+
+    @Test("Calibre fills a field; the online pass then leaves it alone")
+    func calibreRunsBeforeOnline() async throws {
+        let id = UUID()
+        let ours = LibraryEntry(
+            book: Book(id: id, title: "Sturmlicht", authors: ["A. Autor"], language: "de"), number: 1,
+            folder: "Sturmlicht")
+        let calibreBook = CalibreBook(
+            number: 1,
+            book: Book(
+                id: id, title: "Sturmlicht", authors: ["A. Autor"], publisher: "Der Calibre-Verlag",
+                identifiers: [:]),
+            folder: "A. Autor/Sturmlicht (1)")
+        let library = CalibreLibrary(
+            folder: URL(fileURLWithPath: "/tmp"), schema: CalibreSchema(userVersion: 1, isKnown: true),
+            books: [calibreBook])
+
+        // No ISBN and no valid ASIN, so the online branch has nothing to
+        // ask with — proving the publisher came from Calibre, not from a
+        // service this fetcher script would have had to answer for.
+        let result = await FillMissingFields.plan(
+            over: [ours], fetcher: fetcher([]), calibreLibrary: library)
+
+        let plan = try #require(result.plans.first)
+        #expect(plan.change.after.publisher == "Der Calibre-Verlag")
+        #expect(plan.proposals.contains { $0.source == .calibre })
+    }
+
+    @Test("Calibre fills the ISBN; the online ISBN pass then runs on the strength of it")
+    func calibresISBNUnlocksTheOnlinePass() async throws {
+        let id = UUID()
+        let ours = LibraryEntry(
+            book: Book(id: id, title: "Sturmlicht", authors: ["A. Autor"]), number: 1, folder: "Sturmlicht")
+        let calibreBook = CalibreBook(
+            number: 1,
+            book: Book(
+                id: id, title: "Sturmlicht", authors: ["A. Autor"], identifiers: ["isbn": "9780306406157"]),
+            folder: "A. Autor/Sturmlicht (1)")
+        let library = CalibreLibrary(
+            folder: URL(fileURLWithPath: "/tmp"), schema: CalibreSchema(userVersion: 1, isKnown: true),
+            books: [calibreBook])
+
+        let googleBooks = """
+            {"items": [{"id": "gb1", "volumeInfo": {"title": "Sturmlicht", "authors": ["A. Autor"],
+            "publisher": "Verlag X", "industryIdentifiers": [{"type": "ISBN_13", "identifier": "9780306406157"}]}}]}
+            """
+        let result = await FillMissingFields.plan(
+            over: [ours], fetcher: fetcher([answer(emptyOpenLibrary), answer(googleBooks), answer(""), answer("")]),
+            calibreLibrary: library)
+
+        let plan = try #require(result.plans.first)
+        #expect(plan.change.after.identifiers["isbn"] == "9780306406157")
+        #expect(plan.change.after.publisher == "Verlag X")
+        #expect(plan.proposals.contains { $0.source == .calibre })
+        #expect(plan.proposals.contains { $0.source == .isbn(.googleBooks) })
+    }
+
+    @Test("no Calibre library chosen at all — the run behaves exactly as before Teil B4")
+    func noCalibreLibraryIsTheDefault() async {
+        let result = await FillMissingFields.plan(
+            over: [entry(isbn: "9780306406157")],
+            fetcher: fetcher([answer(emptyOpenLibrary), answer(emptyGoogleBooks), answer("")]))
+        #expect(result.unchanged.first?.reason == .noAnswer)
+    }
 }
