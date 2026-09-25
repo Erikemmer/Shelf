@@ -3,6 +3,21 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 19, Teil B2 — a 429 now stops that service for the rest of the run · 25 September 2026
+
+The Title+Author route into `description` (`DescriptionFill`'s own four
+conditions) already existed, from Sprint 18 Teil C4. What was still missing:
+a service that answers 429 to book one of a 366-book run was asked again
+for book two, book three and every book after — the same free-quota refusal
+logged fresh each time. `MetadataFetcher.candidates(for:skipping:)` takes a
+set of services not to ask at all; `FillMissingFields.plan` now remembers
+which service just said 429 and skips it for the rest of that run,
+counting the skips in `Result.serviceSkips` rather than dropping them.
+Scoped to the one `plan` call, on purpose (dated addendum, ADR 0015): the
+fetcher itself stays stateless, since it is shared with the one-book "Fetch
+Metadata…" sheet and a batch run's refusal has no business silencing that.
+5 new tests (916 total).
+
 ## Sprint 19, Teil A1 — the last two real titles left the test fixtures · 25 September 2026
 
 This repository is public. Read against the real library (only read, never

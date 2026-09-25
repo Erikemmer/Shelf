@@ -99,10 +99,18 @@ public actor MetadataFetcher {
     /// A service that fails does not stop the other: the result carries what
     /// came back and what did not, and the window shows the failures as a line
     /// in the status bar rather than as a dialogue (CONCEPT §9).
-    public func candidates(for query: MetadataQuery) async -> LookupResult {
+    ///
+    /// `skipping` names services not to ask at all this time — a batch run
+    /// over many books (`FillMissingFields`) passes back in whatever already
+    /// answered 429 for an earlier book, so a service that has said "stop" is
+    /// not asked a second, third and four-hundredth time in the same run. The
+    /// one-book "Fetch Metadata…" sheet always passes the default, empty set:
+    /// a person opening it fresh is a new question, not a continuation of
+    /// somebody else's.
+    public func candidates(for query: MetadataQuery, skipping: Set<MetadataSource> = []) async -> LookupResult {
         var found: [MetadataCandidate] = []
         var problems: [String] = []
-        for request in MetadataEndpoint.requests(for: query) {
+        for request in MetadataEndpoint.requests(for: query) where !skipping.contains(request.source) {
             switch await answer(to: request) {
             case .answered(let data):
                 do {
@@ -121,7 +129,8 @@ public actor MetadataFetcher {
         return LookupResult(
             query: query,
             ranked: MetadataScore.ranked(found, for: query),
-            problems: problems)
+            problems: problems,
+            skippedSources: skipping)
     }
 
     func parse(
@@ -193,18 +202,35 @@ public struct LookupResult: Equatable, Sendable {
     /// One line per service that could not answer. Never empty *and* fatal:
     /// one service failing still leaves the other's candidates.
     public var problems: [String]
+    /// Services this call skipped outright rather than asking — see
+    /// `MetadataFetcher.candidates(for:skipping:)`.
+    public var skippedSources: Set<MetadataSource>
 
     public var candidates: [MetadataCandidate] { ranked.map(\.candidate) }
     public var isEmpty: Bool { ranked.isEmpty }
 
-    public init(query: MetadataQuery, ranked: [(candidate: MetadataCandidate, score: Int)], problems: [String]) {
+    /// Which of *this call's own* services answered 429 — a fresh refusal,
+    /// found the same way `briefProblem` already reads `problems`, rather
+    /// than a new field `answer(to:)` would have to thread through. A
+    /// service already in `skippedSources` was never asked, so it cannot be
+    /// in here too: this is only ever a service that just said "stop".
+    public var refusedTooManyRequests: Set<MetadataSource> {
+        Set(MetadataSource.allCases.filter { problems.contains("\($0.name) answered 429.") })
+    }
+
+    public init(
+        query: MetadataQuery, ranked: [(candidate: MetadataCandidate, score: Int)], problems: [String],
+        skippedSources: Set<MetadataSource> = []
+    ) {
         self.query = query
         self.ranked = ranked
         self.problems = problems
+        self.skippedSources = skippedSources
     }
 
     public static func == (left: LookupResult, right: LookupResult) -> Bool {
         left.query == right.query && left.problems == right.problems
+            && left.skippedSources == right.skippedSources
             && left.ranked.map(\.candidate) == right.ranked.map(\.candidate)
             && left.ranked.map(\.score) == right.ranked.map(\.score)
     }

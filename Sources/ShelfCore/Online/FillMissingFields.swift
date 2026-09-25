@@ -65,6 +65,11 @@ public enum FillMissingFields {
         /// a service down for ten minutes should not repeat itself four
         /// hundred times in the report.
         public var problems: [String]
+        /// How many books' lookups skipped a service outright because it had
+        /// already answered 429 earlier in this same run — the count behind
+        /// `problems`' one "answered 429" line, for a report that wants to
+        /// say how much of the run that one refusal actually covered.
+        public var serviceSkips: [MetadataSource: Int]
     }
 
     /// Runs the ISBN pass and the description exception across every entry,
@@ -83,6 +88,11 @@ public enum FillMissingFields {
         var plans: [BookPlan] = []
         var unchanged: [Unchanged] = []
         var problems: Set<String> = []
+        // Once a service answers 429 for one book, it is not asked again for
+        // any later one — "stop" said once covers the rest of this run, the
+        // same way `NetworkPolicy` already treats it within one request.
+        var blockedSources: Set<MetadataSource> = []
+        var serviceSkips: [MetadataSource: Int] = [:]
 
         for (done, entry) in entries.enumerated() {
             defer { progress?(done + 1, entries.count) }
@@ -92,8 +102,10 @@ public enum FillMissingFields {
 
             if let query = MetadataQuery.about(entry.book), case .isbn = query {
                 reason = .noAnswer
-                let result = await fetcher.candidates(for: query)
+                let result = await fetcher.candidates(for: query, skipping: blockedSources)
                 problems.formUnion(result.problems)
+                for source in result.skippedSources { serviceSkips[source, default: 0] += 1 }
+                blockedSources.formUnion(result.refusedTooManyRequests)
                 if let best = result.ranked.first {
                     reason = .nothingToFill
                     let comparison = EditionMatch.comparison(of: best.candidate, among: result.ranked, asked: query)
@@ -109,9 +121,11 @@ public enum FillMissingFields {
                 }
             }
 
-            let (found, descriptionProblems) = await DescriptionFill.find(for: working, fetcher: fetcher)
-            problems.formUnion(descriptionProblems)
-            if let found {
+            let described = await DescriptionFill.find(for: working, fetcher: fetcher, skipping: blockedSources)
+            problems.formUnion(described.problems)
+            for source in described.skipped { serviceSkips[source, default: 0] += 1 }
+            blockedSources.formUnion(described.refused)
+            if let found = described.summary {
                 working.description = found.summary
                 proposals.append(
                     Proposal(
@@ -127,7 +141,7 @@ public enum FillMissingFields {
             }
         }
 
-        return Result(plans: plans, unchanged: unchanged, problems: problems.sorted())
+        return Result(plans: plans, unchanged: unchanged, problems: problems.sorted(), serviceSkips: serviceSkips)
     }
 }
 
@@ -144,20 +158,34 @@ public enum DescriptionFill {
     /// snippet ("Winner of the Booker Prize") is more likely than a summary.
     static let minimumLength = 80
 
-    /// `nil, []` when any of the four conditions fails — never a guess, and
-    /// never applied where the field already holds something.
+    /// One try at filling `description`, and everything a batch run needs to
+    /// know about the services it spent doing so.
+    struct Attempt {
+        var summary: (summary: String, source: MetadataSource)?
+        var problems: [String] = []
+        /// Services not asked this time because an earlier book in the same
+        /// run already had one refuse with 429.
+        var skipped: Set<MetadataSource> = []
+        /// Services that answered 429 to *this* book's own question.
+        var refused: Set<MetadataSource> = []
+    }
+
+    /// An empty `summary` when any of the four conditions fails — never a
+    /// guess, and never applied where the field already holds something.
     static func find(
-        for book: Book, fetcher: MetadataFetcher
-    ) async -> (summary: (summary: String, source: MetadataSource)?, problems: [String]) {
+        for book: Book, fetcher: MetadataFetcher, skipping: Set<MetadataSource> = []
+    ) async -> Attempt {
         // (a) the field is empty.
-        guard (book.description ?? "").isEmpty else { return (nil, []) }
+        guard (book.description ?? "").isEmpty else { return Attempt() }
         let title = book.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return (nil, []) }
-        guard let bookLanguage = book.language, !bookLanguage.isEmpty else { return (nil, []) }
-        guard !book.authors.isEmpty else { return (nil, []) }
+        guard !title.isEmpty else { return Attempt() }
+        guard let bookLanguage = book.language, !bookLanguage.isEmpty else { return Attempt() }
+        guard !book.authors.isEmpty else { return Attempt() }
 
         let query = MetadataQuery.titleAuthor(title: title, author: book.authors.first)
-        let result = await fetcher.candidates(for: query)
+        let result = await fetcher.candidates(for: query, skipping: skipping)
+        var attempt = Attempt(
+            problems: result.problems, skipped: result.skippedSources, refused: result.refusedTooManyRequests)
 
         let ourTitle = TitleNormalization.matchable(title)
         let ourAuthors = Set(book.authors.map(AuthorNameFold.normalized))
@@ -169,16 +197,17 @@ public enum DescriptionFill {
             TitleNormalization.matchable($0.title) == ourTitle
                 && Set($0.authors.map(AuthorNameFold.normalized)) == ourAuthors
         }
-        guard matches.count == 1, let candidate = matches.first else { return (nil, result.problems) }
+        guard matches.count == 1, let candidate = matches.first else { return attempt }
         // (c) a known language, and it agrees with the book's own.
         guard let candidateLanguage = candidate.language, !candidateLanguage.isEmpty,
             LanguageCode.normalised(candidateLanguage) == LanguageCode.normalised(bookLanguage)
-        else { return (nil, result.problems) }
+        else { return attempt }
         // (d) long enough to be a summary, and no markup beyond a paragraph
         // break — never an HTML fragment the inspector would show verbatim.
-        guard let summary = candidate.summary, isPlainEnough(summary) else { return (nil, result.problems) }
+        guard let summary = candidate.summary, isPlainEnough(summary) else { return attempt }
 
-        return ((summary, candidate.source), result.problems)
+        attempt.summary = (summary, candidate.source)
+        return attempt
     }
 
     static func isPlainEnough(_ text: String) -> Bool {

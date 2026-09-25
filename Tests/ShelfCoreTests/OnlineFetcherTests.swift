@@ -177,6 +177,42 @@ struct MetadataFetcherTests {
         #expect(times[3] - times[1] >= .milliseconds(100))
     }
 
+    @Test("a service named in skipping is not asked at all")
+    func skippingAService() async throws {
+        let (fetcher, transport) = quick([.init(status: 200, body: try fixture("openlibrary-isbn-9780441013593.json"))])
+        let result = await fetcher.candidates(for: .isbn("9780441013593"), skipping: [.googleBooks])
+
+        #expect(await transport.asked.count == 1, "only Open Library was asked")
+        #expect(result.candidates.count == 1)
+        #expect(result.skippedSources == [.googleBooks])
+        #expect(result.problems.isEmpty, "a service skipped on purpose is not a failure")
+    }
+
+    @Test("skipping every service asks nobody and still answers")
+    func skippingEveryService() async {
+        let (fetcher, transport) = quick([])
+        let result = await fetcher.candidates(for: .isbn("9780441013593"), skipping: Set(MetadataSource.allCases))
+        #expect(await transport.asked.isEmpty)
+        #expect(result.isEmpty)
+        #expect(result.skippedSources == Set(MetadataSource.allCases))
+    }
+
+    @Test("refusedTooManyRequests names only a service that answered 429 just now")
+    func refusedTooManyRequestsNamesFreshRefusals() async {
+        let (fetcher, _) = quick([
+            .init(status: 200, body: Data("{\"docs\": []}".utf8)),
+            .init(status: 429, body: Data("{}".utf8)),
+        ])
+        let result = await fetcher.candidates(for: .isbn("9780441013593"))
+        #expect(result.refusedTooManyRequests == [.googleBooks])
+
+        // A service that was skipped, not asked, never counts as "just refused" —
+        // it said nothing this time, so there is nothing fresh to report.
+        let (skippingFetcher, _) = quick([])
+        let skipped = await skippingFetcher.candidates(for: .isbn("x"), skipping: [.googleBooks, .openLibrary])
+        #expect(skipped.refusedTooManyRequests.isEmpty)
+    }
+
     @Test("an answer already on disk is not asked for again")
     func theCacheAnswers() async throws {
         let folder = try TemporaryFolder()

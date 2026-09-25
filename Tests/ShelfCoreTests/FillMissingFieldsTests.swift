@@ -199,6 +199,55 @@ struct FillMissingFieldsTests {
         #expect(seen.map(\.1) == [2, 2])
     }
 
+    // MARK: - A 429 stops that service for the rest of the run
+
+    @Test("a 429 on one book's ISBN pass stops that service being asked for any later book")
+    func a429StopsTheServiceForLaterBooks() async {
+        let result = await FillMissingFields.plan(
+            over: [
+                entry(isbn: "9780306406157", number: 1),
+                entry(isbn: "9780132350884", number: 2),
+            ],
+            fetcher: fetcher([
+                answer(emptyOpenLibrary), ScriptedTransport.Answer(status: 429, body: Data("{}".utf8)),
+                answer(emptyOpenLibrary),
+            ]))
+
+        #expect(result.problems.contains { $0.contains("Google Books") && $0.contains("429") })
+        // Exactly one line — a service down for the run is one fact, said once,
+        // not repeated per book it then affected.
+        #expect(result.problems.filter { $0.contains("429") }.count == 1)
+        // Book 1 is the one that got the 429 itself, not a skip; book 2's own
+        // request to Google Books is the one that never happened.
+        #expect(result.serviceSkips[.googleBooks] == 1)
+        #expect(result.serviceSkips[.openLibrary] == nil)
+    }
+
+    @Test("the description pass also stops asking a service the ISBN pass already saw refuse")
+    func descriptionPassRespectsAnEarlierRefusal() async throws {
+        let googleBooksISBN = """
+            {"items": [{"id": "gb1", "volumeInfo": {"title": "Sturmlicht", "authors": ["A. Autor"],
+            "publisher": "Verlag X", "industryIdentifiers": [{"type": "ISBN_13", "identifier": "9780306406157"}]}}]}
+            """
+        let result = await FillMissingFields.plan(
+            over: [
+                // Book 1: Open Library refuses with 429; Google Books still
+                // answers, and its own candidate fills the publisher.
+                entry(publisher: nil, isbn: "9780306406157", number: 1),
+                // Book 2: no ISBN, so only the description pass runs, and it
+                // must not ask Open Library again.
+                entry(language: "de", description: nil, isbn: nil, number: 2),
+            ],
+            fetcher: fetcher([
+                ScriptedTransport.Answer(status: 429, body: Data("{}".utf8)), answer(googleBooksISBN),
+                answer(emptyGoogleBooks),
+            ]))
+
+        let plan = try #require(result.plans.first { $0.entry.number == 1 })
+        #expect(plan.change.after.publisher == "Verlag X")
+        #expect(result.serviceSkips[.openLibrary] == 1, "book 2's description pass skipped Open Library")
+    }
+
     // MARK: - Composition: the ISBN pass and the description exception together
 
     @Test("A book with an ISBN can still get its description via Title+Author")

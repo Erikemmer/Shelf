@@ -167,6 +167,29 @@ have or whose search came back with nothing. Everything else stays
 ISBN-only; there is still no scored Title+Author guess for a publisher, a
 date, a language or a series here or anywhere this addendum touches.
 
+## Addendum – 25 September 2026, Sprint 19, Teil B2
+
+**A 429 now stops that service for the rest of one batch pass, not just the
+one request that got it.** Until today, "a 429 is an instruction, not a
+hiccup" (`NetworkPolicy.shouldRetry`) only ever governed the *retry* — the
+answer to being told to stop was never asking that one request again, but
+the very next book's own ISBN or Title+Author question still asked the same
+service fresh, and a shared quota exhausted on book one would have logged
+the same "429" sentence, unhelpfully, up to 366 times. `FillMissingFields
+.plan` now remembers which service refused with 429 and passes it back into
+every later `MetadataFetcher.candidates(for:skipping:)` call for the rest of
+that one run, so the sentence is said once and the rest of the run simply
+does not ask again — counted in `Result.serviceSkips`, not silently dropped.
+
+**Scoped to one `plan` call, not to the fetcher.** `OnlineMetadataModel` and
+`FillMissingFieldsModel` deliberately share one `MetadataFetcher` instance
+(so the two features' requests are paced against each other) — blocking a
+service inside the fetcher itself would have meant a batch run's 429 also
+silently emptying the one-book "Fetch Metadata…" sheet for the rest of the
+app session, which nobody asked for and nothing would have explained. The
+block lives in the loop that has a "run" to speak of; the actor stays as
+stateless about refusals as it always was.
+
 ## Alternatives not taken
 
 - **An API key for Google Books.** It would fix the 429, and it would be a
