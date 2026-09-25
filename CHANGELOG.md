@@ -3,6 +3,21 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 21, Teil C2 — a link in a description, found against the real library before anything was applied · 25 September 2026
+
+The first real run of Teil B1–B4 together, against the real 366-book
+library with a real Calibre library chosen as a source, offered a
+description for a real novel that read, past a genuine synopsis:
+`"----------\nAlso contained in:\n[Novels (…)](https://openlibrary.org/
+works/…)"` — Open Library's own community-wiki work record, carrying a
+markdown reference list to the omnibus editions that novel is also
+collected in. `DescriptionFill.isPlainEnough`'s own markup check never
+caught it — no HTML tag in a markdown link — so it now also refuses any
+text containing `http://` or `https://` before the markup check runs at
+all, on both routes that reach it (the Title+Author match and Teil B1's
+own ISBN/ASIN-edition chain). Cancelled before Apply; nothing was written.
+2 new tests (969 total). Full account: ADR 0015's own addendum.
+
 ## Sprint 21, Teil B4 — Calibre as a second source for "Fill Missing Fields…" · 25 September 2026
 
 "Fill Missing Fields…" gains "Calibre Library as a Source…", the same Open

@@ -183,6 +183,27 @@ struct FillMissingFieldsTests {
         #expect(result.plans.isEmpty)
     }
 
+    @Test("A summary carrying a link never fills — the real-library finding, Sprint 21 Teil C2")
+    func summaryWithALinkNeverFills() async {
+        // Found against the real library, not invented: a real Open Library
+        // work record's own description was a genuine synopsis followed by
+        // a markdown reference list to the omnibus editions that same novel
+        // is also collected in — "Also contained in: [Novels (…)](https://
+        // openlibrary.org/works/…)". No `<p>`/`<br>` tag involved, so the
+        // markup check alone would have let it through.
+        let withLink =
+            "\(longPlainSummary)\n\n----------\nAlso contained in:\n"
+            + "[Novels (Invented Title)](https://openlibrary.org/works/OL0000000W)"
+        let googleBooks = """
+            {"items": [{"id": "gb1", "volumeInfo": {"title": "Sturmlicht", "authors": ["A. Autor"],
+            "language": "de", "description": "\(withLink)"}}]}
+            """
+        let result = await FillMissingFields.plan(
+            over: [entry(language: "de", description: nil)],
+            fetcher: fetcher([answer(emptyOpenLibrary), answer(googleBooks)]))
+        #expect(result.plans.isEmpty)
+    }
+
     @Test("A plain paragraph break alone does not disqualify a summary")
     func paragraphBreakAloneIsFine() async throws {
         let withBreak = "<p>\(longPlainSummary)</p><p>\(longPlainSummary)</p>"
@@ -434,6 +455,23 @@ struct FillMissingFieldsTests {
         let plan = try #require(result.plans.first)
         #expect(plan.change.after.description == longPlainSummary)
         #expect(plan.proposals.contains { $0.source == .titleAuthor(.openLibrary) })
+    }
+
+    @Test("a work record's own description carrying a link never fills either — the same real-library finding")
+    func workRecordDescriptionWithALinkNeverFills() async {
+        let openLibrarySearch = """
+            {"docs": [{"key": "/works/OL1W", "title": "Sturmlicht", "author_name": ["A. Autor"], "language": ["ger"]}]}
+            """
+        let withLink =
+            "\(longPlainSummary)\n\n----------\nAlso contained in:\n"
+            + "[Novels (Invented Title)](https://openlibrary.org/works/OL0000000W)"
+        let work = """
+            {"key": "/works/OL1W", "title": "Sturmlicht", "description": {"type": "/type/text", "value": "\(withLink)"}}
+            """
+        let result = await FillMissingFields.plan(
+            over: [entry(language: "de", description: nil, isbn: nil)],
+            fetcher: fetcher([answer(openLibrarySearch), answer(emptyGoogleBooks), answer(work)]))
+        #expect(result.plans.isEmpty)
     }
 
     @Test(

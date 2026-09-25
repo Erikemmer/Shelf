@@ -348,8 +348,26 @@ public enum DescriptionFill {
         return attempt
     }
 
+    /// Long enough to be a summary, no markup beyond a paragraph break, and
+    /// no link — never an HTML fragment the inspector would show verbatim,
+    /// and never a work's own community-wiki description with a reference
+    /// section grafted on.
+    ///
+    /// **Found against the real library, not invented (Sprint 21, Teil C2):**
+    /// Open Library's own work record for a real, well-known novel answered
+    /// a first paragraph that was a genuine synopsis, followed by
+    /// `"----------\nAlso contained in:\n[Novels (…)](https://openlibrary.org/works/…)"`
+    /// — a markdown reference list to the omnibus editions that novel is
+    /// also collected in, exactly the kind of community-wiki content this
+    /// field's own `{"type": "/type/text", "value": …}` shape does not warn
+    /// about. A `<p>`/`<br>` tag would not have caught it; a link would
+    /// look exactly as broken in a book's own description field as raw HTML
+    /// does, so it is refused the same way.
     static func isPlainEnough(_ text: String) -> Bool {
         guard text.count > minimumLength else { return false }
+        guard text.range(of: "https?://", options: [.regularExpression, .caseInsensitive]) == nil else {
+            return false
+        }
         let allowedTags = ["<p>", "</p>", "<br>", "<br/>", "<br />"]
         var stripped = text
         for tag in allowedTags {

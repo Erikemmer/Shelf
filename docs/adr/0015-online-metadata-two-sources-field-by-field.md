@@ -320,6 +320,33 @@ one at all. `SidecarOPF` closes that gap — unrelated to Calibre-as-a-source
 in its mechanism, but found while checking, as instructed, whether Sprint
 16's own import had ever thrown a Calibre field away.
 
+## Addendum – 25 September 2026, Sprint 21, Teil C2 — a link in a description, found against the real library
+
+**Before anything was applied — the preview did exactly the job it exists
+for.** The first real run of Teil B1–B4 together, against the real
+366-book library with a real Calibre library chosen as a source, offered a
+description for a well-known real novel that read, past a genuine first
+paragraph: `"----------\nAlso contained in:\n[Novels (…)](https://openlibrary
+.org/works/…)"` — Open Library's own work record, community-wiki-edited,
+carrying a markdown reference list to the omnibus editions that novel is
+also collected in. Condition (d)'s own markup check (`isPlainEnough`) never
+caught it: there is no HTML tag in a markdown link, only square brackets and
+parentheses.
+
+**`isPlainEnough` now also refuses any text containing `http://` or
+`https://`, case-insensitively, before the markup check runs at all.** A
+real synopsis does not carry a link; a work record's own added reference
+section, or any other markdown link a service's free-text field might
+carry, does — and it looks exactly as broken in a book's own description
+field as raw HTML would. The refusal is silent, the same way condition
+(b) or (c) failing already is: the field stays empty and the book is left
+in `unchanged` with reason `.nothingToFill`, never reported as a problem,
+because refusing is the rule working, not the rule failing. 2 new tests,
+one for each of the two routes this check now guards (`DescriptionFill
+.find`'s own Title+Author match, and the ISBN/ASIN-edition chain Teil B1
+added). Cancelled before Apply, nothing written — `docs/HANDOFF.md` has
+the run's own numbers once it is re-run clean.
+
 ## Alternatives not taken
 
 - **An API key for Google Books.** It would fix the 429, and it would be a
