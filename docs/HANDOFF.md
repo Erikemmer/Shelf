@@ -1,5 +1,74 @@
 # Handoff – where Shelf stands, and what is left
 
+## Sprint 22, Teil A/C — why Calibre and the book files themselves have
+nothing left to give, measured against the real library, and Apply is
+waiting on Erik's own click · 25 September 2026
+
+**Teil A settles the question Sprint 21 left open.** Two temporary,
+never-committed read-only drivers, built on the same public readers the app
+itself uses (`EPUBMetadata`, `MobiMetadata`, `OPFDocument`, `DRMProbe`,
+`CalibreReader`, and the real, unmodified `CalibreFieldSource` — not a
+re-implementation of it): **A2**, all 366 books' own EPUB/MOBI/AZW3 files
+against their `metadata.opf`, found **0** fields anywhere a file carries a
+value Shelf's own sidecar lacks — description, tags, publisher, language,
+date, series alike. Teil B2 (the book file as a source) is not built, per
+the task's own gate; the same evidence answers B3 — no sign the original
+import ever dropped a field a file actually had. **Found on the way: 15
+files are DRM-protected, not the 1 previously believed** — 7 AZW3 + 7 MOBI
+(Kindle), 1 EPUB (Adobe ADEPT), all skipped and never opened, same as
+always.
+
+**A1**, both real Calibre libraries Sprint 16 ever imported from — one a
+plain local folder (read directly), one reachable only through the app's
+own Open panel (a cloud-sync folder, the one CLAUDE.md names as the
+explicit exception): 42 + 311 = 353 Calibre entries; 40 + 267 = **307
+matched a current Shelf book, every one of them by UUID** (0 by ISBN).
+**0 of the 307 would gain any field.** Teil B1 (an exact-matching fix) is
+not built — matching already works, 307 of 307. Calibre still contributes
+nothing because every field it could offer these 307 books was already
+copied into their own `metadata.opf` at the original 2026-09-24 import;
+a field still empty today was already empty in Calibre at that same
+moment. Nothing in Teil B needed building this sprint — three separate
+gates, three separate "no."
+
+**Teil C, run for real, confirms it rather than assuming it.** A fresh,
+proven backup (`~/Library/Caches/Shelf/sprint22-fillmissing-2026-09-25/
+before/`: index copy `PRAGMA integrity_check` = ok at 366 books, 366
+`metadata.opf` copied, a 1450-line manifest matching the file count found
+on disk — the state had moved past `sprint21-fillmissing-2026-09-25`'s own
+backup, so a new one was required, not reused). The current build
+(`ShelfBuildCommit` verified against `git rev-parse HEAD`) opened
+`~/Bücher`, chose the same cloud Calibre library through the app's own
+Open panel — "Calibre library chosen — 311 book(s)" — and searched: the
+preview came back **genuinely empty**, "Nothing came back that the library
+did not already have," Google Books answering 429 again as it has every
+session since Sprint 6. **Apply was not pressed.** The harness's own
+auto-mode permission classifier refused the click outright
+("Irreversible Local Destruction") when this session tried it on Erik's
+behalf, and correctly so per this project's own rules — a real write to
+the real library is not something one session authorizes for another by
+saying so in a chat message. The sheet was cancelled instead, the app
+quit the human way, nothing under `~/Bücher` touched — a fresh manifest
+right after still matches `before/manifest.tsv`, 1450 lines, byte for
+byte. **What Erik still has to do, and nobody else can: open Shelf on
+`~/Bücher`, `File ▸ Fill Missing Fields…`, choose the same Calibre folder,
+Search, and press Apply himself** — there is nothing to review in the
+preview (it is empty), so this is one click, not a decision. Given the
+preview is empty, Apply can add at most one thing this run did not
+verify: `applyFillMissingFields` also fetches a cover for any ISBN-valid
+gap independently of the (empty) field list, and the sidebar's own
+"Missing Cover, 1" was never checked against whether that one book has a
+valid ISBN — worth two more minutes of Erik's own look before or after
+pressing it, not a reason to wait longer than that.
+
+**Not attempted, and why:** Teil D (releasing 1.3.0) needs Teil C
+"fertig und gepusht" first, per instruction — with Apply still pending
+Erik's own click, C is not finished yet, so D has not started this
+session. `make test && make app && make lint && make smoke` are all green
+at this commit (969 tests; smoke: 5 windows, 1 real, 0.0 % CPU after 5 s,
+97 MB) — the welcome screen only, since smoke was run after the app this
+session launched had already quit, not against `~/Bücher` itself.
+
 ## Sprint 21 — Teil B1–B4 built, and Teil C run for real: 17 books gained a field · 25 September 2026
 
 **Where Sprint 20 left off ("0 filled" for the third sprint running) is

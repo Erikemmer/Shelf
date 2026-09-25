@@ -3,6 +3,49 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 22, Teil A — why Calibre and the book files themselves have nothing
+left to give "Fill Missing Fields…", measured rather than assumed · 25 September 2026
+
+**A2, book files against their own `metadata.opf`, all 366 real books, two
+temporary read-only drivers (`shelf-tool a1-probe`/`a2-probe`, built on the
+same public `EPUBMetadata`/`MobiMetadata`/`OPFDocument`/`DRMProbe` readers
+the app itself uses — never committed, numbers here and in
+`docs/HANDOFF.md` only): 0 fields anywhere across description, tags,
+publisher, language, date or series where a book's own EPUB or MOBI/AZW3
+file carries a value its `metadata.opf` lacks. Every field a file has,
+Shelf's own sidecar already has too. **Teil B2 (the book file as a source)
+is not built** — the task's own gate was "only if A2 shows at least one
+hit," and it shows none. The identical evidence answers Teil B3: no sign
+anywhere that the original import ever dropped a field a file actually
+carried, so B3 needs no fix either.
+
+**Found on the way: 15 files are DRM-protected, not the 1 believed** — 7
+AZW3 and 7 MOBI (Kindle EXTH 209), 1 EPUB (Adobe ADEPT,
+`META-INF/encryption.xml`). All 15 skipped and counted, never opened, the
+same as every DRM-protected file always is (CLAUDE.md); 268 KFX files
+skipped separately and unconditionally, per ADR 0011.
+
+**A1, both real Calibre libraries Sprint 16 ever imported from — one a
+plain local folder, one reachable only through the app's own Open panel
+(a cloud-sync folder; CLAUDE.md's one named exception for reading a cloud
+folder's content)** — read with the real, unmodified `CalibreReader` and
+matched against Shelf's real 366 books with the real, unmodified
+`CalibreFieldSource.matching`/`.fill` (reused directly, not
+re-implemented, so this is not a second opinion about what the production
+code does — it is the production code, run once more, read-only). 42 + 311
+= 353 Calibre entries; 40 + 267 = **307 matched a current Shelf book, every
+one of them by UUID** — 0 by ISBN, since Calibre itself carries a valid
+ISBN for only 9 of the 353 entries checked. **0 of the 307 matched books
+would gain any field.** The exact matching Teil B1 would have built
+**already works — 307 of 307** — so B1 is not built either. Why Calibre
+still contributes nothing is structural, not a defect: every field
+`CalibreFieldSource` could offer these 307 books was already copied into
+their own `metadata.opf` at the original 2026-09-24 import, so a field
+still empty today in Shelf was already empty in Calibre at that same
+moment. `docs/HANDOFF.md` has the numbers Erik asked for; no title, author
+or folder name from either Calibre library is here or anywhere else in
+this repository (CLAUDE.md).
+
 ## Sprint 21, Teil C2 — a link in a description, found against the real library before anything was applied · 25 September 2026
 
 The first real run of Teil B1–B4 together, against the real 366-book
