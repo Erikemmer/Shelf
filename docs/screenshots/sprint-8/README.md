@@ -1,7 +1,9 @@
 # Sprint 8 screenshots
 
 Taken by `make organize-shots` (`Scripts/organize-shot.sh`) against the 16-book
-library `Scripts/organize-library.sh` builds, on 19 September 2026, window at
+library `Scripts/organize-library.sh` builds, on 19 September 2026 and
+re-taken on 25 September 2026 after the example author's name changed
+(`docs/BACKLOG.md`, Sprint 18), window at
 1440 × 950. **English here and German in `de/`** — the same script, run twice:
 `SHELF_SHOT_LANGUAGE=de` pins the language and picks the German menu names out
 of one table, so a script that drives menus says which language it is written
@@ -23,8 +25,8 @@ nothing, which cost two runs before the point was printed out and looked at.
 ## `merge-dialog.jpg` — Rename / Merge
 
 One person as three authors, which is the whole reason this sprint exists: the
-sidebar behind the sheet lists **S. Fitzek 3**, **Fitzek, Sebastian 3** and
-**Sebastian Fitzek 3**, and the sheet lists the same three with their counts so
+sidebar behind the sheet lists **M. Voss 3**, **Voss, Marek 3** and
+**Marek Voss 3**, and the sheet lists the same three with their counts so
 the mess is visible in one place for the first time.
 
 It reads well: the explanation says what will happen *and* what will not ("It
@@ -42,7 +44,7 @@ value the button executes.
 
 "8 to move · 7 already right · 1 cannot be", then every `old → new` pair. The
 pairs are worth reading: `Tchaikovsky, Terry/The Dispossessed State #13 (3) →
-Fitzek, S/…` is a folder still carrying the author it had before the merge,
+Voss, M/…` is a folder still carrying the author it had before the merge,
 which is exactly what ADR 0007 said would accumulate and ADR 0018 is the answer
 to.
 
@@ -62,7 +64,7 @@ This is the only picture in this folder taken after a button that moves
 something was pressed, and `Scripts/organize-shot.sh` refuses to run outside
 `~/Library/Caches/Shelf` for that reason.
 
-Worth noticing in the background: the sidebar still shows the three Fitzek
+Worth noticing in the background: the sidebar still shows the three Voss
 spellings. Correct — this run moved *folders*, and the three spellings are
 three authors until somebody merges them. The two commands are deliberately
 separate.

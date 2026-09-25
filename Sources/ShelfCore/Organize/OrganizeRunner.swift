@@ -15,7 +15,7 @@ import Foundation
 ///   because a plan is a statement about a moment that has passed.
 /// * **Nothing is deleted.** The one folder this touches at all is an author
 ///   folder this run has just **emptied** — "Atwood, Adrian" after its last
-///   book moved to "Fitzek, Sebastian" — and it goes to the **Trash**, never
+///   book moved to "Voss, Marek" — and it goes to the **Trash**, never
 ///   to `removeItem`. The rule is `EmptiedFolder` and the act is
 ///   `FolderDisposal`, kept apart so the first can be tested on Linux and the
 ///   second is the platform's. A folder holding anything but the file
@@ -263,7 +263,7 @@ public struct OrganizeRunner: Sendable {
         try makeFolder(destination.deletingLastPathComponent())
 
         if move.isCaseOnly {
-            // `Fitzek` → `fitzek` on a folding volume is not a move between two
+            // `Voss` → `voss` on a folding volume is not a move between two
             // folders; it is one folder being spelled differently, and a direct
             // `moveItem` is a write into itself. Two steps through a name
             // nothing else can have — and the only halfway state in this whole

@@ -61,7 +61,7 @@ public struct SimilarSpellingGroup: Equatable, Sendable, Identifiable {
 /// Proposing groups of author or publisher spellings that are probably one
 /// person or one publisher — never merging anything itself.
 public enum SimilarSpellings {
-    /// A name whose given-name part is written as initials — `"J. Zeh"`,
+    /// A name whose given-name part is written as initials — `"J. Vogt"`,
     /// `"J. K. Rowling"` — every token before the last one is a single
     /// letter with a period. The riskier of C2's two rules only applies
     /// when this is true of one side and false of the other; two full names

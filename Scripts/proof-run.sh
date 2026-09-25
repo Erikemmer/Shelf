@@ -700,7 +700,7 @@ echo "  a copy of the library: $BOOKS_BEFORE EPUBs"
 # the same person, and then the three are folded into one.
 say "one author under three spellings, over 40 books"
 # Literal, three spellings, never computed or filtered.
-SPELLINGS=("Sebastian Fitzek" "Fitzek, Sebastian" "S. Fitzek")
+SPELLINGS=("Marek Voss" "Voss, Marek" "M. Voss")
 N=0
 while IFS= read -r TITLE; do
     "$TOOL" set-author "$S8_LIB" "$TITLE" "${SPELLINGS[$((N % 3))]}" >/dev/null 2>&1 \
@@ -716,20 +716,20 @@ for SPELLING in "${SPELLINGS[@]}"; do
     echo "    ${SPELLING}: ${COUNT_ONE:-0} books"
 done
 
-"$TOOL" merge "$S8_LIB" author "Sebastian Fitzek" "Fitzek, Sebastian" "S. Fitzek" | sed 's/^/  /'
-MERGED=$("$TOOL" names "$S8_LIB" author | awk -F'\t' '$2 == "Sebastian Fitzek" {print $1}' | tr -d ' ')
+"$TOOL" merge "$S8_LIB" author "Marek Voss" "Voss, Marek" "M. Voss" | sed 's/^/  /'
+MERGED=$("$TOOL" names "$S8_LIB" author | awk -F'\t' '$2 == "Marek Voss" {print $1}' | tr -d ' ')
 echo "  after the merge: ${MERGED:-0} books under one spelling"
 [ "${MERGED:-0}" = "40" ] || s8_fail "the merge did not gather all 40 books"
 
 # The claim that matters: it went into the folders, not only into the index.
 say "throwing the index away, and asking the folders who wrote those 40"
 "$TOOL" rebuild "$S8_LIB" 2>&1 | tail -4 | sed 's/^/  /'
-REBUILT=$("$TOOL" names "$S8_LIB" author | awk -F'\t' '$2 == "Sebastian Fitzek" {print $1}' | tr -d ' ')
-STRAYS=$("$TOOL" names "$S8_LIB" author | grep -c "Fitzek" || true)
-echo "  after the rebuild: ${REBUILT:-0} books under 'Sebastian Fitzek'"
-echo "  spellings of Fitzek still in the library: $STRAYS"
+REBUILT=$("$TOOL" names "$S8_LIB" author | awk -F'\t' '$2 == "Marek Voss" {print $1}' | tr -d ' ')
+STRAYS=$("$TOOL" names "$S8_LIB" author | grep -c "Voss" || true)
+echo "  after the rebuild: ${REBUILT:-0} books under 'Marek Voss'"
+echo "  spellings of Voss still in the library: $STRAYS"
 [ "${REBUILT:-0}" = "40" ] || s8_fail "the merge did not survive the rebuild — it was only in the index"
-[ "$STRAYS" = "1" ] || s8_fail "more than one spelling of Fitzek came back out of the folders"
+[ "$STRAYS" = "1" ] || s8_fail "more than one spelling of Voss came back out of the folders"
 echo "  one spelling, 40 books, nothing lost ✓"
 
 # ── 12b. Two obstacles, built on purpose ──────────────────────────────────────

@@ -208,8 +208,14 @@ public enum FileNameMetadata {
     static let separators = [" - ", " – ", " — ", "_-_"]
 
     /// Prefixes shops and sites glue onto a file name. Stripped so a book is
-    /// not called "OceanofPDF com The Wife Upstairs".
-    static let noisePrefixes = ["_oceanofpdf.com_", "oceanofpdf.com_", "www.", "_"]
+    /// not called "Example Books com The Attic Room".
+    ///
+    /// No site's own domain is hard-coded: `_<label>.<tld>_` at the very
+    /// start of a name is the shape every one of them shares, so a domain
+    /// this project has never seen a file from folds away exactly like one
+    /// it has.
+    static let noisePrefixes = ["www.", "_"]
+    private static let domainPrefixPattern = "^_[a-z0-9-]+(?:\\.[a-z0-9-]+)+_"
 
     /// The title part of "The Hobbit - J.R.R. Tolkien".
     ///
@@ -241,13 +247,27 @@ public enum FileNameMetadata {
     }
 
     private static func withoutNoise(_ name: String) -> String {
-        var result = name
-        let lower = result.lowercased()
-        for prefix in noisePrefixes where lower.hasPrefix(prefix) {
-            result = String(result.dropFirst(prefix.count))
-            break
+        let lower = name.lowercased()
+        if let match = firstMatch(domainPrefixPattern, in: lower), let whole = match.first {
+            return String(name.dropFirst(whole.count))
         }
-        return result
+        for prefix in noisePrefixes where lower.hasPrefix(prefix) {
+            return String(name.dropFirst(prefix.count))
+        }
+        return name
+    }
+
+    /// The whole match and its groups, or nil. `NSRegularExpression` rather
+    /// than Swift's `Regex`, for the same Linux-portability reason
+    /// `ComicFileName.firstMatch` gives.
+    private static func firstMatch(_ pattern: String, in text: String) -> [String]? {
+        guard let expression = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let full = NSRange(text.startIndex..., in: text)
+        guard let match = expression.firstMatch(in: text, range: full) else { return nil }
+        return (0..<match.numberOfRanges).map { index in
+            guard let range = Range(match.range(at: index), in: text) else { return "" }
+            return String(text[range])
+        }
     }
 
     /// Underscores back to spaces, runs of whitespace collapsed. Not

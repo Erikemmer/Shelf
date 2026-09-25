@@ -3,6 +3,26 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 18 — a real author, a real title and a real download site left the public repo · 25 September 2026
+
+This repository is public. Read against the real library (only read, never
+written), one real author's name — used since Sprint 8 as the running
+example for merging spellings, in `ADR 0018`, in scripts and in tests —
+and a second real author and book title — a test fixture for the
+download-site filename pattern, and the same author named once more in a
+`CHANGELOG` entry and a code comment — turned out to be genuinely hers and
+his, not invented. Both are now invented names (`docs/BACKLOG.md` names
+which, only there, since this file is public); every place they appeared
+carries the same invented name, including the six Sprint 8 screenshots
+that showed the real one on screen — re-taken against the rebuilt example
+library, both languages, real clicks. The download-site test no longer
+names a real site at all: `FileNameMetadata`'s prefix rule is now a
+pattern — `_<domain>_` at the start of a name — instead of one hard-coded
+domain, tested with a domain invented for the purpose. One real,
+unrelated book title that had slipped into a `CHANGELOG` entry describing
+a real import is withheld rather than replaced, since no invented title
+was owed there. 911 core tests (one new, for the domain-pattern rule).
+
 ## Sprint 18, Teil C3 — "Standardize Fields…", one right answer per rule · 24 September 2026
 
 Unlike C2's spellings, nothing here is a proposal to accept or reject —
@@ -226,7 +246,7 @@ left for a person to look at, never guessed past.
 ("German Edition", "Kindle Edition", "Deutsche Ausgabe", "eBook", stacked
 or alone) on top of what `DuplicateKey.foldedTitle` already did.
 `AuthorNameFold.normalized` folds only the *safe* half of Teil C's own
-rule — order and punctuation ("Fitzek, Sebastian" / "Sebastian Fitzek") —
+rule — order and punctuation ("Voss, Marek" / "Marek Voss") —
 never an initial standing for a full first name, which needs a shared work
 to confirm and belongs to "Ähnliche Schreibweisen…" itself.
 
@@ -3359,8 +3379,8 @@ driven against, and the screenshots).
 
 **Why there is a Sprint 8 at all.** Trying the program found a hole in the
 concept rather than a defect in the code. Shelf could order a collection only
-inside its own window: with one person in the library as "Sebastian Fitzek",
-"Fitzek, Sebastian" and "S. Fitzek", those were three authors in the sidebar
+inside its own window: with one person in the library as "Marek Voss",
+"Voss, Marek" and "M. Voss", those were three authors in the sidebar
 and three folders on the disk — and every answer Shelf gave was correct,
 because three different strings really are three different strings. A library
 manager that can only ever agree with the mess is not managing anything. The
@@ -3420,7 +3440,7 @@ books changed — tidy the folders now?" — as a banner that opens the preview.
 |---|---|
 | 40 books given one of three spellings, then merged | 26 rewritten (14 already read that way) |
 | the index then erased and rebuilt from the folders | **40 books, one spelling, 0 lost** |
-| spellings of "Fitzek" left in the library afterwards | 1 |
+| spellings of "Voss" left in the library afterwards | 1 |
 
 That second row is the one that matters: the merge went into the OPFs, not only
 into the index, so the index is still nothing but a cache (ADR 0001).
@@ -3441,7 +3461,7 @@ both sides are what say so rather than a sentence in a document.
 empty file with a mixed-case name, asks for it by the other spelling, and takes
 the answer away. APFS is case-insensitive by default and case-*sensitive* if it
 was formatted that way, and a library can sit on either — guessing from the
-platform gets an external disk wrong. On a folding volume `Fitzek` → `fitzek`
+platform gets an external disk wrong. On a folding volume `Voss` → `voss`
 is not a move between two folders but one folder spelled differently, and a
 direct `moveItem` is a write into itself; such a move goes through a third name
 in `.shelf/moving/`, and **that one move is written into the manifest before it
@@ -5795,8 +5815,8 @@ Seventeen real EPUBs were copied out of `~/Downloads` into a throw-away library
 correctly — titles, authors, subtitles and covers. The three findings:
 
 4. **An author name that already had a comma was sorted again.** Shop EPUBs
-   write `dc:creator` both ways, and `AuthorSort.of("McFadden, Freida")` gave
-   `"Freida, McFadden,"` — a second author folder for the same person, in a
+   write `dc:creator` both ways, and `AuthorSort.of("Albrecht, Nora")` gave
+   `"Nora, Albrecht,"` — a second author folder for the same person, in a
    library where thirteen of seventeen books were hers. A name with a comma is
    already in sort form and is now left alone, with a test.
 5. **Symlinked books imported with the wrong size.**
@@ -5817,7 +5837,8 @@ correctly — titles, authors, subtitles and covers. The three findings:
    and is less code than doing it by hand. **A local green build is not a green
    build.**
 
-The seventeenth real book, *Greenlights*, has no readable metadata: the file is
+The seventeenth real book, title withheld here as this repository is public,
+has no readable metadata: the file is
 not a valid ZIP at all, and `unzip` refuses it too. Shelf imported it anyway,
 named from its file, and said so in the report — which is what the fallback
 chain is designed to do, working on a real broken file rather than a contrived one.

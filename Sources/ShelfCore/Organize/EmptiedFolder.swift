@@ -9,7 +9,7 @@ import Foundation
 /// not an `rmdir`.
 ///
 /// **Why anything may be removed at all.** An organise moves a book out of
-/// `Atwood, Adrian/` and into `Fitzek, Sebastian/`. What is left is an author
+/// `Atwood, Adrian/` and into `Voss, Marek/`. What is left is an author
 /// folder for an author no book in the library has any more. Leaving them means
 /// an organise that tidies the books and litters the library — a merge of
 /// fifty-five spellings left fifty-five of them in the closing run. But a

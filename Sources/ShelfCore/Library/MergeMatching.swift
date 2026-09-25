@@ -39,8 +39,8 @@ public enum TitleNormalization {
 /// Folding an author's name for "is this the same person" — the *safe* half
 /// of Teil C's rule only: case, accents, punctuation and word order.
 ///
-/// `"Fitzek, Sebastian"` and `"Sebastian Fitzek"` fold to the same key. An
-/// initial standing for a full first name (`"J. Zeh"` against `"Juli Zeh"`)
+/// `"Voss, Marek"` and `"Marek Voss"` fold to the same key. An
+/// initial standing for a full first name (`"J. Vogt"` against `"Julia Vogt"`)
 /// is a different, riskier claim — it needs a shared work or series to
 /// confirm, which is what makes it a *proposal* a person confirms rather than
 /// something two books can be matched by on their own — so it belongs to

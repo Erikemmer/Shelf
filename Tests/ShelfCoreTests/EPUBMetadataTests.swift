@@ -261,11 +261,18 @@ struct FileNameMetadataTests {
     @Test("underscores become spaces and a shop's prefix is dropped")
     func noise() {
         #expect(
-            FileNameMetadata.title(from: "_OceanofPDF.com_The_Wife_Upstairs_-_Freida_McFadden")
-                == "The Wife Upstairs")
+            FileNameMetadata.title(from: "_example-books.test_The_Attic_Room_-_Nora_Albrecht")
+                == "The Attic Room")
         #expect(
-            FileNameMetadata.authors(from: "_OceanofPDF.com_The_Wife_Upstairs_-_Freida_McFadden")
-                == ["Freida McFadden"])
+            FileNameMetadata.authors(from: "_example-books.test_The_Attic_Room_-_Nora_Albrecht")
+                == ["Nora Albrecht"])
+    }
+
+    @Test("a domain this project has never seen a file from folds away just the same")
+    func unseenDomain() {
+        #expect(
+            FileNameMetadata.title(from: "_totally-invented-site.example_A_Title_-_An_Author")
+                == "A Title")
     }
 
     @Test("the first separator wins, so a title containing a dash keeps its tail")

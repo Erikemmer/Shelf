@@ -835,7 +835,7 @@ the answer away with it. Guessing from the platform gets an external disk wrong.
 
 It changes two things:
 
-* **`Fitzek` → `fitzek` is not a move between two folders**, it is one folder
+* **`Voss` → `voss` is not a move between two folders**, it is one folder
   being spelled differently, and a direct `moveItem` is a write into itself.
   Such a move goes through a third name in `.shelf/moving/`.
 * **Two books whose paths differ only in capitals** are a collision here and
@@ -848,7 +848,7 @@ destroy a folder.
 
 ### The one folder an organise makes go away
 
-An organise moves a book out of `Atwood, Adrian/` into `Fitzek, Sebastian/`,
+An organise moves a book out of `Atwood, Adrian/` into `Voss, Marek/`,
 and what is left is an author folder no book in the library points at. Leaving
 them means an organise that tidies the books and litters the library: the
 closing run's merge of fifty-five spellings would have left fifty-five of them.
@@ -890,8 +890,8 @@ that was never touched.
     {
       "bookID": "3922C84C-…",
       "from": "Atwood, Adrian/Piranesi #34 (8)",
-      "to":   "Fitzek, Sebastian/Piranesi #34 (8)",
-      "digests": { "Piranesi #34 - Sebastian Fitzek.epub": "9f2a…", "metadata.opf": "1c4e…" },
+      "to":   "Voss, Marek/Piranesi #34 (8)",
+      "digests": { "Piranesi #34 - Marek Voss.epub": "9f2a…", "metadata.opf": "1c4e…" },
       "movedAt": "2026-09-19T14:02:11Z"
     }
   ],

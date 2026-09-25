@@ -199,7 +199,7 @@ wird überschrieben, nichts zusammengelegt (ADR 0002, Entscheidung 4).
 
 Auf dem Mac kommt ein zweiter Fall dazu, den kein anderes Betriebssystem
 kennt. **APFS ist standardmäßig case-insensitive, aber case-preserving:**
-`Fitzek` und `fitzek` sind derselbe Ordner, und ein `moveItem` von einem auf
+`Voss` und `voss` sind derselbe Ordner, und ein `moveItem` von einem auf
 den anderen ist kein Umbenennen, sondern ein Schreiben in sich selbst – auf
 manchen Volumes ein Fehler, auf anderen ein Datenverlust. Deshalb gilt:
 
@@ -337,7 +337,7 @@ Wiederverwendung aus Selector (kopieren, nicht koppeln, weil fachlich verschiede
 
 **Sprint 7 – Polish & Release.** Deutsch, Barrierefreiheit, Shortcut-Übersicht, Signierung + Notarisierung, Direkt-Download, Runbook.
 
-**Sprint 8 – Ordnen und Export.** Der Sprint, der aus einer Lücke entstand, die beim Ausprobieren auffiel: Shelf konnte eine Sammlung bisher nur *im Fenster* ordnen. Steht derselbe Autor als „Sebastian Fitzek“, „Fitzek, Sebastian“ und „S. Fitzek“ in der Bibliothek, blieben das drei Autoren und drei Ordner. Umbenennen und Zusammenführen von Autoren, Serien, Verlagen und Tags; „Organize Library…“ mit Vorschau, Prüfsummen, Manifest und Rückweg; Export in vier Voreinstellungen, davon eine, die den Rückweg nach Calibre verlustfrei macht. Beweislauf gegen 5.000 Bücher, darunter der wichtigste des Sprints: ein Archiv-Export wird in eine leere Bibliothek importiert und beide werden verglichen → **v1.0**.
+**Sprint 8 – Ordnen und Export.** Der Sprint, der aus einer Lücke entstand, die beim Ausprobieren auffiel: Shelf konnte eine Sammlung bisher nur *im Fenster* ordnen. Steht derselbe Autor als „Marek Voss“, „Voss, Marek“ und „M. Voss“ in der Bibliothek, blieben das drei Autoren und drei Ordner. Umbenennen und Zusammenführen von Autoren, Serien, Verlagen und Tags; „Organize Library…“ mit Vorschau, Prüfsummen, Manifest und Rückweg; Export in vier Voreinstellungen, davon eine, die den Rückweg nach Calibre verlustfrei macht. Beweislauf gegen 5.000 Bücher, darunter der wichtigste des Sprints: ein Archiv-Export wird in eine leere Bibliothek importiert und beide werden verglichen → **v1.0**.
 
 **Danach (Wünsche):** Konvertierung über `ebook-convert`, Reader, Send-to-Kindle, Fortschritt schreiben, regelbasierte Regale, iPad. Dazu ein lokales Modell oder eine Schnittstelle zu einem Dienst wie Claude, das Schreibweisen, Dubletten und Cover *vorschlägt*: die Vorschläge füllen dieselbe Vorschau-Liste, die der Nutzer heute von Hand füllt und bestätigt, und gehen nie selbst an Dateien. Die Grenze ist die Stelle, an der Sprint 8 sie gezogen hat – ein Vorschlag ist ein Vorschlag, und bestätigt wird von einem Menschen.
 

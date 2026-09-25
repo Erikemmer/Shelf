@@ -270,7 +270,7 @@ public enum AuthorSort {
     public static func of(_ name: String) -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         // A name that already has a comma in it is already in sort form, and
-        // sorting it again is how "McFadden, Freida" became "Freida, McFadden,".
+        // sorting it again is how "Albrecht, Nora" became "Nora, Albrecht,".
         // Real EPUBs write `dc:creator` both ways – found in a shop download,
         // and in a large share of any real library.
         guard !trimmed.contains(",") else {

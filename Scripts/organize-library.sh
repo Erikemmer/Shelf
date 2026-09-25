@@ -37,13 +37,13 @@ echo "── 16 books"
 "$TOOL" import "$SOURCE" "$LIBRARY" | tail -1
 
 echo "── one author, three spellings, over nine books"
-SPELLINGS=("Sebastian Fitzek" "Fitzek, Sebastian" "S. Fitzek")
+SPELLINGS=("Marek Voss" "Voss, Marek" "M. Voss")
 N=0
 while IFS= read -r TITLE; do
     "$TOOL" set-author "$LIBRARY" "$TITLE" "${SPELLINGS[$((N % 3))]}" >/dev/null 2>&1
     N=$((N + 1))
 done < <("$TOOL" first-titles "$LIBRARY" 9)
-"$TOOL" names "$LIBRARY" author | grep Fitzek | sed 's/^/  /'
+"$TOOL" names "$LIBRARY" author | grep Voss | sed 's/^/  /'
 
 echo "── shelves, and a few books read"
 "$TOOL" shelve "$LIBRARY" "Fiction/Sci-Fi" 5 >/dev/null 2>&1

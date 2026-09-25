@@ -466,11 +466,11 @@ computed from the very value the button executes.
 ```
 $ shelf-tool names <library> author
 36 authors
-  14	Sebastian Fitzek
-  13	Fitzek, Sebastian
-  13	S. Fitzek
-$ shelf-tool merge <library> author "Sebastian Fitzek" "Fitzek, Sebastian" "S. Fitzek"
-plan: 26 books · 2 spellings · → “Sebastian Fitzek”
+  14	Marek Voss
+  13	Voss, Marek
+  13	M. Voss
+$ shelf-tool merge <library> author "Marek Voss" "Voss, Marek" "M. Voss"
+plan: 26 books · 2 spellings · → “Marek Voss”
 Merge Authors: 26 books · 0 s
 no folder was moved — that is `organize`
 ```
@@ -494,7 +494,7 @@ $ shelf-tool organize <library>
 volume folds case: yes
 plan: 202 to move · 4794 already right · 2 cannot be
   Atwood, Adrian/Piranesi #34 (8)
-    → Fitzek, Sebastian/Piranesi #34 (8)
+    → Voss, Marek/Piranesi #34 (8)
   …
   something is already there, and it is not empty: 2
 nothing was moved — add --run
@@ -514,7 +514,7 @@ What it guarantees, and what each one is worth knowing:
   back and named in the report.
 - **Nothing is overwritten and nothing is deleted.** The one folder it touches
   at all is an author folder the run itself has just *emptied* — "Atwood,
-  Adrian", after its last book moved to "Fitzek, Sebastian" — and that goes to
+  Adrian", after its last book moved to "Voss, Marek" — and that goes to
   the **Trash**, where you can drag it back out. Each one is named in the
   report. A folder still holding anything of yours is left exactly where it is;
   the only things it will ignore are the file system's own leavings

@@ -65,8 +65,8 @@ public struct NameMerge: Equatable, Sendable {
     /// The spellings being replaced, exactly as the sidebar lists them.
     ///
     /// Exact, not folded: the facets the person clicked are exact strings, and
-    /// a rename whose only change *is* the capitalisation — "fitzek" to
-    /// "Fitzek" — has to be possible.
+    /// a rename whose only change *is* the capitalisation — "voss" to
+    /// "Voss" — has to be possible.
     public var sources: [String]
     /// What they all become.
     public var target: String
@@ -162,8 +162,8 @@ public struct NameMergePlan: Equatable, Sendable {
     /// not the merge would change them.
     ///
     /// It exists to tell two quite different nothings apart, and looking at a
-    /// screenshot is what found them being told alike. Ticking "Sebastian
-    /// Fitzek" and typing "Sebastian Fitzek" changes nothing, and the sheet
+    /// screenshot is what found them being told alike. Ticking "Marek
+    /// Voss" and typing "Marek Voss" changes nothing, and the sheet
     /// said **"No book carries that name"** — with three of them listed one
     /// line above, each saying "3 books". Both are empty plans; only one of
     /// them is a library that has never heard of the name.
@@ -187,7 +187,7 @@ public struct NameMergePlan: Equatable, Sendable {
             && zip(one.changes, other.changes).allSatisfy { $0.entry == $1.entry && $0.change == $1.change }
     }
 
-    /// "37 books · 3 spellings → “Sebastian Fitzek”".
+    /// "37 books · 3 spellings → “Marek Voss”".
     public func summary() -> String {
         guard !isEmpty else {
             if carrying == 0 {

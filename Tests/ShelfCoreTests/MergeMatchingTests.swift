@@ -43,13 +43,13 @@ struct MergeMatchingTests {
 
     @Test("order and punctuation do not make two spellings different people")
     func foldsOrderAndPunctuation() {
-        #expect(AuthorNameFold.normalized("Fitzek, Sebastian") == AuthorNameFold.normalized("Sebastian Fitzek"))
+        #expect(AuthorNameFold.normalized("Voss, Marek") == AuthorNameFold.normalized("Marek Voss"))
         #expect(AuthorNameFold.normalized("Hartmann, Cole") == AuthorNameFold.normalized("Cole Hartmann"))
     }
 
     @Test("an initial for a full first name is NOT folded the same — that needs Teil C's own confirmation")
     func doesNotFoldInitialsAgainstFullNames() {
-        #expect(AuthorNameFold.normalized("J. Zeh") != AuthorNameFold.normalized("Juli Zeh"))
+        #expect(AuthorNameFold.normalized("J. Vogt") != AuthorNameFold.normalized("Julia Vogt"))
     }
 
     @Test("genuinely different people stay different")
@@ -98,8 +98,8 @@ struct MergeMatchingTests {
 
     @Test("an author spelling swap still groups, via the safe fold")
     func groupsAcrossAuthorOrderSwap() {
-        let a = entry(title: "Nachtfrost", author: "Sebastian Fitzek", number: 1)
-        let b = entry(title: "Nachtfrost", author: "Fitzek, Sebastian", number: 2)
+        let a = entry(title: "Nachtfrost", author: "Marek Voss", number: 1)
+        let b = entry(title: "Nachtfrost", author: "Voss, Marek", number: 2)
         let groups = MergeCandidates.certainGroups(among: [a, b])
         #expect(groups.count == 1)
     }

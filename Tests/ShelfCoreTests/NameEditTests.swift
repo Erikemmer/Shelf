@@ -6,8 +6,8 @@ import Testing
 /// Renaming one spelling, and folding several into one.
 ///
 /// The scenario every test here comes back to is the one that started Sprint 8:
-/// one person in the library as "Sebastian Fitzek", "Fitzek, Sebastian" and
-/// "S. Fitzek", which is three authors and three folders and no defect
+/// one person in the library as "Marek Voss", "Voss, Marek" and
+/// "M. Voss", which is three authors and three folders and no defect
 /// anywhere — three different strings really are three different strings.
 @Suite("Renaming and merging the names books share")
 struct NameEditTests {
@@ -26,19 +26,19 @@ struct NameEditTests {
     @Test("three spellings of one author become one, and each book is one change")
     func mergeAuthors() {
         let entries = [
-            entry("Die Therapie", authors: ["Sebastian Fitzek"]),
-            entry("Das Kind", authors: ["Fitzek, Sebastian"]),
-            entry("Splitter", authors: ["S. Fitzek"]),
+            entry("Die Therapie", authors: ["Marek Voss"]),
+            entry("Das Kind", authors: ["Voss, Marek"]),
+            entry("Splitter", authors: ["M. Voss"]),
             entry("Pride and Prejudice", authors: ["Jane Austen"]),
         ]
         let merge = NameMerge(
-            kind: .author, sources: ["Fitzek, Sebastian", "S. Fitzek"], target: "Sebastian Fitzek")
+            kind: .author, sources: ["Voss, Marek", "M. Voss"], target: "Marek Voss")
         let plan = NameEdit.plan(merge, over: entries)
 
         // The book that already spells it right is not rewritten: a change
         // that changes nothing is not written.
         #expect(plan.bookCount == 2)
-        #expect(plan.changes.allSatisfy { $0.change.after.authors == ["Sebastian Fitzek"] })
+        #expect(plan.changes.allSatisfy { $0.change.after.authors == ["Marek Voss"] })
         // And Jane Austen is untouched, which is the whole of "Shelf never chooses".
         #expect(!plan.changes.contains { $0.entry.book.title == "Pride and Prejudice" })
         // Without the count: the window adds that through the same frame it
@@ -50,10 +50,10 @@ struct NameEditTests {
 
     @Test("a book carrying two of the spellings ends up with one author, not two")
     func twoSpellingsOnOneBook() {
-        let book = entry("An anthology", authors: ["S. Fitzek", "Sebastian Fitzek", "Jane Austen"]).book
-        let merge = NameMerge(kind: .author, sources: ["S. Fitzek"], target: "Sebastian Fitzek")
+        let book = entry("An anthology", authors: ["M. Voss", "Marek Voss", "Jane Austen"]).book
+        let merge = NameMerge(kind: .author, sources: ["M. Voss"], target: "Marek Voss")
         let edited = NameEdit.replacing(merge, in: book)
-        #expect(edited?.authors == ["Sebastian Fitzek", "Jane Austen"])
+        #expect(edited?.authors == ["Marek Voss", "Jane Austen"])
     }
 
     /// The order of the authors is data — the first one names the folder and
@@ -71,10 +71,10 @@ struct NameEditTests {
     /// why the sources are matched exactly and not folded.
     @Test("a rename that only changes the capitalisation is a real change")
     func capitalisationOnly() {
-        let book = entry("A book", authors: ["fitzek"]).book
-        let merge = NameMerge.rename(.author, from: "fitzek", to: "Fitzek")
+        let book = entry("A book", authors: ["voss"]).book
+        let merge = NameMerge.rename(.author, from: "voss", to: "Voss")
         let change = NameEdit.change(merge, to: book)
-        #expect(change?.after.authors == ["Fitzek"])
+        #expect(change?.after.authors == ["Voss"])
     }
 
     /// …and the target's spelling wins when the replacement collides with a
@@ -126,13 +126,13 @@ struct NameEditTests {
     @Test("an empty plan says whether nobody carries the name or everybody already does")
     func twoKindsOfNothing() {
         let entries = [
-            entry("One", authors: ["Sebastian Fitzek"]),
-            entry("Two", authors: ["Sebastian Fitzek"]),
+            entry("One", authors: ["Marek Voss"]),
+            entry("Two", authors: ["Marek Voss"]),
             entry("Three", authors: ["Jane Austen"]),
         ]
         // Ticked and typed the same: nothing to do, but the books are there.
         let noop = NameEdit.plan(
-            NameMerge.rename(.author, from: "Sebastian Fitzek", to: "Sebastian Fitzek"),
+            NameMerge.rename(.author, from: "Marek Voss", to: "Marek Voss"),
             over: entries)
         #expect(noop.isEmpty)
         #expect(noop.carrying == 2)
@@ -177,20 +177,20 @@ struct NameEditTests {
     func sortKeysFollow() async throws {
         let index = try LibraryIndex(inMemory: "merge-sort")
 
-        var zebra = entry("Zebra", authors: ["Fitzek, Sebastian"])
+        var zebra = entry("Zebra", authors: ["Voss, Marek"])
         try await index.save(zebra)
-        // "Fitzek, Sebastian" already sorts as itself; the merged spelling
-        // "Sebastian Fitzek" has to be filed under F as well, which is the
+        // "Voss, Marek" already sorts as itself; the merged spelling
+        // "Marek Voss" has to be filed under F as well, which is the
         // thing a fresh name_sort buys.
-        #expect(try await index.authorFacets().map { $0.name } == ["Fitzek, Sebastian"])
+        #expect(try await index.authorFacets().map { $0.name } == ["Voss, Marek"])
 
-        let merge = NameMerge.rename(.author, from: "Fitzek, Sebastian", to: "Sebastian Fitzek")
+        let merge = NameMerge.rename(.author, from: "Voss, Marek", to: "Marek Voss")
         zebra.book = try #require(NameEdit.replacing(merge, in: zebra.book))
         try await index.save(zebra)
 
         let facets = try await index.authorFacets()
         // The old author row has no books left, so it is not a facet any more.
-        #expect(facets.map { $0.name } == ["Sebastian Fitzek"])
+        #expect(facets.map { $0.name } == ["Marek Voss"])
         #expect(facets.first?.count == 1)
 
         let sorted = try await index.allEntries(sortedBy: BookOrder(field: .author, ascending: true))

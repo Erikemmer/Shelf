@@ -29,7 +29,7 @@ sheet simply grows. **But looking at these found two defects, both fixed.**
 > because the sheet's own title one line above already says "Autor
 > umbenennen", so interpolating it bought nothing and cost a bug.
 
-Otherwise it reads as it should: the three Fitzek spellings with "3 Bücher"
+Otherwise it reads as it should: the three Voss spellings with "3 Bücher"
 each, "Alle werden zu", and the line that told two nothings apart in English
 telling them apart in German too — **"3 Bücher lesen sich schon so – nichts zu
 ändern"**. The plural comes from the catalogue, so "1 Buch" and "3 Bücher" are

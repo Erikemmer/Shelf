@@ -420,8 +420,8 @@ struct OrganizeTests {
     func caseIsMeasured() throws {
         let temporary = try TemporaryFolder()
         let folds = VolumeCase.folds(at: temporary.url)
-        try temporary.write("Fitzek/x.txt", text: "x")
-        #expect(temporary.exists("fitzek/x.txt") == folds)
+        try temporary.write("Voss/x.txt", text: "x")
+        #expect(temporary.exists("voss/x.txt") == folds)
         #expect(VolumeCase.same("A/B", "a/b", folding: folds) == folds)
         #expect(VolumeCase.same("A/B", "A/B", folding: folds))
         #expect(VolumeCase.isCaseOnly(from: "A", to: "a", folding: folds) == folds)

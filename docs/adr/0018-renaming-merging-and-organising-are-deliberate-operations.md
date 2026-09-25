@@ -22,7 +22,7 @@ assumption: Shelf does not touch folders.
 Trying the program is what found the hole, and it is not about tidiness. Shelf
 is supposed to *order* a collection that grew over years. Today it can only do
 that in the window. If the same person stands in the library as
-"Sebastian Fitzek", "Fitzek, Sebastian" and "S. Fitzek", those are three
+"Marek Voss", "Voss, Marek" and "M. Voss", those are three
 authors in the sidebar, three folders on the disk, and three of everything
 anywhere else — and every one of Shelf's answers is correct, because every one
 of those three strings really is a different string. A library manager that
@@ -162,7 +162,7 @@ Two rules, both narrower than "similar enough":
 
 * **The safe rule** — the exact fold `MergeMatching.swift`'s `AuthorNameFold`
   already uses for matching two books as the same work: case, accents,
-  punctuation, word order. "Fitzek, Sebastian" and "Sebastian Fitzek" group;
+  punctuation, word order. "Voss, Marek" and "Marek Voss" group;
   two different people never do, because nothing about their names folds the
   same way.
 * **The riskier rule** — an initialed given name ("J. Ahlberg") against a full

@@ -9,7 +9,7 @@ import Foundation
 /// library can sit on any of them, and the answer changes what "move this
 /// folder there" means:
 ///
-/// * On a folding volume, `Fitzek` and `fitzek` are **one folder**. Moving one
+/// * On a folding volume, `Voss` and `voss` are **one folder**. Moving one
 ///   onto the other is not a move at all — it is a write into itself, which
 ///   `FileManager` refuses on some volumes and silently mangles on others. Such
 ///   a move has to go through a third name.
@@ -23,7 +23,7 @@ import Foundation
 /// asks for it by the other spelling, and takes the answer away with it.
 public enum VolumeCase {
 
-    /// `true` when the volume folds case — `Fitzek` and `fitzek` are one name.
+    /// `true` when the volume folds case — `Voss` and `voss` are one name.
     ///
     /// Falls back to `true` when the question cannot be asked at all (a
     /// read-only folder, a volume that has gone). `true` is the cautious

@@ -173,15 +173,15 @@ struct SortingTests {
     }
 
     /// Found by importing seventeen real books: shop EPUBs write `dc:creator`
-    /// both ways, and sorting an already-sorted name turned "McFadden, Freida"
-    /// into "Freida, McFadden," – and with it the folder the book lives in.
+    /// both ways, and sorting an already-sorted name turned "Albrecht, Nora"
+    /// into "Nora, Albrecht," – and with it the folder the book lives in.
     @Test("a name that already has a comma is already sorted, and is left alone")
     func authorSortAlreadySorted() {
-        #expect(AuthorSort.of("McFadden, Freida") == "McFadden, Freida")
+        #expect(AuthorSort.of("Albrecht, Nora") == "Albrecht, Nora")
         #expect(AuthorSort.of("Austen, Jane") == "Austen, Jane")
         #expect(AuthorSort.of("King, Martin Luther Jr.") == "King, Martin Luther Jr.")
         // Whitespace is still tidied, so two spellings of one name are one name.
-        #expect(AuthorSort.of("  McFadden,   Freida  ") == "McFadden, Freida")
+        #expect(AuthorSort.of("  Albrecht,   Nora  ") == "Albrecht, Nora")
     }
 
     @Test("sorting a name twice gives the same answer as sorting it once")

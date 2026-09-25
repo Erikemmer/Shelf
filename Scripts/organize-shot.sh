@@ -213,9 +213,9 @@ bring_into_view() {
 
 # The sidebar's help string is a sentence and is therefore translated, so the
 # row is found by the author's *name*, which is data and is not.
-P=$(bring_into_view "Sebastian Fitzek, 3") \
-    || P=$(bring_into_view "Fitzek, Sebastian, 3") \
-    || fail "no Fitzek row could be brought into view — is this the library Scripts/organize-library.sh built?"
+P=$(bring_into_view "Marek Voss, 3") \
+    || P=$(bring_into_view "Voss, Marek, 3") \
+    || fail "no Voss row could be brought into view — is this the library Scripts/organize-library.sh built?"
 say "  the author row is at ${P}"
 swift "$HERE/click-at.swift" ${P% *} ${P#* } right 2>/dev/null \
     || fail "could not right-click the author row"
@@ -238,7 +238,7 @@ EOF
 wait_for "$(menu_name spellings)" "the merge sheet never appeared — did the context menu open?"
 sleep 1.5
 tree_has "$(menu_name target)" || fail "the merge sheet has no target field"
-tree_has "Fitzek" || fail "the merge sheet does not list the spellings it was opened on"
+tree_has "Voss" || fail "the merge sheet does not list the spellings it was opened on"
 shoot merge-dialog
 escape
 

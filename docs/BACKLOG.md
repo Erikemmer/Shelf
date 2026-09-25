@@ -793,7 +793,7 @@ is currently assumed.
 ### Left for later, deliberately
 
 - [ ] **A rename does not offer to fix the *sort* name too.** `AuthorSort` is
-      derived, so merging "Fitzek, Sebastian" into "Sebastian Fitzek" files it
+      derived, so merging "Voss, Marek" into "Marek Voss" files it
       under F either way — but a name the rule gets wrong (a Dutch *van*, a
       Spanish double surname) still has no way to be corrected by hand. That is
       a stored `authorSort` per author, which is a schema change
