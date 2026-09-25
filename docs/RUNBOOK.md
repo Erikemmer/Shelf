@@ -109,6 +109,29 @@ written when a metadata change is made, atomically through a `.part` file, so a
 copy taken while the app is open either has the old file or the new one. The
 index is the exception, and it is the thing being left out.
 
+### Before a run that changes many books at once
+
+A run that touches most or all of a library — a batch merge, "Standardize
+Fields…", "Fill Missing Fields…", "Organize Library…" over the whole
+collection — does not start until a complete backup of the *current* state
+is proven, in the report, not merely stated: the index (copied through
+SQLite's own backup call, `PRAGMA integrity_check` run against the copy,
+not the live file), every `metadata.opf` at its relative path, and a
+manifest of every file's path, size and SHA-256. "Proven" means the numbers
+line up — OPF count equals the book count the index reports, manifest line
+count equals files found on disk — not that a folder exists.
+
+This rule exists because Sprint 18's own pre-change backup was, on 24
+September 2026, believed to be only a hash manifest with no folder copy
+behind it — checked again on 25 September 2026 and found to hold a full
+index and OPF copy after all (`docs/HANDOFF.md` has the numbers). The
+belief was wrong, not the backup, but a wrong belief discovered only after
+the run would have been just as costly if the backup really had been
+missing. This session has no automated, technical version of this
+check yet — `make` has no target that refuses a batch command without a
+proven backup — so until one exists, the proof is a manual step in every
+report; `docs/BACKLOG.md` has this as an open item.
+
 ---
 
 ## 3. Restore
@@ -705,3 +728,24 @@ already check for a `Developer ID Application` identity every time they run
 `YES` on their own the moment one is found; a real signature, notarisation
 and stapling follow automatically, and the download's name drops the
 `-unsigned` suffix. Nothing to edit by hand.
+
+---
+
+## 16. When an AI session drives Shelf
+
+**A session leaves no Shelf instance running.** Any Shelf.app it launched
+itself — for `make smoke`, for a screenshot, for driving the app through a
+real workflow — is quit through the same human-way path (`Shelf ▸ Quit` /
+SIGTERM, never SIGKILL) before the session ends, so the next session never
+has to identify and ask about a leftover instance that was actually its own
+predecessor's.
+
+**Before a `/clear`, or at the end of a task, no background task and no
+Shelf instance belonging to that session may still be running.** Found
+worth writing down on 25 September 2026: a Sprint 18 session left at least
+one Shelf.app instance running across a `/clear` boundary, and the
+following session — unable to tell a leftover instance of its own history
+apart from a genuinely foreign one — had to stop and ask about it twice
+before work could continue. The check costs little; tracing a
+mid-conversation ownership question after the fact costs a great deal
+more.

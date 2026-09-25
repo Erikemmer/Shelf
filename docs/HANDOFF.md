@@ -1,5 +1,32 @@
 # Handoff – where Shelf stands, and what is left
 
+**Sprint 18's pre-change backup, checked 25 September 2026: complete, not
+missing.** `~/Library/Caches/Shelf/standardize-2026-09-24/` was believed to
+hold only `manifest.tsv` (a hash list of 1 845 files) with no folder copy
+behind it. Checked again before today's run: it also holds `index/`
+(the pre-change `library.sqlite`, with its `-wal`/`-shm`, recovering
+cleanly — `PRAGMA integrity_check` returns `ok`, 372 books, matching the
+372 `metadata.opf` files under `opfs/` and the 372 `metadata.opf` lines in
+`manifest.tsv`) and `opfs/` itself (372 files, one per pre-change book).
+The belief that it was incomplete was wrong; the backup was not. A second,
+after-the-run backup was taken today the same way, into
+`after-sprint18/` in the same folder (index + 366 `metadata.opf` + a
+1 445-line manifest, book count matching): `docs/RUNBOOK.md` §2 now has the
+rule this should have been checked against from the start, and
+`docs/BACKLOG.md` has the one gap actually found (no automated check for
+it yet). Two local APFS snapshots from earlier that day
+(`com.apple.TimeMachine.2026-09-24-101634.local`,
+`…-120813.local`, both `Purgeable: Yes`) exist as an older, unmounted
+fallback — not inspected further, since the on-disk backup above already
+answers the question. No Time Machine network destination was reachable
+(`tmutil listbackups`: "No machine directory found for host").
+
+*(The section below this note is Sprint 16's own top summary and is stale
+— it still describes `v1.1.0-rc1`. A full rewrite covering Sprint 18 is
+planned before this session's report closes.)*
+
+---
+
 **Shelf is installed, in `/Applications`, and updates itself.** Every
 future release published with `make release` reaches Erik without him
 doing anything — down to one click of his own, on "Install" — 24

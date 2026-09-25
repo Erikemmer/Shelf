@@ -1475,3 +1475,23 @@ only ever replace it with another, never take it away.
       `/de`), with a verdict under each picture in the Sprint 9/11 style —
       every claim checked against the folder on disk and the sidebar's own
       "Missing Cover" count, not against the picture
+
+## Sprint 18 — safeguards found while running the sprint · 25 September 2026
+
+- **No technical, automated check yet that a batch run has a proven backup
+  behind it.** `docs/RUNBOOK.md` §2 now states the rule in words — a run
+  touching most or all of a library does not start without a proven backup
+  in the report — but no `make` target enforces it. Worth a target (or a
+  preflight the app itself runs) that refuses to start "Standardize
+  Fields…", "Fill Missing Fields…" or a library-wide "Organize Library…"
+  without one.
+- **Two unexplained `Shelf.app` processes, observed 24–25 September 2026,
+  both from the DerivedData Release build, both re-parented to `launchd`
+  (PID 1) by the time they were found:** one seen at a start time not
+  captured before it exited on its own; one started 2026-09-25 08:41:26,
+  quit cleanly via its own `Shelf ▸ Beenden` five seconds after being asked
+  to. Neither was a descendant of the driving Claude Code session's own
+  process tree (checked by walking `pgrep -P` recursively from that
+  session's top-level process), and a unified-log query for the second
+  one's actual launch request returned nothing. Genuinely open: what
+  launched them. Not investigated further, and no cause assumed.
