@@ -58,4 +58,26 @@ public enum LanguageCode {
         let code = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return twoLetter[code] ?? code
     }
+
+    /// Whether two language values name the same language, ignoring a region
+    /// or script subtag on either side.
+    ///
+    /// `normalised` alone compares two values *as given* — right for storing
+    /// a value untouched (`FieldStandardization` deliberately leaves a
+    /// region-tagged code like `en-GB` alone, on purpose, so as not to lower-
+    /// case its canonical region). But a straight `normalised(a) ==
+    /// normalised(b)` then never matches a service's bare `eng` against a
+    /// book's own `en-GB`, because `en-gb` is passed through as an opaque,
+    /// unknown code rather than folded to `en`. Found against the real
+    /// library, not invented (Sprint 20, Teil A1): a book stored as `en-GB`
+    /// whose only Open Library candidate answered `eng` — a real agreement
+    /// the plain equality this function replaces in `DescriptionFill` would
+    /// have missed.
+    public static func matches(_ one: String, _ other: String) -> Bool {
+        func primarySubtag(_ raw: String) -> String {
+            let bare = raw.split(separator: "-", maxSplits: 1).first.map(String.init) ?? raw
+            return normalised(bare)
+        }
+        return primarySubtag(one) == primarySubtag(other)
+    }
 }

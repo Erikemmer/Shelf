@@ -3,6 +3,25 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 20, Teil A1 — a region-tagged language never agreed with a service's bare one · 25 September 2026
+
+Found re-reading Sprint 19's own 348 cached Open Library answers against the
+real library, read-only, through a temporary analysis driver built on
+`ShelfCore`'s own public reader and comparison functions (not committed —
+its numbers are in `docs/HANDOFF.md`). `DescriptionFill`'s own condition (c)
+compared `LanguageCode.normalised(candidate) == LanguageCode.normalised(book)`
+— correct for two bare codes, but `FieldStandardization` deliberately leaves
+a *region*-tagged code (`en-GB`) exactly as the file said it, so `normalised`
+passes it through unfolded and it never again equals a service's bare `eng`.
+Found against one real book, not invented: stored as `en-GB`, Open Library's
+only candidate answering the bare `eng` it always does — same language,
+compared as if it were not. `LanguageCode.matches(_:_:)` now compares the
+primary subtag on both sides before folding either one; `DescriptionFill`
+uses it instead of the plain equality. 2 new tests (918 total). Does not, on
+its own, change Sprint 19's own "0 filled" result — see Teil A1's own numbers
+below for why the description route stays at 0 regardless while Google Books
+is the only service that ever answers with a summary at all.
+
 <!-- shelf-release: v1.2.0 · 25 September 2026 -->
 
 ## Sprint 19, Teil B2 — a 429 now stops that service for the rest of the run · 25 September 2026

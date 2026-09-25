@@ -217,6 +217,25 @@ struct OnlineValueTests {
     func unknownLanguage() {
         #expect(LanguageCode.normalised("xyz") == "xyz")
     }
+
+    /// `normalised` alone leaves a region-tagged code exactly as given (by
+    /// design — `FieldStandardization` never lower-cases a canonical region),
+    /// which means a plain `normalised(a) == normalised(b)` never agrees that
+    /// `en-GB` and `eng` name the same language. Found against the real
+    /// library (Sprint 20, Teil A1): a book stored as `en-GB` whose only Open
+    /// Library candidate answered `eng` for `DescriptionFill`'s own language
+    /// check.
+    @Test(
+        "a region or script subtag on either side does not stop two codes agreeing",
+        arguments: [
+            ("en-GB", "eng", true), ("en-US", "en", true), ("de-DE", "ger", true),
+            ("de-AT", "deu", true), ("en-GB", "ger", false), ("de", "en", false),
+            ("pt-BR", "por", true),
+        ])
+    func languageMatchesAcrossSubtags(one: String, other: String, expected: Bool) {
+        #expect(LanguageCode.matches(one, other) == expected)
+        #expect(LanguageCode.matches(other, one) == expected)
+    }
 }
 
 /// With two services, "what the service says" stops being a sentence. Every

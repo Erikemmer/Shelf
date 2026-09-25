@@ -132,6 +132,30 @@ struct FillMissingFieldsTests {
         #expect(result.plans.isEmpty)
     }
 
+    @Test(
+        "A region-tagged book language still agrees with a service's bare one — the real-library bug, Sprint 20 Teil A1"
+    )
+    func regionTaggedLanguageStillMatches() async throws {
+        // Real shape, found against the real library: a book stored as
+        // "en-GB" (`FieldStandardization` deliberately never folds a
+        // region-tagged code — it already carries a canonical region and is
+        // not the bare three-letter code that rule exists to fix). Before
+        // `LanguageCode.matches`, `normalised("en-GB")` ("en-gb", passed
+        // through as unknown) never equalled a service's bare `normalised`
+        // form, so this book's description could never fill even once the
+        // candidate's own language plainly agreed.
+        let googleBooks = """
+            {"items": [{"id": "gb1", "volumeInfo": {"title": "Sturmlicht", "authors": ["A. Autor"],
+            "language": "en", "description": "\(longPlainSummary)"}}]}
+            """
+        let result = await FillMissingFields.plan(
+            over: [entry(language: "en-GB", description: nil)],
+            fetcher: fetcher([answer(emptyOpenLibrary), answer(googleBooks)]))
+
+        let plan = try #require(result.plans.first)
+        #expect(plan.change.after.description == longPlainSummary)
+    }
+
     @Test("A summary at or under 80 characters never fills")
     func tooShortNeverFills() async {
         let googleBooks = """

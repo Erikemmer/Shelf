@@ -198,9 +198,10 @@ public enum DescriptionFill {
                 && Set($0.authors.map(AuthorNameFold.normalized)) == ourAuthors
         }
         guard matches.count == 1, let candidate = matches.first else { return attempt }
-        // (c) a known language, and it agrees with the book's own.
+        // (c) a known language, and it agrees with the book's own — ignoring
+        // a region or script subtag on either side (`LanguageCode.matches`).
         guard let candidateLanguage = candidate.language, !candidateLanguage.isEmpty,
-            LanguageCode.normalised(candidateLanguage) == LanguageCode.normalised(bookLanguage)
+            LanguageCode.matches(candidateLanguage, bookLanguage)
         else { return attempt }
         // (d) long enough to be a summary, and no markup beyond a paragraph
         // break — never an HTML fragment the inspector would show verbatim.
