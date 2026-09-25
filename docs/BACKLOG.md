@@ -1521,3 +1521,19 @@ download-site domain, the third author's name, and the unrelated book
 title. History is not rewritten (`CLAUDE.md`); what the count means for a
 public repository already known to a mirror or a clone is Erik's own
 judgement, not this session's.
+
+## The Dock and About-panel icon still show the old artwork · 25 September 2026
+
+Not a build defect: `AppIcon.icns` inside the freshly built app is the new
+icon (checked with `iconutil -c iconset`), and a fresh, uncached
+`NSWorkspace.shared.icon(forFile:)` lookup against the built app's path
+also draws the new one. What still shows the old bookshelf, after a
+rebuild and a full quit-and-relaunch, is the Dock and the About panel —
+LaunchServices' own icon cache, the same behaviour Sprint 4's own
+`CHANGELOG` entry named, whose documented fix is `lsregister -f` on the
+one bundle. This session's own permission guardrail refused that call as
+a system-registration action outside a coding session's authorization,
+correctly by its own rule even though the action is narrower than
+resetting the icon cache outright. Erik running it himself
+(`lsregister -f -R -trusted <path to Shelf.app>`, no `sudo` needed), or a
+normal restart, is expected to clear it.

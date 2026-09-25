@@ -3,6 +3,41 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## New app icon (Neues App-Icon) · 25 September 2026
+
+Erik's new package — Motiv 7b, "E-Reader Bauhaus" — replaces the first icon
+(Sprint 4) everywhere it lived: `App/Shelf/Resources/Assets.xcassets/
+AppIcon.appiconset` (the ten macOS sizes) and `docs/icon/` (the whole
+delivered package: `macOS/`, `iOS/`, `iconset/`, `png/`, the README), both
+swapped wholesale, nothing from the old set left in either. Every PNG
+checked against its `Contents.json` before the swap: pixel size, `@2x`
+exactly twice its base, alpha present throughout. `Scripts/write-into-
+book-cover-shot.sh`, which derives three real JPEGs from the app icon via
+`sips` at fixed target sizes, needed no change — it already regenerates
+those every run rather than trusting stale bytes — and a repo-wide
+hash-comparison against every old icon file's bytes found no other copy
+anywhere (`docs/screenshots/` excepted on purpose: those are evidence of
+earlier states and stay as they were).
+
+**Proof, and its limit.** `iconutil -c iconset` on the *built* app's own
+`AppIcon.icns` extracts the new artwork — the bundle itself is correct.
+`NSWorkspace.shared.icon(forFile:)`, called against the built app's path
+from a fresh process, also draws the new icon at 512 px, pixel-for-pixel
+the same picture as `png/Shelf-512.png` (not byte-identical — `NSWorkspace`
+re-encodes through its own rendering path — but the same image, checked by
+eye). **The About panel and the Dock, in this session, kept showing the
+old bookshelf icon after a rebuild and a full quit-and-relaunch** — the
+exact LaunchServices icon-cache behaviour this project's own Sprint 4
+entry already named, whose documented fix (`lsregister -f` on the one
+bundle) this session was not permitted to run: a narrower action than
+resetting the icon cache outright, but still a system-registration change
+the session's own guardrails correctly treat as outside a coding session's
+authorization. Both pictures are kept
+(`~/Library/Caches/Shelf/icon-2026-09-24/proof/`) rather than only the
+flattering one. Erik running `lsregister -f` on his own build, or simply
+using it for a while, is expected to clear it; nothing about the bundle
+itself needs a second look.
+
 ## Sprint 18 — a real author, a real title and a real download site left the public repo · 25 September 2026
 
 This repository is public. Read against the real library (only read, never
