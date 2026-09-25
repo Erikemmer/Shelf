@@ -190,6 +190,84 @@ app session, which nobody asked for and nothing would have explained. The
 block lives in the loop that has a "run" to speak of; the actor stays as
 stateless about refusals as it always was.
 
+## Addendum – 25 September 2026, Sprint 21, Teil A1/A2 — two probes, before building anything
+
+**A1: Open Library's own per-ISBN edition endpoint genuinely answers one
+edition — unlike `/api/books` (rule 2 above) and unlike `/search.json`
+(rule 3), neither of which this addendum touches.** `/isbn/<ISBN>.json`
+(redirecting to `/books/<OLID>.json`) is a different endpoint from both:
+asked for 10 of the library's 36 real ISBN books, cached, it answered 6 of
+10, and every one of the 6 carried `publishers`, `publish_date` and
+`languages` — real edition-level fields, not a work's guess at one. Teil B2
+builds on this.
+
+**A2: 20 more real ASINs, cached, `/search.json?q=id_amazon:<ASIN>`,
+alongside Sprint 20's own five — 25 in total, the decision rule's own
+threshold.** 1 hit across all 25 (Sprint 20's own), naming exactly one work
+and exactly one edition; the 24 others answered `numFound: 0`. No hit, in
+25 tries, ever named more than one of either. The decision rule this ADR's
+own addendum below sets: coverage does not decide whether B3 gets built,
+uniqueness does — and no probe ever failed the uniqueness question, however
+rarely it fires. Teil B3 builds on this.
+
+## Addendum – 25 September 2026, Sprint 21, Teil B1/B2/B3 — a work's own
+description, a real edition by ISBN, and an ASIN treated the same way
+
+**B2 — `OpenLibraryEditionReader` reads `/isbn/<ISBN>.json`, and its answer
+is folded into the same-ISBN `/search.json` candidate, never shown beside
+it.** Both are Open Library's own opinion about one book; keeping them as
+two separate "Open Library" lines would have made `MetadataMerge`'s own
+per-source contest logic (rule 3's "two answers to one field are two
+lines") see one service disagreeing with itself. `EditionMerge.folding`
+instead **replaces** the `/search.json` candidate's `publisher`,
+`published` and `language` with the edition endpoint's own values — never
+half of one and half of the other: a field the edition record does not
+carry is left empty, not inherited from the work-level guess it would
+otherwise wear a newly-`true` `describesOneEdition` flag over. Where
+`/search.json` found nothing at all for this ISBN, the edition record
+stands on its own. The endpoint is asked from `FillMissingFields`' own ISBN
+branch only — never from `MetadataFetcher.candidates(for:)`, the seam the
+one-book "Fetch Metadata…" sheet and every existing test already depend on
+— so nothing about that sheet's own request shape changes by this
+endpoint's existing at all. A 429 from it blocks Open Library for the rest
+of the run, the identical rule the addendum below already set for
+`/search.json`'s own refusal.
+
+**B3 — an ASIN is asked through the same `/search.json?q=id_amazon:<ASIN>`
+Teil A2 probed, and only trusted once `OpenLibraryASINSearch.uniqueEdition`
+confirms exactly one work with exactly one `edition_key`.** That key is
+then asked directly, `/books/<OLID>.json` — the identical shape and reader
+`/isbn/<ISBN>.json` redirects to, so B3 is B2 with a different first hop,
+not a second set of field rules. An ASIN search naming more than one work,
+or one work with more than one edition, fills nothing — never a guess
+between candidates the way rule 5 forbids for a title. `FillMissingFields`
+only ever reaches this branch for a book with **no** valid ISBN; a book
+that has one is never additionally asked its ASIN.
+
+**B1 — a description, the one field Open Library's `/search.json` has
+never carried (rule "the search carries no description at all",
+`OpenLibraryReader`).** `OpenLibraryWorkReader` reads a work's own record,
+`/works/<key>.json` — found, not assumed, to answer `description` as
+**an object**, `{"type": "/type/text", "value": "…"}`, never a plain
+string, on every real work record this project has read that carries one
+at all. Reached two ways: from `DescriptionFill`'s own Title+Author match
+(conditions (a)–(c) unchanged), once that match is Open Library's and its
+inline `summary` is (as it always is) `nil` — its candidate `id` already
+names the work key; and from B2/B3's own edition record, whose `works`
+field names the same key without any Title+Author guess at all, gated only
+by the edition's own language agreeing with the book's (there is no second
+candidate here to disambiguate against — an ISBN or a uniquely-resolved
+ASIN is already a stronger identity guarantee than condition (b) ever
+gives a title search). Condition (d) — long enough, no markup beyond a
+paragraph break — applies unchanged to a work-level answer exactly as it
+already did to Google Books' inline one.
+
+**Test data throughout is invented — no real ISBN, ASIN, title or author
+from Erik's library is in any fixture or test name (`CLAUDE.md`).** The
+probes above ran against the real library and are named, with counts, only
+in the report to Erik and in `docs/HANDOFF.md`; nothing from them is
+quoted here.
+
 ## Alternatives not taken
 
 - **An API key for Google Books.** It would fix the 429, and it would be a

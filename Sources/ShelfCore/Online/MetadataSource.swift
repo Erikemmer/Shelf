@@ -157,6 +157,56 @@ public enum MetadataEndpoint {
         "key,title,subtitle,author_name,first_publish_year,publisher,language,isbn,cover_i,subject,"
         + "number_of_pages_median"
 
+    /// Only the fields Teil B3's own edition-key check reads: whether the
+    /// ASIN named exactly one work and, inside it, exactly one edition.
+    static let asinSearchFields = "key,title,edition_key,isbn,id_amazon"
+
+    // MARK: Teil B2/B3 — the edition-level endpoints, outside the ordinary
+    // two-service loop above. `MetadataFetcher` calls these directly, only
+    // from `FillMissingFields`' own ISBN/ASIN branches — never from
+    // `requests(for:)`, so every existing caller of the ordinary lookup is
+    // unaffected by their existence.
+
+    /// Open Library's own per-ISBN edition endpoint. `/isbn/<ISBN>.json`
+    /// redirects to `/books/<OLID>.json`; `URLSessionTransport` follows
+    /// redirects the way any browser would, so this is the one URL to ask.
+    public static func editionRequest(forISBN isbn: String) -> MetadataRequest? {
+        guard let url = URL(string: "https://openlibrary.org/isbn/\(isbn).json") else { return nil }
+        return MetadataRequest(source: .openLibrary, url: url, cacheKey: hashedKey("openlibrary-edition", isbn))
+    }
+
+    /// The same edition record, asked by the key Teil B3's own ASIN search
+    /// already named — no redirect needed, because the key is exact.
+    public static func editionByKeyRequest(_ editionKey: String) -> MetadataRequest? {
+        guard let url = URL(string: "https://openlibrary.org/books/\(editionKey).json") else { return nil }
+        return MetadataRequest(
+            source: .openLibrary, url: url, cacheKey: hashedKey("openlibrary-edition-key", editionKey))
+    }
+
+    /// Teil B3's first hop: does Open Library carry this ASIN at all, and
+    /// naming how many works and editions — the uniqueness check A2 asked
+    /// for, before any edition-level field is ever trusted from it.
+    public static func asinSearchRequest(asin: String) -> MetadataRequest? {
+        guard
+            let url = url(
+                "https://openlibrary.org/search.json", [("q", "id_amazon:\(asin)"), ("fields", asinSearchFields)])
+        else { return nil }
+        return MetadataRequest(source: .openLibrary, url: url, cacheKey: hashedKey("openlibrary-asin-search", asin))
+    }
+
+    /// A work's own record — `/works/<key>.json` — Teil B1's own source for
+    /// a description Open Library's search never carries.
+    public static func workRequest(key: String) -> MetadataRequest? {
+        guard let url = URL(string: "https://openlibrary.org\(key).json") else { return nil }
+        return MetadataRequest(source: .openLibrary, url: url, cacheKey: hashedKey("openlibrary-work", key))
+    }
+
+    private static func hashedKey(_ namespace: String, _ token: String) -> String {
+        let hasher = PortableSHA256Hasher()
+        hasher.update(Data("\(namespace)/\(token)".utf8))
+        return "\(namespace)-\(hasher.finish().prefix(32))"
+    }
+
     private static func url(_ base: String, _ items: [(String, String)]) -> URL? {
         guard var components = URLComponents(string: base) else { return nil }
         components.queryItems = items.map { URLQueryItem(name: $0.0, value: $0.1) }

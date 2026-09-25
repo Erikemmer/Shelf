@@ -97,6 +97,7 @@ struct FillMissingFieldsSheet: View {
         let sourceLabel: String
         switch proposal.source {
         case .isbn: sourceLabel = "ISBN"
+        case .asin: sourceLabel = "ASIN"
         case .titleAuthor: sourceLabel = Loc.string("Title+Author")
         }
         let current = proposal.current.isEmpty ? "–" : proposal.current

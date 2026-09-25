@@ -80,6 +80,15 @@ public enum OpenLibraryReader {
     /// ticks it or does not, and a hundred tags behind one tick is not an offer.
     static let maximumSubjects = 12
 
+    /// The work key inside one of this reader's own candidate ids
+    /// (`"openlibrary:/works/OL123W"` → `"/works/OL123W"`) — Teil B1's own
+    /// route from a Title+Author match to that work's description, which
+    /// `/search.json` itself never carries.
+    public static func workKey(fromCandidateID id: String) -> String? {
+        guard id.hasPrefix("openlibrary:/works/") else { return nil }
+        return String(id.dropFirst("openlibrary:".count))
+    }
+
     // MARK: Reading loosely
 
     static func string(_ value: Any?) -> String? {

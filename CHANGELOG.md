@@ -3,6 +3,32 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 21, Teil B1/B2/B3 — a real edition by ISBN, an ASIN treated the same way, and a work's own description · 25 September 2026
+
+Built on two probes against the real library (Teil A1/A2 below): Open
+Library's `/isbn/<ISBN>.json` genuinely answers one edition (6 of 10 real
+ISBNs tried), and no ASIN probe, in 25 tries across two sessions, ever
+named more than one work or edition for one ASIN. `OpenLibraryEditionReader`
+reads that endpoint and `/books/<OLID>.json` alike; `EditionMerge.folding`
+replaces (never half-merges) a same-ISBN `/search.json` candidate's
+publisher, date and language with the edition record's own, or stands the
+edition alone when the search found nothing. `OpenLibraryASINSearch`
+confirms an ASIN names exactly one work and exactly one edition before
+`FillMissingFields`' new ASIN branch trusts it the same way an ISBN is —
+only for a book with no valid ISBN at all. `OpenLibraryWorkReader` adds the
+one field Open Library's search has never carried: a description, read
+from `/works/<key>.json`'s own `{"type": "/type/text", "value": "…"}`
+shape, reached from `DescriptionFill`'s Title+Author match when it is Open
+Library's own (whose inline summary is always `nil`) and from B2/B3's own
+edition record via its `works` field, gated by the edition's own language
+agreeing with the book's. `FillMissingFields.Proposal.Source` gains
+`.asin(MetadataSource)`, shown in the sheet as "ASIN" beside the existing
+"ISBN" and "Title+Author". 28 new tests (946 total); full reasoning and
+the two probes' own numbers: ADR 0015's addenda for Teil A1/A2 and
+Teil B1/B2/B3. All test data is invented — no real ISBN, ASIN, title or
+author is in any fixture (`CLAUDE.md`); the probes' own real numbers are in
+the report to Erik and in `docs/HANDOFF.md`, not here.
+
 ## Sprint 20, Teil A1 — a region-tagged language never agreed with a service's bare one · 25 September 2026
 
 Found re-reading Sprint 19's own 348 cached Open Library answers against the

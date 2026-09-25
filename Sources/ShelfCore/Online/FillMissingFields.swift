@@ -26,6 +26,9 @@ public enum FillMissingFields {
     public struct Proposal: Sendable, Equatable {
         public enum Source: Sendable, Equatable {
             case isbn(MetadataSource)
+            /// Teil B3: an ASIN search that named exactly one work with
+            /// exactly one edition, trusted the same way an ISBN is.
+            case asin(MetadataSource)
             case titleAuthor(MetadataSource)
         }
         public var label: String
@@ -100,15 +103,34 @@ public enum FillMissingFields {
             var proposals: [Proposal] = []
             var reason: UnchangedReason = .nothingToAskWith
 
-            if let query = MetadataQuery.about(entry.book), case .isbn = query {
+            if let query = MetadataQuery.about(entry.book), case .isbn(let isbn) = query {
                 reason = .noAnswer
                 let result = await fetcher.candidates(for: query, skipping: blockedSources)
                 problems.formUnion(result.problems)
                 for source in result.skippedSources { serviceSkips[source, default: 0] += 1 }
                 blockedSources.formUnion(result.refusedTooManyRequests)
-                if let best = result.ranked.first {
+
+                // Teil B2: Open Library's own per-ISBN edition endpoint
+                // genuinely answers one edition (Sprint 21, Teil A1), folded
+                // into the `/search.json` candidate above rather than shown
+                // beside it — never asked once Open Library has already said
+                // "stop" this run, in this book's own answer above or an
+                // earlier book's.
+                var candidates = result.candidates
+                var editionRecord: OpenLibraryEdition?
+                if !blockedSources.contains(.openLibrary) {
+                    let edition = await fetcher.openLibraryEdition(forISBN: isbn)
+                    if edition.refusedTooManyRequests { blockedSources.insert(.openLibrary) }
+                    if let record = edition.edition {
+                        editionRecord = record
+                        candidates = EditionMerge.folding(record, into: candidates)
+                    }
+                }
+
+                let ranked = MetadataScore.ranked(candidates, for: query)
+                if let best = ranked.first {
                     reason = .nothingToFill
-                    let comparison = EditionMatch.comparison(of: best.candidate, among: result.ranked, asked: query)
+                    let comparison = EditionMatch.comparison(of: best.candidate, among: ranked, asked: query)
                     let ticked = MetadataMerge.proposals(for: working, from: comparison).filter(\.isTickedByDefault)
                     if !ticked.isEmpty {
                         working = MetadataMerge.apply(ticked, to: working).book
@@ -116,6 +138,66 @@ public enum FillMissingFields {
                             Proposal(
                                 label: $0.label, current: $0.current, proposed: $0.proposed,
                                 source: .isbn($0.sources.first ?? .openLibrary))
+                        }
+                    }
+                }
+
+                // Teil B1, chained from B2's own edition record: its work
+                // key is the one place Open Library ever carries a
+                // description at all.
+                if (working.description ?? "").isEmpty, let workKey = editionRecord?.workKey {
+                    let described = await DescriptionFill.fromEdition(
+                        workKey: workKey, editionLanguage: editionRecord?.language, bookLanguage: working.language,
+                        fetcher: fetcher)
+                    if described.refused.contains(.openLibrary) { blockedSources.insert(.openLibrary) }
+                    if let found = described.summary {
+                        working.description = found.summary
+                        proposals.append(
+                            Proposal(
+                                label: BookField.description.label, current: entry.book.description ?? "",
+                                proposed: found.summary, source: .isbn(.openLibrary)))
+                    }
+                }
+            } else if let asin = AmazonASIN.valid(in: entry.book.identifiers) {
+                // Teil B3: the same trust rule as B2, reached through an ASIN
+                // instead of an ISBN — only when the search named exactly
+                // one work with exactly one edition (`OpenLibraryASINSearch`,
+                // ADR 0015's own addendum on this). Counts as a skip, the same
+                // way the ISBN branch's own `candidates(for:skipping:)` call
+                // does, rather than silently looking like nothing to ask.
+                reason = .noAnswer
+                if blockedSources.contains(.openLibrary) {
+                    serviceSkips[.openLibrary, default: 0] += 1
+                } else {
+                    let lookup = await fetcher.openLibraryEditionForASIN(asin)
+                    if lookup.refusedTooManyRequests { blockedSources.insert(.openLibrary) }
+                    if let record = lookup.edition {
+                        reason = .nothingToFill
+                        let candidate = record.asCandidate(extraIdentifiers: ["asin": asin])
+                        let ticked = MetadataMerge.proposals(for: working, from: candidate).filter(\.isTickedByDefault)
+                        if !ticked.isEmpty {
+                            working = MetadataMerge.apply(ticked, to: working).book
+                            proposals += ticked.map {
+                                Proposal(
+                                    label: $0.label, current: $0.current, proposed: $0.proposed,
+                                    source: .asin($0.sources.first ?? .openLibrary))
+                            }
+                        }
+
+                        // Teil B1, chained from B3's own edition record —
+                        // identical to the ISBN branch above.
+                        if (working.description ?? "").isEmpty, let workKey = record.workKey {
+                            let described = await DescriptionFill.fromEdition(
+                                workKey: workKey, editionLanguage: record.language, bookLanguage: working.language,
+                                fetcher: fetcher)
+                            if described.refused.contains(.openLibrary) { blockedSources.insert(.openLibrary) }
+                            if let found = described.summary {
+                                working.description = found.summary
+                                proposals.append(
+                                    Proposal(
+                                        label: BookField.description.label, current: entry.book.description ?? "",
+                                        proposed: found.summary, source: .asin(.openLibrary)))
+                            }
                         }
                     }
                 }
@@ -203,11 +285,48 @@ public enum DescriptionFill {
         guard let candidateLanguage = candidate.language, !candidateLanguage.isEmpty,
             LanguageCode.matches(candidateLanguage, bookLanguage)
         else { return attempt }
+
+        // Teil B1: `/search.json` never carries a description at all
+        // (`OpenLibraryReader`'s own `summary: nil`) — its *work* record
+        // might. Google Books' answer already carries its own description
+        // inline, so this is asked only when the unique match is Open
+        // Library's, and only once — the work key is right there in the
+        // candidate this run already fetched.
+        var summary = candidate.summary
+        if summary == nil, candidate.source == .openLibrary,
+            let workKey = OpenLibraryReader.workKey(fromCandidateID: candidate.id)
+        {
+            let work = await fetcher.openLibraryWorkDescription(key: workKey)
+            if work.refusedTooManyRequests { attempt.refused.insert(.openLibrary) }
+            summary = work.description
+        }
+
         // (d) long enough to be a summary, and no markup beyond a paragraph
         // break — never an HTML fragment the inspector would show verbatim.
-        guard let summary = candidate.summary, isPlainEnough(summary) else { return attempt }
+        guard let summary, isPlainEnough(summary) else { return attempt }
 
         attempt.summary = (summary, candidate.source)
+        return attempt
+    }
+
+    /// Teil B1's own chain from an edition record the ISBN or ASIN route
+    /// already found (`FillMissingFields`' own branches): the same language
+    /// and plain-text checks as conditions (c)/(d) above, without condition
+    /// (b) — an ISBN or a uniquely-resolved ASIN is a stronger identity
+    /// guarantee than a Title+Author match ever is, so there is no second
+    /// candidate here to disambiguate against.
+    static func fromEdition(
+        workKey: String, editionLanguage: String?, bookLanguage: String?, fetcher: MetadataFetcher
+    ) async -> Attempt {
+        guard let editionLanguage, !editionLanguage.isEmpty,
+            let bookLanguage, !bookLanguage.isEmpty,
+            LanguageCode.matches(editionLanguage, bookLanguage)
+        else { return Attempt() }
+        let work = await fetcher.openLibraryWorkDescription(key: workKey)
+        var attempt = Attempt()
+        if work.refusedTooManyRequests { attempt.refused.insert(.openLibrary) }
+        guard let summary = work.description, isPlainEnough(summary) else { return attempt }
+        attempt.summary = (summary, .openLibrary)
         return attempt
     }
 

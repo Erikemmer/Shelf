@@ -133,6 +133,70 @@ public actor MetadataFetcher {
             skippedSources: skipping)
     }
 
+    /// One edition record, keyed by an ISBN — Teil B2. Called only from
+    /// `FillMissingFields`' own ISBN branch, never from `candidates(for:)`,
+    /// so the ordinary lookup's request shape (and every test built against
+    /// it) is unchanged by this endpoint's existence.
+    public func openLibraryEdition(forISBN isbn: String) async -> EditionLookup {
+        guard let request = MetadataEndpoint.editionRequest(forISBN: isbn) else { return EditionLookup() }
+        return await editionLookup(at: request, isbn: isbn)
+    }
+
+    /// Teil B3: does the ASIN name exactly one work with exactly one
+    /// edition, and if so, that edition's own record — the same shape and
+    /// the same trust rules Teil B2 already has, reached by a different
+    /// first hop because an ASIN is not an ISBN Open Library indexes
+    /// directly.
+    public func openLibraryEditionForASIN(_ asin: String) async -> EditionLookup {
+        guard let searchRequest = MetadataEndpoint.asinSearchRequest(asin: asin) else { return EditionLookup() }
+        switch await answer(to: searchRequest) {
+        case .answered(let data):
+            guard let hit = try? OpenLibraryASINSearch.uniqueEdition(from: data) else { return EditionLookup() }
+            guard let editionRequest = MetadataEndpoint.editionByKeyRequest(hit.editionKey) else {
+                return EditionLookup()
+            }
+            return await editionLookup(at: editionRequest, isbn: hit.isbn)
+        case .refused(let status):
+            return EditionLookup(refusedTooManyRequests: status == 429)
+        case .failed:
+            return EditionLookup()
+        }
+    }
+
+    private func editionLookup(at request: MetadataRequest, isbn: String? = nil) async -> EditionLookup {
+        switch await answer(to: request) {
+        case .answered(let data):
+            guard let edition = try? OpenLibraryEditionReader.edition(from: data, isbn: isbn) else {
+                return EditionLookup()
+            }
+            return EditionLookup(edition: edition)
+        case .refused(let status):
+            return EditionLookup(refusedTooManyRequests: status == 429)
+        case .failed:
+            return EditionLookup()
+        }
+    }
+
+    /// A work's own description — Teil B1. Called from `DescriptionFill`
+    /// when its Title+Author match is an Open Library candidate (whose
+    /// `/search.json` answer never carries one at all), and from
+    /// `FillMissingFields`' own ISBN/ASIN branches once Teil B2/B3 already
+    /// found the work key.
+    public func openLibraryWorkDescription(key: String) async -> WorkDescriptionLookup {
+        guard let request = MetadataEndpoint.workRequest(key: key) else { return WorkDescriptionLookup() }
+        switch await answer(to: request) {
+        case .answered(let data):
+            guard let text = try? OpenLibraryWorkReader.description(from: data) else {
+                return WorkDescriptionLookup()
+            }
+            return WorkDescriptionLookup(description: text)
+        case .refused(let status):
+            return WorkDescriptionLookup(refusedTooManyRequests: status == 429)
+        case .failed:
+            return WorkDescriptionLookup()
+        }
+    }
+
     func parse(
         _ data: Data, from source: MetadataSource, answering query: MetadataQuery
     ) throws -> [MetadataCandidate] {
@@ -192,6 +256,31 @@ public actor MetadataFetcher {
     static func describe(_ error: any Error) -> String {
         let text = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         return text.isEmpty ? "the request did not get an answer" : text
+    }
+}
+
+/// What `openLibraryEdition(forISBN:)` / `openLibraryEditionForASIN(_:)` came
+/// back with — an edition record, or nothing, or a 429 worth remembering for
+/// the rest of the run the same way `LookupResult.refusedTooManyRequests`
+/// already is.
+public struct EditionLookup: Sendable, Equatable {
+    public var edition: OpenLibraryEdition?
+    public var refusedTooManyRequests: Bool = false
+
+    public init(edition: OpenLibraryEdition? = nil, refusedTooManyRequests: Bool = false) {
+        self.edition = edition
+        self.refusedTooManyRequests = refusedTooManyRequests
+    }
+}
+
+/// What `openLibraryWorkDescription(key:)` came back with.
+public struct WorkDescriptionLookup: Sendable, Equatable {
+    public var description: String?
+    public var refusedTooManyRequests: Bool = false
+
+    public init(description: String? = nil, refusedTooManyRequests: Bool = false) {
+        self.description = description
+        self.refusedTooManyRequests = refusedTooManyRequests
     }
 }
 
