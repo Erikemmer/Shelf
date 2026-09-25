@@ -93,12 +93,14 @@ struct EPUBFileReplacementTests {
         let outcome = try await EPUBFileReplacement.commit(
             newContent, to: entry, library: library, index: index, disposal: bin.disposal)
 
-        guard case .wrote(let updated) = outcome else {
+        guard case .wrote(let updated, let beforeSHA256, let result) = outcome else {
             Issue.record("expected .wrote, got \(outcome)")
             return
         }
+        #expect(beforeSHA256 == "old")
         let newEPUB = try #require(updated.formats.first { $0.format == .epub })
         #expect(newEPUB.sha256 != "old")
+        #expect(newEPUB.sha256 == result.format.sha256)
         #expect(newEPUB.byteSize == Int64(newContent.count))
         // The PDF row is untouched — this never writes anything but the EPUB.
         #expect(updated.formats.first { $0.format == .pdf } == pdfFormat)

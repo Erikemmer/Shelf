@@ -19,6 +19,30 @@ read of the same per-format `drm` column the audit compared. **No bug
 found; no fix needed.** The temporary command was reverted afterwards
 (`git checkout`), never committed.
 
+## Sprint 23, Teil B — "Write into the Book File…" across hundreds of books: halts on the first failure, a manifest, "Stop After This Book" · 25 September 2026
+
+A whole selection could already be handed to "Write into the Book File…"
+since Sprint 10 — `EPUBWrite.plan`/`.run` always took `[LibraryEntry]`, and
+the sidebar's context menu already offered it over a multi-selection. What
+a run against most or all of a 366-book library needs beyond that: the
+first failure now halts the run rather than pressing on through the rest
+of the selection (every plan after it comes back `.notAttempted`, its file
+untouched — `EPUBFileReplacement.replace` is atomic and was never asked to
+touch it); "Stop After This Book" during a run, the same cooperative
+`Task.isCancelled` idiom `OrganizeRunner` already uses, now wired to an
+actual button; and `EPUBWriteManifest`
+(`.shelf/epub-write-report.txt`, appended, never overwritten, the same
+shape `Import-Report.txt` uses) — one line per book actually written,
+naming the hash it had, the hash it has now, and where the original went.
+Never read back by `run` itself: a fresh plan already shows an
+already-written book as having no change left to make, so resuming an
+interrupted run needs no manifest at all — this one is a record for a
+person, not a second source of truth. The confirmation sheet gained the
+counts (to write / already the same / cannot be written) and the finished
+summary now names succeeded / already the same / failed / not attempted,
+plus where the manifest lives. 4 new core tests (973 total). Full
+reasoning: ADR 0021's own addendum.
+
 ## Sprint 22, Teil A — why Calibre and the book files themselves have nothing
 left to give "Fill Missing Fields…", measured rather than assumed · 25 September 2026
 

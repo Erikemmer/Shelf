@@ -480,6 +480,199 @@ struct EPUBWriteTests {
         #expect(reloaded?.formats.first?.sha256 == "unchanged")
     }
 
+    // MARK: Halting, resuming, and the manifest (Sprint 23, Teil B)
+
+    @Test("a book that is written appends one manifest line naming the way back")
+    func writingABookAppendsAManifestLine() async throws {
+        let folder = try TemporaryFolder()
+        let libraryRoot = try folder.folder("library")
+        _ = try folder.write(
+            "library/Author/Book (1)/book.epub", data: Self.book(title: "Old Title", author: "Author"))
+
+        let library = Library(root: libraryRoot)
+        let index = try LibraryIndex(inMemory: "epub-write-manifest-test")
+        let bin = try Bin(in: folder.url)
+        let bookID = UUID()
+        let format = BookFormat(
+            bookID: bookID, format: .epub, fileName: "book.epub", byteSize: 1, sha256: "old", modifiedAt: Date())
+        let entry = LibraryEntry(
+            book: Book(id: bookID, title: "New Title", authors: ["Author"]), number: 1, folder: "Author/Book (1)",
+            formats: [format])
+        try await index.save(entry)
+
+        guard case .success(let plan) = EPUBWrite.plan(for: entry, library: library) else {
+            Issue.record("expected a plan")
+            return
+        }
+        _ = await EPUBWrite.run(
+            [plan], entries: [bookID: entry], library: library, index: index, disposal: bin.disposal)
+
+        let manifestText = try String(contentsOf: EPUBWriteManifest.url(in: library), encoding: .utf8)
+        let lines = manifestText.split(separator: "\n")
+        #expect(lines.count == 1)
+        let columns = lines[0].split(separator: "\t", omittingEmptySubsequences: false)
+        #expect(columns.count == 5)
+        #expect(columns[1] == "New Title")
+        #expect(columns[2] == "old")
+        #expect(columns[3] != "old")
+        #expect(columns[4].hasPrefix("Trash:"))
+    }
+
+    @Test("a book that has nothing to write, and one that is never attempted, leave no manifest line")
+    func onlyAWrittenBookGetsAManifestLine() async throws {
+        let folder = try TemporaryFolder()
+        let libraryRoot = try folder.folder("library")
+        _ = try folder.write(
+            "library/Author/Nameless (1)/Nameless.epub", data: Self.bookWithNoTitle(author: "Some Author"))
+
+        let library = Library(root: libraryRoot)
+        let index = try LibraryIndex(inMemory: "epub-write-manifest-nochange-test")
+        let bin = try Bin(in: folder.url)
+        let bookID = UUID()
+        let format = BookFormat(
+            bookID: bookID, format: .epub, fileName: "Nameless.epub", byteSize: 1, sha256: "unchanged",
+            modifiedAt: Date())
+        let entry = LibraryEntry(
+            book: Book(id: bookID, title: "Nameless", authors: ["Some Author"]), number: 1,
+            folder: "Author/Nameless (1)", formats: [format])
+        try await index.save(entry)
+
+        guard case .success(let plan) = EPUBWrite.plan(for: entry, library: library) else {
+            Issue.record("expected a plan")
+            return
+        }
+        _ = await EPUBWrite.run(
+            [plan], entries: [bookID: entry], library: library, index: index, disposal: bin.disposal)
+
+        #expect(!FileManager.default.fileExists(atPath: EPUBWriteManifest.url(in: library).path))
+    }
+
+    @Test("the first failure halts the run — the books after it are never attempted, and are left alone")
+    func firstFailureHaltsTheRun() async throws {
+        let folder = try TemporaryFolder()
+        let libraryRoot = try folder.folder("library")
+        // Book "One" has a plan (from a real file) but the entry handed to
+        // `run` is for a book ID nothing in `entries` answers to — the same
+        // shape "no longer in the library" already covers — so it fails
+        // without ever touching a real file.
+        _ = try folder.write(
+            "library/A/One (1)/book.epub", data: Self.book(title: "Old One", author: "Author One"))
+        let originalTwoBytes = Self.book(title: "Old Two", author: "Author Two")
+        _ = try folder.write("library/B/Two (1)/book.epub", data: originalTwoBytes)
+
+        let library = Library(root: libraryRoot)
+        let index = try LibraryIndex(inMemory: "epub-write-halt-test")
+        let bin = try Bin(in: folder.url)
+
+        let idOne = UUID()
+        let idTwo = UUID()
+        let formatOne = BookFormat(
+            bookID: idOne, format: .epub, fileName: "book.epub", byteSize: 1, sha256: "old-one", modifiedAt: Date())
+        let formatTwo = BookFormat(
+            bookID: idTwo, format: .epub, fileName: "book.epub", byteSize: 1, sha256: "old-two", modifiedAt: Date())
+        let entryOne = LibraryEntry(
+            book: Book(id: idOne, title: "New One", authors: ["Author One"]), number: 1, folder: "A/One (1)",
+            formats: [formatOne])
+        let entryTwo = LibraryEntry(
+            book: Book(id: idTwo, title: "New Two", authors: ["Author Two"]), number: 1, folder: "B/Two (1)",
+            formats: [formatTwo])
+        try await index.save(entryOne)
+        try await index.save(entryTwo)
+
+        guard case .success(let planOne) = EPUBWrite.plan(for: entryOne, library: library),
+            case .success(let planTwo) = EPUBWrite.plan(for: entryTwo, library: library)
+        else {
+            Issue.record("expected both to plan")
+            return
+        }
+
+        // `entries` deliberately omits `idOne` — the exact "vanished from
+        // the library mid-run" case `run` already treats as a failure —
+        // so the first book fails and the second must never be attempted.
+        let report = await EPUBWrite.run(
+            [planOne, planTwo], entries: [idTwo: entryTwo], library: library, index: index, disposal: bin.disposal)
+
+        #expect(report.failed == 1)
+        #expect(report.notAttempted == 1)
+        #expect(report.succeeded == 0)
+        guard case .notAttempted = report.outcomes[1].result else {
+            Issue.record("expected the second book to be notAttempted, got \(report.outcomes[1].result)")
+            return
+        }
+        // Book Two's file is untouched — never opened, never trashed.
+        #expect(bin.taken.isEmpty)
+        let untouchedTwo = try Data(contentsOf: libraryRoot.appendingPathComponent("B/Two (1)/book.epub"))
+        #expect(untouchedTwo == originalTwoBytes)
+        let reloadedTwo = try await index.entries(ids: [idTwo]).first
+        #expect(reloadedTwo?.formats.first?.sha256 == "old-two")
+    }
+
+    @Test("stopping after this book — book one still writes, book two is left alone and named not attempted")
+    func stoppingAfterOneBookLeavesTheNextUntouched() async throws {
+        let folder = try TemporaryFolder()
+        let libraryRoot = try folder.folder("library")
+        _ = try folder.write(
+            "library/A/One (1)/book.epub", data: Self.book(title: "Old One", author: "Author One"))
+        let originalTwoBytes = Self.book(title: "Old Two", author: "Author Two")
+        _ = try folder.write("library/B/Two (1)/book.epub", data: originalTwoBytes)
+
+        let library = Library(root: libraryRoot)
+        let index = try LibraryIndex(inMemory: "epub-write-cancel-test")
+        let bin = try Bin(in: folder.url)
+
+        let idOne = UUID()
+        let idTwo = UUID()
+        let formatOne = BookFormat(
+            bookID: idOne, format: .epub, fileName: "book.epub", byteSize: 1, sha256: "old-one", modifiedAt: Date())
+        let formatTwo = BookFormat(
+            bookID: idTwo, format: .epub, fileName: "book.epub", byteSize: 1, sha256: "old-two", modifiedAt: Date())
+        let entryOne = LibraryEntry(
+            book: Book(id: idOne, title: "New One", authors: ["Author One"]), number: 1, folder: "A/One (1)",
+            formats: [formatOne])
+        let entryTwo = LibraryEntry(
+            book: Book(id: idTwo, title: "New Two", authors: ["Author Two"]), number: 1, folder: "B/Two (1)",
+            formats: [formatTwo])
+        try await index.save(entryOne)
+        try await index.save(entryTwo)
+
+        guard case .success(let planOne) = EPUBWrite.plan(for: entryOne, library: library),
+            case .success(let planTwo) = EPUBWrite.plan(for: entryTwo, library: library)
+        else {
+            Issue.record("expected both to plan")
+            return
+        }
+
+        // A deterministic stand-in for "Nach diesem Buch anhalten" pressed
+        // right after book one starts — no real `Task` and no race: `run`
+        // asks this closure once per book, and it starts saying yes the
+        // moment book one's own progress call has fired.
+        let requested = RequestedAfterFirstProgress()
+        let report = await EPUBWrite.run(
+            [planOne, planTwo], entries: [idOne: entryOne, idTwo: entryTwo], library: library, index: index,
+            disposal: bin.disposal, isCancelled: requested.value,
+            progress: { _ in requested.noteProgress() })
+
+        #expect(report.succeeded == 1)
+        #expect(report.notAttempted == 1)
+        guard case .notAttempted = report.outcomes[1].result else {
+            Issue.record("expected book two to be notAttempted, got \(report.outcomes[1].result)")
+            return
+        }
+        // Book two's file is untouched — never opened, never trashed.
+        let untouchedTwo = try Data(contentsOf: libraryRoot.appendingPathComponent("B/Two (1)/book.epub"))
+        #expect(untouchedTwo == originalTwoBytes)
+        #expect(bin.taken.count == 1)
+    }
+
+    /// `true` from the second call onward — the same shape a "stop after
+    /// this book" flag flipped inside book one's own progress callback
+    /// would have, without needing a real, racy `Task` to prove it.
+    private final class RequestedAfterFirstProgress: @unchecked Sendable {
+        private var progressCalls = 0
+        func noteProgress() { progressCalls += 1 }
+        func value() -> Bool { progressCalls >= 1 }
+    }
+
     // MARK: Fixtures
 
     /// Collects `run`'s progress callbacks, in the order they arrive — a

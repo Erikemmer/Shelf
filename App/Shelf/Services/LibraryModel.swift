@@ -2680,6 +2680,17 @@ final class LibraryModel {
     }
 
     var epubWritePhase: EPUBWritePhase?
+    /// Whether "Stop After This Book" has been pressed for the run
+    /// currently shown. Reset the moment a fresh run begins, so a flag
+    /// left over from an earlier run can never disable the button before
+    /// it has anything to cancel.
+    private(set) var epubWriteStopRequested = false
+    /// The detached task actually doing the writing — `EPUBWrite.run`'s
+    /// own default `isCancelled` reads `Task.isCancelled` on exactly this
+    /// task, so cancelling it here is what "Stop After This Book" means.
+    /// Never the outer `Task { … }` that awaits it: that one only reads
+    /// the result back onto the main actor and has nothing to stop.
+    private var epubWriteRunTask: Task<EPUBWrite.Report, Never>?
 
     /// Opens the sheet on a fresh plan for `entry` — the whole selection if
     /// `entry` is part of it and there is more than one book selected,
@@ -2709,19 +2720,32 @@ final class LibraryModel {
     func runEPUBWrite(_ plan: EPUBWrite.Plan) {
         guard let library, let index else { return }
         epubWritePhase = .running(EPUBWrite.Progress(done: 0, total: plan.books.count, currentTitle: ""))
+        epubWriteStopRequested = false
         let ids = Set(plan.books.map(\.entryID))
         let entriesByID = Dictionary(uniqueKeysWithValues: entries.filter { ids.contains($0.id) }.map { ($0.id, $0) })
+        let onProgress: @Sendable (EPUBWrite.Progress) -> Void = { [weak self] progress in
+            Task { @MainActor in self?.epubWritePhase = .running(progress) }
+        }
+        let runTask = Task.detached(priority: .userInitiated) {
+            await EPUBWrite.run(
+                plan.books, entries: entriesByID, library: library, index: index, progress: onProgress)
+        }
+        epubWriteRunTask = runTask
         Task {
-            let onProgress: @Sendable (EPUBWrite.Progress) -> Void = { [weak self] progress in
-                Task { @MainActor in self?.epubWritePhase = .running(progress) }
-            }
-            let report = await Task.detached(priority: .userInitiated) {
-                await EPUBWrite.run(
-                    plan.books, entries: entriesByID, library: library, index: index, progress: onProgress)
-            }.value
+            let report = await runTask.value
+            epubWriteRunTask = nil
             epubWritePhase = .done(report)
             await reload()
         }
+    }
+
+    /// "Stop After This Book" — the write already in flight finishes (it is
+    /// atomic and is never interrupted partway through, ADR 0021), and every
+    /// book after it is left exactly as it was, reported as not attempted
+    /// rather than silently missing.
+    func stopEPUBWrite() {
+        epubWriteRunTask?.cancel()
+        epubWriteStopRequested = true
     }
 
     /// Why this book is in *Duplicates*, in one line — or nothing when it is

@@ -117,3 +117,52 @@ synthetic ones.
   a file most readers tolerate. That risk is exactly why this ADR splits the
   writer from the command: the writer is built and proven first, against
   synthetic archives, before anything is asked to trust it with a book.
+
+## Addendum – 25 September 2026, Sprint 23, Teil B
+
+**A whole selection, not only one book, could already be handed to "Write
+into the Book File…"** — `EPUBWrite.plan(for:library:)` and `.run` took
+`[LibraryEntry]`/`[BookPlan]` since Sprint 10, Schritt E2, and the sidebar's
+own multi-selection context menu already called `beginEPUBWrite(for: books)`
+for exactly this. What this addendum adds is not multi-selection itself, but
+three things a run against hundreds of books, rather than a handful, turns
+out to need:
+
+1. **The first failure halts the run.** Before this, a refused or failed
+   book was recorded and `run` pressed on through the rest of the selection.
+   Now it stops there — every plan after it comes back `.notAttempted`,
+   named rather than silently missing, and its file is exactly as it was,
+   because `EPUBFileReplacement.replace` was never asked to touch it. A
+   failure among 366 books is worth a person's own look before the other
+   365 are written past it; nothing here changes what a *success* does.
+2. **"Stop After This Book"**, during a run — the same shape as a first
+   failure: the book already in flight (atomic, never interrupted
+   mid-write) finishes, and everything after it is `.notAttempted`.
+   `EPUBWrite.run` takes an injectable `isCancelled` closure, defaulting to
+   `Task.isCancelled` — the same cooperative-cancellation idiom
+   `OrganizeRunner` already checks, wired here for the first time to an
+   actual button (`LibraryModel.stopEPUBWrite()` cancels the detached task
+   `run` executes inside).
+3. **`EPUBWriteManifest`** (`.shelf/epub-write-report.txt`, appended to,
+   never overwritten — the same shape `Import-Report.txt` already uses):
+   one line per book actually written, naming the hash it had, the hash it
+   has now, and where the original went. **Never read back by `run`
+   itself** — resuming an interrupted run needs no manifest at all, because
+   a fresh plan already shows an already-written book as having no change
+   left to make (`BookPlan.hasChange`), the same way `Organize`'s own
+   folder-state repair works from the folders rather than from its
+   manifest. This one is a record for a person, not a second source of
+   truth, which is also why losing it is tolerated rather than thrown —
+   the book it describes is already correct by the time a line would be
+   written for it.
+
+The confirmation sheet gained the numbers this addendum's own task asked
+for — to write / already the same / cannot be written, each read back from
+the same plan the list below shows — and the finished summary now names how
+many succeeded, were already the same, failed, or were never attempted,
+plus where the manifest lives. Every rule ADR 0021 itself states — EPUB
+only, DRM refused, the confirmation naming every field, no ⌘Z, the original
+to the Trash — is unchanged; this addendum is about what happens *around*
+one book's own write when there are many of them, not about the write
+itself. 4 new core tests (`EPUBWriteTests.swift`), `CHANGELOG.md` has the
+numbers.

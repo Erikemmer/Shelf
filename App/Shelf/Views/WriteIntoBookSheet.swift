@@ -64,6 +64,7 @@ struct WriteIntoBookSheet: View {
             Text(Loc.string("None of this can be written into.")).foregroundStyle(Slate.textPrimary)
             skippedSection(plan.skipped)
         } else if Self.changingCount(plan) == 0 {
+            summaryLine(plan)
             // Every book in the plan is eligible, but none of them would
             // actually change — every field is either already the same or
             // one `EPUBOPFPatch` cannot place. Offering the write anyway
@@ -78,6 +79,7 @@ struct WriteIntoBookSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             bookList(plan)
         } else {
+            summaryLine(plan)
             Text(Loc.count("%lld books will have their EPUB file replaced.", Self.changingCount(plan)))
                 .foregroundStyle(Slate.textPrimary)
             Text(
@@ -97,6 +99,27 @@ struct WriteIntoBookSheet: View {
                 .font(.caption)
                 .foregroundStyle(Slate.textSecondary)
         }
+    }
+
+    /// The three numbers Sprint 23 added at the top of the sheet: how many
+    /// of this selection would actually get a new file, how many are
+    /// already exactly what Shelf would write, and how many cannot be
+    /// written at all — each read back from the very plan the list below
+    /// shows, never a separate count that could disagree with it.
+    private func summaryLine(_ plan: EPUBWrite.Plan) -> some View {
+        let toWrite = Self.changingCount(plan)
+        let alreadySame = plan.books.count - toWrite
+        let cannotWrite = plan.skipped.count
+        return HStack(spacing: 4) {
+            Text(Loc.count("%lld to write", toWrite))
+            Text("·").foregroundStyle(Slate.textSecondary)
+            Text(Loc.count("%lld already the same", alreadySame))
+            Text("·").foregroundStyle(Slate.textSecondary)
+            Text(Loc.count("%lld cannot be written", cannotWrite))
+        }
+        .font(.caption)
+        .foregroundStyle(Slate.textSecondary)
+        .accessibilityElement(children: .combine)
     }
 
     /// Every book, in full — a list that only shows the first few is a list
@@ -139,6 +162,17 @@ struct WriteIntoBookSheet: View {
                 .font(.caption)
                 .foregroundStyle(Slate.textSecondary)
                 .lineLimit(1)
+            HStack {
+                Spacer()
+                if model.epubWriteStopRequested {
+                    Text(Loc.string("Stopping after this book…"))
+                        .font(.caption2)
+                        .foregroundStyle(Slate.textSecondary)
+                } else {
+                    Button(Loc.string("Stop After This Book")) { model.stopEPUBWrite() }
+                        .font(.caption)
+                }
+            }
         }
     }
 
@@ -146,28 +180,50 @@ struct WriteIntoBookSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(Loc.count("%lld books were written into.", report.succeeded))
                 .foregroundStyle(Slate.textPrimary)
-            let failed = report.outcomes.filter {
-                if case .failed = $0.result { return true }
-                return false
+            HStack(spacing: 4) {
+                Text(Loc.count("%lld already the same", report.noChange))
+                if report.failed > 0 {
+                    Text("·").foregroundStyle(Slate.textSecondary)
+                    Text(Loc.count("%lld failed", report.failed))
+                }
+                if report.notAttempted > 0 {
+                    Text("·").foregroundStyle(Slate.textSecondary)
+                    Text(Loc.count("%lld not attempted", report.notAttempted))
+                }
             }
-            if !failed.isEmpty {
+            .font(.caption)
+            .foregroundStyle(Slate.textSecondary)
+            if !report.failures.isEmpty {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 2) {
-                        ForEach(failed, id: \.entryID) { outcome in
-                            if case .failed(let why) = outcome.result {
-                                Text(verbatim: "\(outcome.title): \(why)")
-                                    .font(.caption2)
-                                    .foregroundStyle(Slate.accent)
-                            }
+                        ForEach(Array(report.failures.enumerated()), id: \.offset) { _, failure in
+                            Text(verbatim: "\(failure.title): \(failure.reason)")
+                                .font(.caption2)
+                                .foregroundStyle(Slate.accent)
                         }
                     }
                 }
                 .frame(maxHeight: 120)
             }
+            if report.notAttempted > 0 {
+                Text(
+                    report.failed > 0
+                        ? Loc.string("Stopped after a failure — the books after it were left untouched.")
+                        : Loc.string("Stopped at your own request — the books after it were left untouched.")
+                )
+                .font(.caption2)
+                .foregroundStyle(Slate.textSecondary)
+            }
             if report.succeeded > 0 {
                 Text(Loc.string("No ⌘Z for this. Each original is in the Trash and can be dragged back from there."))
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
+                if let library = model.library {
+                    Text(Loc.string("A record of every change is in “%@”.", EPUBWriteManifest.url(in: library).path))
+                        .font(.caption2)
+                        .foregroundStyle(Slate.textSecondary)
+                        .textSelection(.enabled)
+                }
             }
         }
     }

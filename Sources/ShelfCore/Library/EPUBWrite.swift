@@ -289,12 +289,23 @@ public enum EPUBWrite {
 
     public struct BookOutcome: Equatable, Sendable {
         public enum Result: Equatable, Sendable {
-            case wrote
+            /// The hash the book's EPUB had before this call, the hash it
+            /// has now, and where the displaced original went — exactly
+            /// what `EPUBWriteManifest` records, read back rather than
+            /// recomputed so the sheet's own summary and the manifest line
+            /// can never disagree about what happened.
+            case wrote(beforeSHA256: String, afterSHA256: String, disposal: EPUBFileReplacement.DisposalOutcome)
             case failed(String)
             /// `plan.hasChange` was `false` — nothing was written, nothing
             /// went to the Trash, the index is untouched. Not a failure:
             /// the book was left exactly as it was, on purpose.
             case noChange
+            /// The plan had a real change, but `run` never reached it — an
+            /// earlier book in the same run failed, or the run was stopped
+            /// after the one before it. The file is exactly as it was;
+            /// nothing about this book was touched, the same as any book
+            /// this run was never asked to consider at all.
+            case notAttempted
         }
         public var entryID: UUID
         public var title: String
@@ -303,11 +314,26 @@ public enum EPUBWrite {
 
     public struct Report: Equatable, Sendable {
         public var outcomes: [BookOutcome]
-        public var succeeded: Int {
-            outcomes.filter {
-                if case .wrote = $0.result { return true }
-                return false
-            }.count
+        public var succeeded: Int { count { if case .wrote = $0 { true } else { false } } }
+        public var failed: Int { count { if case .failed = $0 { true } else { false } } }
+        public var noChange: Int { count { if case .noChange = $0 { true } else { false } } }
+        public var notAttempted: Int { count { if case .notAttempted = $0 { true } else { false } } }
+        /// The title and reason of every book `run` gave up on — what a
+        /// halted run's own summary names, so "stopped after a failure"
+        /// is never a bare sentence with nothing behind it.
+        public var failures: [(title: String, reason: String)] {
+            outcomes.compactMap {
+                guard case .failed(let reason) = $0.result else { return nil }
+                return ($0.title, reason)
+            }
+        }
+
+        private func count(where predicate: (BookOutcome.Result) -> Bool) -> Int {
+            outcomes.filter { predicate($0.result) }.count
+        }
+
+        public init(outcomes: [BookOutcome]) {
+            self.outcomes = outcomes
         }
     }
 
@@ -318,12 +344,32 @@ public enum EPUBWrite {
     /// caller: at 24 MB and 187 entries for a real, illustrated EPUB, the
     /// peak memory a run of these costs is one book's, not the whole
     /// batch's.
+    ///
+    /// **Stops after the first book that fails, rather than pressing on
+    /// through the rest of the selection.** A book that fails here has
+    /// already been left exactly as it was — `EPUBFileReplacement.replace`
+    /// never leaves a half-swapped file — so stopping costs nothing about
+    /// that book; what it buys is that a run against hundreds of books
+    /// never quietly writes past something a person would have wanted to
+    /// look at first. Every plan `run` never reaches this way — because an
+    /// earlier one failed, or because the caller's own `Task` was
+    /// cancelled (checked once per book, at the same point the progress
+    /// callback fires, the same "Nach diesem Buch anhalten" shape
+    /// `OrganizeRunner` already checks `Task.isCancelled` at) — comes back
+    /// as `.notAttempted`, named rather than silently missing from the
+    /// report.
     public static func run(
         _ plans: [BookPlan], entries: [UUID: LibraryEntry], library: Library, index: LibraryIndex,
-        disposal: FolderDisposal = .trash, progress: @Sendable (Progress) -> Void = { _ in }
+        disposal: FolderDisposal = .trash, isCancelled: @Sendable () -> Bool = { Task.isCancelled },
+        progress: @Sendable (Progress) -> Void = { _ in }
     ) async -> Report {
         var outcomes: [BookOutcome] = []
+        var stopped = false
         for (offset, plan) in plans.enumerated() {
+            if stopped || isCancelled() {
+                outcomes.append(BookOutcome(entryID: plan.entryID, title: plan.title, result: .notAttempted))
+                continue
+            }
             progress(Progress(done: offset, total: plans.count, currentTitle: plan.title))
             guard plan.hasChange else {
                 outcomes.append(BookOutcome(entryID: plan.entryID, title: plan.title, result: .noChange))
@@ -332,21 +378,30 @@ public enum EPUBWrite {
             guard let entry = entries[plan.entryID] else {
                 outcomes.append(
                     BookOutcome(entryID: plan.entryID, title: plan.title, result: .failed("no longer in the library")))
+                stopped = true
                 continue
             }
             do {
                 let commit = try await EPUBFileReplacement.commit(
                     plan.newContent, to: entry, library: library, index: index, disposal: disposal)
                 switch commit {
-                case .wrote:
-                    outcomes.append(BookOutcome(entryID: plan.entryID, title: plan.title, result: .wrote))
+                case .wrote(_, let beforeSHA256, let result):
+                    let outcome = BookOutcome(
+                        entryID: plan.entryID, title: plan.title,
+                        result: .wrote(
+                            beforeSHA256: beforeSHA256, afterSHA256: result.format.sha256,
+                            disposal: result.originalDisposal))
+                    outcomes.append(outcome)
+                    EPUBWriteManifest.append(outcome, in: library)
                 case .refused(let refusal):
                     outcomes.append(
                         BookOutcome(entryID: plan.entryID, title: plan.title, result: .failed(refusal.message)))
+                    stopped = true
                 }
             } catch {
                 outcomes.append(
                     BookOutcome(entryID: plan.entryID, title: plan.title, result: .failed(String(describing: error))))
+                stopped = true
             }
         }
         progress(Progress(done: plans.count, total: plans.count, currentTitle: ""))

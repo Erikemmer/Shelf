@@ -284,7 +284,12 @@ extension EPUBFileReplacement {
     /// What a commit turned out to do: the entry with its format record
     /// updated, or the refusal that stopped it.
     public enum Commit {
-        case wrote(LibraryEntry)
+        /// `beforeSHA256` is the hash the index already held for this
+        /// book's EPUB before this call touched anything — read off
+        /// `entry.formats`, never recomputed, so it is exactly what a
+        /// manifest recording "the way back" needs and nothing this call
+        /// has to hash a second time.
+        case wrote(LibraryEntry, beforeSHA256: String, result: Result)
         case refused(Refusal)
     }
 
@@ -309,6 +314,7 @@ extension EPUBFileReplacement {
         guard let epub = entry.formats.first(where: { $0.format == .epub }) else {
             return .refused(.notAnEPUB)
         }
+        let beforeSHA256 = epub.sha256
         let folder = library.root.appendingPathComponent(entry.folder, isDirectory: true)
         let url = folder.appendingPathComponent(epub.fileName)
 
@@ -323,6 +329,6 @@ extension EPUBFileReplacement {
         var updated = entry
         updated.formats = entry.formats.map { $0.format == .epub ? result.format : $0 }
         try await index.save(updated)
-        return .wrote(updated)
+        return .wrote(updated, beforeSHA256: beforeSHA256, result: result)
     }
 }
