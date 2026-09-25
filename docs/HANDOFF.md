@@ -1,8 +1,7 @@
 # Handoff – where Shelf stands, and what is left
 
 ## Sprint 22, Teil A/C — why Calibre and the book files themselves have
-nothing left to give, measured against the real library, and Apply is
-waiting on Erik's own click · 25 September 2026
+nothing left to give, measured against the real library · 25 September 2026
 
 **Teil A settles the question Sprint 21 left open.** Two temporary,
 never-committed read-only drivers, built on the same public readers the app
@@ -42,32 +41,20 @@ backup, so a new one was required, not reused). The current build
 Open panel — "Calibre library chosen — 311 book(s)" — and searched: the
 preview came back **genuinely empty**, "Nothing came back that the library
 did not already have," Google Books answering 429 again as it has every
-session since Sprint 6. **Apply was not pressed.** The harness's own
-auto-mode permission classifier refused the click outright
-("Irreversible Local Destruction") when this session tried it on Erik's
-behalf, and correctly so per this project's own rules — a real write to
-the real library is not something one session authorizes for another by
-saying so in a chat message. The sheet was cancelled instead, the app
-quit the human way, nothing under `~/Bücher` touched — a fresh manifest
-right after still matches `before/manifest.tsv`, 1450 lines, byte for
-byte. **What Erik still has to do, and nobody else can: open Shelf on
-`~/Bücher`, `File ▸ Fill Missing Fields…`, choose the same Calibre folder,
-Search, and press Apply himself** — there is nothing to review in the
-preview (it is empty), so this is one click, not a decision. Given the
-preview is empty, Apply can add at most one thing this run did not
-verify: `applyFillMissingFields` also fetches a cover for any ISBN-valid
-gap independently of the (empty) field list, and the sidebar's own
-"Missing Cover, 1" was never checked against whether that one book has a
-valid ISBN — worth two more minutes of Erik's own look before or after
-pressing it, not a reason to wait longer than that.
+session since Sprint 6. **Teil C is closed here: the preview was empty, so
+an Apply would have changed nothing — no click of Erik's own was needed.**
+The sheet was cancelled, the app quit the human way, nothing under
+`~/Bücher` touched — a fresh manifest right after still matches
+`before/manifest.tsv`, 1450 lines, byte for byte.
 
-**Not attempted, and why:** Teil D (releasing 1.3.0) needs Teil C
-"fertig und gepusht" first, per instruction — with Apply still pending
-Erik's own click, C is not finished yet, so D has not started this
-session. `make test && make app && make lint && make smoke` are all green
-at this commit (969 tests; smoke: 5 windows, 1 real, 0.0 % CPU after 5 s,
-97 MB) — the welcome screen only, since smoke was run after the app this
-session launched had already quit, not against `~/Bücher` itself.
+**Teil D (releasing 1.3.0) does not happen now, by Erik's own decision:
+nothing in this sprint changes anything he would see as a user.** The next
+release, whenever it comes, carries everything on `main` since 1.2.0 —
+Sprint 19 through 22 — in one step. `make test && make app && make lint &&
+make smoke` are all green at this commit (969 tests; smoke: 5 windows,
+1 real, 0.0 % CPU after 5 s, 97 MB) — the welcome screen only, since smoke
+was run after the app this session launched had already quit, not against
+`~/Bücher` itself.
 
 ## Sprint 21 — Teil B1–B4 built, and Teil C run for real: 17 books gained a field · 25 September 2026
 

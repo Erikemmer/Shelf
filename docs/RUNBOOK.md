@@ -749,3 +749,14 @@ apart from a genuinely foreign one — had to stop and ask about it twice
 before work could continue. The check costs little; tracing a
 mid-conversation ownership question after the fact costs a great deal
 more.
+
+**No helper agents or monitors for the session to wait on. Whatever the app
+does against the real library, the session does itself.** Found worth
+writing down on 25 September 2026, Sprint 22: driving the app through a
+real Fill-Missing-Fields run by way of a dispatched helper agent worked,
+but added a layer the session then had to babysit — reading the helper's
+own report back, deciding, resuming it, reading the next report back —
+for something the session could have driven directly. A session is
+already the one thing in this project that is allowed to touch
+`~/Bücher` through the app; putting a second, delegated actor between
+itself and the library answers to nobody faster for it.
