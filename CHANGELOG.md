@@ -43,6 +43,35 @@ summary now names succeeded / already the same / failed / not attempted,
 plus where the manifest lives. 4 new core tests (973 total). Full
 reasoning: ADR 0021's own addendum.
 
+## Sprint 23, Teil C — a trial run against 20 real books, then the real library: planned, not written · 25 September 2026
+
+Trial library, 20 real book folders copied from `~/Bücher` (byte-verified,
+source untouched): real clicks through the real app selected all 20,
+"Write into the Book File…" read 16 to write / 4 already the same / 0
+cannot be written, and writing for real — ticked, clicked, waited —
+matched exactly: 16 changed, `epub-write-report.txt` held one line per
+book, and an independent Python check (`zipfile`/`xml.etree`, not this
+project's own code) found 0 problems across all 16: valid ZIP, `mimetype`
+first/stored/no extra field, every entry but the OPF byte-identical,
+`<manifest>`/`<spine>`/`<guide>` untouched, the OPF matching Shelf's own
+sidecar, `unique-identifier` resolving. The 16 originals' sizes in the
+Trash matched; their content could not be checked — this session's
+Terminal lacks the Full Disk Access `~/.Trash` needs to be read.
+
+Real library: backed up per `docs/RUNBOOK.md` §2 (index `PRAGMA
+integrity_check` = `ok`, 366 books; 366 OPFs; a 1 450-line manifest,
+matching Sprint 20–22's own count), opened, all 366 selected through the
+real Library menu, planned: **292 to write · 57 already the same · 17
+cannot be written**, all 17 refusals sound (10 no EPUB, 1 DRM, 3 a source
+ZIP whose own structure preflight correctly refuses, 2 a non-author
+creator role). Of 319 real field changes, 4 of 292 descriptions already
+carry unstripped markdown or HTML in Shelf's own stored metadata — not
+this feature's own defect, since it writes exactly what the sidecar
+says, but real content about to become permanent. **The run stopped
+there, per instruction: nothing was ticked, nothing was written.** A
+fresh manifest afterward matches the backup's, byte for byte. Full
+account, and what is still open: `docs/HANDOFF.md`.
+
 ## Sprint 22, Teil A — why Calibre and the book files themselves have nothing
 left to give "Fill Missing Fields…", measured rather than assumed · 25 September 2026
 

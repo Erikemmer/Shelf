@@ -1,5 +1,76 @@
 # Handoff – where Shelf stands, and what is left
 
+## Sprint 23, Teil C — a trial run proves the mechanism; the real run is paused on a real finding · 25 September 2026
+
+**Teil A and B are done and shipped** (`CHANGELOG.md` has the numbers):
+the DRM badge already agrees with the real library on all 714 examinable
+files, and "Write into the Book File" now halts on the first failure,
+keeps a manifest, and can be stopped mid-run.
+
+**Teil C1–C3, a trial library of 20 real book folders copied from
+`~/Bücher`** (byte-verified against the source both ways, source
+untouched throughout): the real app, real clicks (`Scripts/click-at.swift`,
+never `AXPress`) selected all 20, opened "Write into the Book File…", and
+the sheet read exactly **16 books to write · 4 already the same · 0 cannot
+be written** before anything happened. Ticked and written for real: 16
+books changed, `epub-write-report.txt` recorded one line per book (before
+hash, after hash, Trash location), and an independent Python check —
+`zipfile`/`xml.etree`, never this project's own code — found **0
+problems** across all 16: valid ZIP, `mimetype` first/stored/no extra
+field, every entry except the OPF byte-identical to the original,
+`<manifest>`/`<spine>`/`<guide>` untouched, the OPF's own title and
+authors matching Shelf's sidecar exactly, `unique-identifier` still
+resolving. The 16 originals' sizes in the Trash matched their pre-write
+sizes exactly; their **byte content could not be checked** — this
+session's own Terminal has no Full Disk Access, and macOs refuses to read
+a file's content from `~/.Trash` without it (`Operation not permitted`),
+though it will `stat` one. That is the one thing this session could not
+verify itself and is named as such rather than assumed.
+
+**Teil C4, the real library: backed up, opened, planned — and paused
+before anything was ticked.** The backup is proven per `docs/RUNBOOK.md`
+§2: the index through SQLite's own `.backup`, `PRAGMA integrity_check` =
+`ok` at 366 books; all 366 `metadata.opf` copied; a 1 450-line manifest —
+matching Sprint 20–22's own file count exactly, so nothing about the
+library's shape has moved since. The real app opened `~/Bücher`, selected
+all 366 through the real Library menu (proven on the trial library first
+to survive the right-click that follows — an earlier attempt using a
+posted ⌘A keystroke did not, and silently planned only 1 book instead of
+the whole selection, caught before it mattered), and the plan came back:
+**292 books to write · 57 already the same · 17 cannot be written**. The
+17 refusals are all sound and none is a surprise: 10 have no EPUB at all,
+1 is DRM-protected (matching Teil A's own count), 3 fail `EPUBFileReplacement`'s
+own ZIP preflight (`mimetypeMustBeFirst` — a source file whose own
+structure is not valid to begin with, refused rather than risked), 2 name
+a `dc:creator` whose role is not "author" (an editor or a translator,
+correctly left alone). Of the 319 real field changes across the 292 books
+that would write, most (257) are title annotation-stripping; the rest —
+27 covers, 10 publishers, 8 authors, 8 descriptions, 7 published dates, 2
+languages — were read one by one, and every author and language change
+checked out as a correction (a name reordered, a pseudonym's second name
+added, a language code folded), none losing a field to empty.
+
+**One thing did not check out: 4 of the 292 descriptions that would be
+written already carry unstripped markdown or raw HTML markup in Shelf's
+own stored metadata** — a `<div>` tag, `**bold**` markers — predating or
+bypassing `DescriptionFill.isPlainEnough`'s own markup-and-link refusal
+(ADR 0015's addendum). "Write into the Book File" does not filter content
+by design — it faithfully writes whatever the sidecar already says — so
+this is not a defect in Sprint 23's own work, but real content debt about
+to become permanent in four real files. Per this session's own
+instruction for exactly this situation, the run stopped here: the sheet
+was cancelled, the app quit the human way, and a fresh manifest afterward
+matches the backup's own, byte for byte, 1 450 lines — nothing under
+`~/Bücher` was touched. Numbers, not titles, per `CLAUDE.md`; the report
+to Erik names the four books.
+
+**Not done this session:** the real write itself, and therefore Teil C5's
+own after-the-fact checks (a second manifest, a rebuilt-index comparison,
+a restart check) and the `sprint23-writeproof/` cleanup — left in place
+under `~/Library/Caches/Shelf/` in case the next session resumes from
+here rather than starting over. `make test && make app && make lint &&
+make smoke` are all green at the commit Teil A/B shipped on.
+
 ## Sprint 22, Teil A/C — why Calibre and the book files themselves have
 nothing left to give, measured against the real library · 25 September 2026
 
