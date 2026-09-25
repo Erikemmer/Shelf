@@ -3,7 +3,24 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
-## New app icon (Neues App-Icon) · 25 September 2026
+## Sprint 19, Teil A1 — the last two real titles left the test fixtures · 25 September 2026
+
+This repository is public. Read against the real library (only read, never
+written) once more, the same way as the Sprint 18 scrub: every title,
+author, sort name, publisher and series from the current 366-book index,
+plus folder names, checked as a whole value (not a substring) against
+`MergeMatchingTests.swift`, `NameEditTests.swift` and
+`SimilarSpellingsTests.swift`, also against the pre-Sprint-18 372-book
+backup under `~/Library/Caches/Shelf/standardize-2026-09-24/opfs/` in case
+a title had since been merged away. Two of the German-thriller-sounding
+titles used beside the invented author "Marek Voss" in `NameEditTests`
+turned out to be genuinely his — both real Sebastian Fitzek titles — and
+are now invented ones; the third title in that same test was already
+invented, and stayed. Four real publisher names (all real, all belonging
+to books in the library) are left as they were — `CLAUDE.md` only asks
+that a book file, a title or an author never be real, not a publisher —
+and are counted, not replaced. 911 core tests, unchanged in what they
+check, all still green.
 
 Erik's new package — Motiv 7b, "E-Reader Bauhaus" — replaces the first icon
 (Sprint 4) everywhere it lived: `App/Shelf/Resources/Assets.xcassets/

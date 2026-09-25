@@ -26,9 +26,9 @@ struct NameEditTests {
     @Test("three spellings of one author become one, and each book is one change")
     func mergeAuthors() {
         let entries = [
-            entry("Die Therapie", authors: ["Marek Voss"]),
+            entry("Kältestarre", authors: ["Marek Voss"]),
             entry("Das Kind", authors: ["Voss, Marek"]),
-            entry("Splitter", authors: ["M. Voss"]),
+            entry("Nebelriss", authors: ["M. Voss"]),
             entry("Pride and Prejudice", authors: ["Jane Austen"]),
         ]
         let merge = NameMerge(
