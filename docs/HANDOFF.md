@@ -21,9 +21,60 @@ fallback — not inspected further, since the on-disk backup above already
 answers the question. No Time Machine network destination was reachable
 (`tmutil listbackups`: "No machine directory found for host").
 
-*(The section below this note is Sprint 16's own top summary and is stale
-— it still describes `v1.1.0-rc1`. A full rewrite covering Sprint 18 is
-planned before this session's report closes.)*
+## Sprint 18 — where it stands, 25 September 2026
+
+**Built this sprint**, all against the real library through the app itself,
+never a script: duplicate merging (B1), a single format file or a whole book
+to the Trash (B2/B5), KFX's own container marker read for DRM (B4), a stored
+and correctable `authorSort` (C1), "Similar Spellings…" as a proposal never a
+guess (C2), "Standardize Fields…" for title/language/ISBN/tags (C3), "Fill
+Missing Fields…" strictly by ISBN with a preview and progress (C4), and
+"Organize Library…" over the whole collection (D). Full numbers for each are
+in `CHANGELOG.md`.
+
+**Run against the real library today:** 372 books → 366 (6 absorbed by
+merges), 214 authors → 207, 129 publishers → 125, series unchanged at 4.
+1 459 real files (OPFs excluded) before, 1 445 after; every one of the 1 459
+accounted for — 326 unchanged at their old path, 798 moved to a new path
+with the same hash, 335 gone from their old path (330 of those are OPFs,
+which were allowed to change; the other 5 are 2 duplicate-format files and
+1 duplicate book's cover plus a "My Clippings" book's own file and cover,
+all matching a reason named in this session's own report to Erik). EPUB
+count 358 → 356 (2 removed), AZW3/KFX/MOBI unchanged at 22/268/68. KFX's
+new container-marker check ran against all 268 KFX files and flagged 0 as
+DRM-protected by that narrow check — not the same claim as "268 confirmed
+DRM-free" (`docs/BACKLOG.md`, Sprint 17, has the check's own limits).
+"Fill Missing Fields…" found nothing fillable: Google Books answered 429
+for the one attempt made (not repeated, per instruction), and only 36 of
+366 books carry a real ISBN in the first place (308 more carry only an
+Amazon ASIN) — strictly-by-ISBN was never going to reach most of this
+library. A folder-rebuild of the index, against a scratch copy of the real
+library's folders, reproduced the live index exactly: same book, author,
+`authorSort` and series counts, byte-identical author table, `folders with
+no readable book: 0`.
+
+**Still open:**
+
+- The Calibre database on the NAS (a second source for "Fill Missing
+  Fields…") — the NAS was not mounted this session, checked once, not
+  retried.
+- An automated, technical check that a batch run has a proven backup
+  behind it before it starts — currently a rule in words only
+  (`docs/RUNBOOK.md` §2), no `make` target enforces it.
+- The Dock and About-panel icon still show the old artwork after today's
+  replacement, pending one `lsregister` call this session's own permission
+  guardrail declined to make (`docs/BACKLOG.md`).
+- What launched two unexplained `Shelf.app` instances this session found
+  and, once cleared for the one still running, quit (`docs/BACKLOG.md`).
+- The welcome screen's own placeholder logo (pre-existing, unrelated to
+  today's icon work) is unchanged — never asked for, still a question.
+
+---
+
+**Below is Sprint 16's own top summary, kept as it was written — the
+version and update-channel state it describes are superseded by whatever
+`CHANGELOG.md` says most recently, and none of it depended on the numbers
+above.**
 
 ---
 
