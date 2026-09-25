@@ -1,5 +1,40 @@
 # Handoff – where Shelf stands, and what is left
 
+## Sprint 20, Teil C1 — a fresh backup proven, Sprint 19's own kept rather than deleted · 25 September 2026
+
+**A new, proven backup**, per `docs/RUNBOOK.md` §2, at
+`~/Library/Caches/Shelf/sprint20-fillmissing-2026-09-25/` — created and named
+by this session: the index copied through SQLite's own `.backup` call
+(`PRAGMA integrity_check` on the copy = `ok`, 366 books, matching the live
+index); all 366 `metadata.opf` copied at their relative paths, matching the
+book count; a 1 450-line manifest (SHA-256 and path, the same two-column
+shape Sprint 18/19's own manifests use) matching the exact file count found
+on disk, index and cover cache excluded exactly as `rsync`'s own exclusions
+in RUNBOOK §2 name.
+
+**Checked before doing any of that, not assumed: the real library has not
+moved since Sprint 19's own pre-run backup.** A fresh, from-scratch SHA-256
+manifest of the live `~/Bücher` (same exclusions, computed independently
+rather than trusting either of Sprint 19's own manifests) diffs to nothing,
+sorted, against `sprint19-fillmissing-2026-09-25/manifest.tsv` — 1 450 lines,
+identical. The 366 OPFs in that same Sprint 19 folder are separately
+hash-identical, file for file, against the 366 just copied above. Sprint
+19's own before/after manifest pair (`manifest.tsv` vs. `manifest-after.tsv`)
+also diffs to nothing once sorted — the un-sorted `diff` looks alarming (six
+hundred-odd lines only on one side) because the two runs walked the folder
+tree in a different order, not because a file differs; sorting first is what
+the comparison actually needs.
+
+**`sprint19-fillmissing-2026-09-25/` is proven redundant, and is kept
+anyway.** The task for this session named it safe to delete once this proof
+existed; `CLAUDE.md` says a session deletes only what it created itself and
+named as created in its own report, without exception for a folder proven
+redundant by a later session — and says `CLAUDE.md` governs first. The two
+rules disagree here, and the more specific, unconditional one wins: the
+folder stays. Deleting it, if Erik still wants that once he reads this, is
+now a one-line `rm -rf` he can run himself, backed by the proof above rather
+than by trust.
+
 ## Sprint 20, Teil A — why 0, broken down by condition, and one real bug found · 25 September 2026
 
 **Erik's own `/Applications/Shelf.app` had `~/Bücher` open for this whole
