@@ -21,6 +21,44 @@ fallback — not inspected further, since the on-disk backup above already
 answers the question. No Time Machine network destination was reachable
 (`tmutil listbackups`: "No machine directory found for host").
 
+## Sprint 19, Teil B1 — Calibre as a second source: still unreachable, checked a different way this time · 25 September 2026
+
+**Not mounted under `/Volumes`** (checked once: only `music` and `home`
+SMB shares from the NAS are there). **The exact path Sprint 16's own
+import used is reachable by name but not by content**: `Import-
+Report.txt` names `~/Library/CloudStorage/SynologyDrive-Bedarfs-
+synchronisierung/Dokumente/09_Medien/Calibre - Backup/Calibre Library
+eBooks/metadata.db` as that import's real source, and the file is there
+(`ls -l`: 1 998 848 bytes) — but every attempt to read it, or anything
+else under that folder, answered "Operation not permitted" (`cp`, `dd`,
+even `mdls`), consistent with a cloud-sync placeholder outside this
+session's TCC grant rather than a permissions problem `chmod` would fix.
+Checked once, not retried, nothing mounted and no credentials asked for
+(`CLAUDE.md`). **Skip branch taken, as instructed.**
+
+Counted instead: `Import-Report.txt` records three batches — 40 new
+books from "Calibre library Digital Book Collection", 267 from "Calibre-
+Bibliothek Calibre Library eBooks" (this same NAS library), 65 from a
+plain folder, `/Users/erikemmer/eBook Bibliothek`, not Calibre at all —
+40 + 267 + 65 = 372, matching the pre-Sprint-18 book count exactly. So
+**307 of the library's original 372 books came from a Calibre import.**
+No field records that origin on the book itself, and Sprint 18's merges
+(372 → 366) did not preserve one either, so today's exact per-origin
+count among the current 366 is not reconstructable without it.
+
+**Whether the import lost fields, checked the one way still open**
+without the database: a random sample of 40 of the 314 books with an
+empty `description` today, filtered to the 38 that carry their own EPUB
+with a readable internal OPF, and every one of those 38 compared against
+its *own* embedded `<dc:description>` rather than Calibre's. **0 of 38
+had a description in the file that the sidecar Shelf wrote does not
+have** — no sign of an import defect that drops a value the source file
+actually carried. What is still unanswered is narrower than Sprint 18
+left it: not "did the import lose a field", but "did Calibre's
+`comments` field ever reach the exported file in the first place, before
+Shelf ever saw it" — a question about the export step, unreachable
+without `metadata.db`.
+
 ## Sprint 19, Teil A2/A3 — the KFX container census, and why C4 filled nothing · 25 September 2026
 
 **A2, all 268 KFX files, read once (their own first 8 bytes, and a KFX-ZIP's
