@@ -3,6 +3,23 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 21, Teil B4 — a `metadata.opf` beside a book file, on a fresh import, is no longer thrown away · 25 September 2026
+
+Found while checking, as instructed, whether Sprint 16's own import had
+ever discarded a field Calibre's own `metadata.opf` carried: it had, and
+not on a per-book basis — structurally, for every book imported by
+dropping in a plain folder rather than by reading `metadata.db` directly.
+`IndexRebuilder.readFolder` already treats a folder's own `metadata.opf`
+as the authority for a book already *in* a library (CONCEPT §5.3); a fresh
+import (`ImportModel.candidate(for:)`) never looked for one at all, and
+re-derived every field — description very much included — from the book
+file alone. `SidecarOPF.book(besideFile:fallbackTitle:)`, new in
+`ShelfCore` and so tested on Linux too, gives an import the same
+precedence a rebuild already has. 3 new tests (949 total). Sprint 16's own
+65-book "plain folder" batch (`docs/HANDOFF.md`) is exactly the population
+this would have affected, but re-importing it to recover anything is not
+this fix's job — nothing here touches a book already in the library.
+
 ## Sprint 21, Teil B1/B2/B3 — a real edition by ISBN, an ASIN treated the same way, and a work's own description · 25 September 2026
 
 Built on two probes against the real library (Teil A1/A2 below): Open

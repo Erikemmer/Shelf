@@ -441,6 +441,13 @@ final class ImportModel {
             let stem = url.deletingPathExtension().lastPathComponent
             book = Book(title: FileNameMetadata.title(from: stem), authors: FileNameMetadata.authors(from: stem))
         }
+        // A `metadata.opf` already beside the file is the authority
+        // (CONCEPT §5.3) — the same precedence `IndexRebuilder.readFolder`
+        // already gives a folder already in a library, extended here to one
+        // being imported for the first time (`SidecarOPF`, Sprint 21, Teil B4).
+        if let fromOPF = SidecarOPF.book(besideFile: facts.url, fallbackTitle: book.title) {
+            book = fromOPF
+        }
         return ImportCandidate(
             source: facts.url, byteSize: facts.byteSize, format: format, sha256: digest, book: book,
             cover: read.cover, coverName: read.coverName, drm: read.drm, drmExamined: read.drmExamined,
