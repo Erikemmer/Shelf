@@ -1,5 +1,60 @@
 # Handoff – where Shelf stands, and what is left
 
+## Sprint 21 — Teil B1–B4 built, and Teil C run for real: 17 books gained a field · 25 September 2026
+
+**Where Sprint 20 left off ("0 filled" for the third sprint running) is
+answered.** Two probes against the real library first (Teil A1/A2, cached
+under `~/Library/Caches/Shelf/online/`, numbers in the report to Erik and
+in `CHANGELOG.md`, never here): Open Library's own `/isbn/<ISBN>.json`
+genuinely answers one edition (6 of 10 real ISBNs), and no ASIN probe in 25
+tries across two sessions ever named more than one work or edition for one
+ASIN. Both decisions from those probes were "build it", and B2 (ISBN
+edition), B3 (ASIN, same rule), B1 (a work's own description) and B4
+(Calibre as a second source, matched by UUID or ISBN, checked before every
+online source) all shipped, tested (67 new core tests across five commits,
+969 total), and documented in ADR 0015's own addenda.
+
+**Run for real, backup checked first and found still current — 0 diff
+against `sprint20-fillmissing-2026-09-25/`'s own 1 450-file manifest, so no
+new backup was needed.** Through the real, installed-nowhere-but-built
+current app, real clicks throughout (`Scripts/`'s own accessibility-driven
+click, never `AXPress`): the real Calibre library — unreachable from a
+terminal in every session since Sprint 16, "Operation not permitted" —
+opened cleanly through the app's own Open panel, the human path this
+addendum exists for. 311 books read from it.
+
+**The preview caught something before anything was applied, which is
+exactly its job.** The first full run offered a description for a real
+book that was a genuine synopsis followed by a markdown reference list to
+the omnibus editions it is also collected in — Open Library's own
+community-wiki work record, not an invented case. Cancelled, fixed
+(`DescriptionFill.isPlainEnough` now also refuses a link — ADR 0015's own
+addendum, `CHANGELOG.md`), re-run clean.
+
+**Applied: 17 books changed, 0 covers.** Description 314 → 306 empty (8
+filled), publisher 66 → 64 (2), published 23 → 16 (7), language 2 → 1 (1),
+a valid ISBN 36 → 37 (1, by way of Teil B3's own ASIN route). Series (351)
+and tags (345) stayed exactly where they were — nothing this run found
+answered either, which this file does not explain further; the report to
+Erik has what is measured against what is assumed here. Every one of the
+17 changed files is a `metadata.opf`; the manifest taken again afterward
+(same exclusions) diffs to nothing anywhere else — 1 450 files, 17 of them
+different, all seventeen the OPF and nothing else. A rebuild of the index
+from a scratch copy of the folders (`shelf-tool rebuild`, then `compare`
+against the live library) agrees on titles, authors, ratings, read status,
+series, shelves and tags — 366 and 366, compared by UUID.
+
+**`make smoke` at the commit this ran against**: ok, 5 windows (1 real),
+0.0 % CPU after 5 s. No Shelf instance was left running at any point this
+session did not itself start and then quit.
+
+**Not attempted, and why:** none of Sprint 21's own five commits changed
+anything `make smoke` had not already checked once at that commit — Teil
+C is a run against real data, not a code change, so a sixth smoke run
+after Apply would have measured the identical build again. Google Books
+answered 429 on its very first question, as every session since Sprint 6
+has found; nothing here is different this time.
+
 ## Sprint 20, Teil C1 — a fresh backup proven, Sprint 19's own kept rather than deleted · 25 September 2026
 
 **A new, proven backup**, per `docs/RUNBOOK.md` §2, at
