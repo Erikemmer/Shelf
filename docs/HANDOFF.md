@@ -21,6 +21,47 @@ fallback — not inspected further, since the on-disk backup above already
 answers the question. No Time Machine network destination was reachable
 (`tmutil listbackups`: "No machine directory found for host").
 
+## Sprint 19, Teil A2/A3 — the KFX container census, and why C4 filled nothing · 25 September 2026
+
+**A2, all 268 KFX files, read once (their own first 8 bytes, and a KFX-ZIP's
+own entry list where the bytes say it is one) — never decoded further, the
+same narrow read `DRMProbe` itself does:** container marker `CONT` in all
+268, `DRMION` in 0, a KFX-ZIP (with or without a `*.voucher` entry) in 0,
+unrecognised in 0. DRM status follows the marker directly: 268 "kein DRM
+gefunden", 0 "DRM gefunden", 0 "nicht geprüft". Cross-checked against the
+real index's own `formats` table (`drm`/`drm_examined` columns, read-only,
+`PRAGMA integrity_check` = `ok`): the same 268/0/0 split. Nothing removed —
+there is nothing found to remove.
+
+**A3, why "Fill Missing Fields…" filled nothing last sprint, measured
+against the real 366-book library today** (numbers below are this
+session's own count, read from every `metadata.opf`'s own tags and a
+checksum-valid ISBN test — two of Sprint 18's own summary numbers do not
+quite match this recount and are flagged, not silently adopted): 36 books
+carry a checksum-valid ISBN, 330 do not, so the ISBN pass — C4's whole
+route to every field except `description` — never had a question to ask
+for 330 of 366, full stop; **not a re-measure of Sprint 18's own 320 /
+308, which came out as 314 / 301 this time** (314 books with no
+`dc:description` tag at all; of the 330 without an ISBN, 301 carry an
+Amazon ASIN instead and 29 carry neither). Per field, empty now / of
+those how many belong to one of the 36 ISBN books: description 314 (17),
+publisher 66 (2), date 23 (12), language 2 (1), series 351 (34), tags 345
+(24). For those 36, which exact reason — service declined with a status,
+no candidate, a candidate that itself lacked the field, or the rule that
+forbids it — applied to which field is **not reconstructable**: Sprint
+18's run wrote nothing to `~/Library/Caches/Shelf/online/` (the folder
+does not exist) and kept no per-book log, so all that survives is its own
+sentence in this file ("Google Books answered 429 for the one attempt
+made"). Re-asking the two services now, only to answer this question,
+would spend their goodwill a second time on the same population Teil B2
+asks for real later this session — not done, on that judgement.
+`description`'s separate Title+Author route (never gated by ISBN) has its
+own four static conditions; of the 314 empty descriptions, 312 pass every
+one that can be checked without a live query (a title, a known language,
+at least one author) — whether a lookup would actually find exactly one
+matching, same-language, long-enough candidate for each of those 312 is
+Teil B2's question, not this one's.
+
 ## Sprint 18 — where it stands, 25 September 2026
 
 **Built this sprint**, all against the real library through the app itself,
