@@ -11,9 +11,10 @@ example for merging spellings, in `ADR 0018`, in scripts and in tests —
 and a second real author and book title — a test fixture for the
 download-site filename pattern, and the same author named once more in a
 `CHANGELOG` entry and a code comment — turned out to be genuinely hers and
-his, not invented. Both are now invented names (`docs/BACKLOG.md` names
-which, only there, since this file is public); every place they appeared
-carries the same invented name, including the six Sprint 8 screenshots
+his, not invented. Both are now invented names — this repository is
+public, so which names were real stays out of every committed file and is
+Erik's own report to read; every place they appeared now carries the same
+invented name, including the six Sprint 8 screenshots
 that showed the real one on screen — re-taken against the rebuilt example
 library, both languages, real clicks. The download-site test no longer
 names a real site at all: `FileNameMetadata`'s prefix rule is now a

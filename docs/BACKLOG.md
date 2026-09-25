@@ -1495,3 +1495,29 @@ only ever replace it with another, never take it away.
   session's top-level process), and a unified-log query for the second
   one's actual launch request returned nothing. Genuinely open: what
   launched them. Not investigated further, and no cause assumed.
+
+## Sprint 18 — names left the public repo, and the history that still holds them · 25 September 2026
+
+Read against the real library on 25 September 2026 (read-only), then
+searched for across the whole working tree (`git grep`, whole words,
+values under 5 characters and known-generic words skipped and counted):
+**one real author's name in 5 kinds of place** (source comments, test
+fixtures, four documentation files including an ADR, six screenshots in
+two languages and their accessibility dumps, three shell scripts) — the
+Sprint 8 merge/organize running example — **a second real author's name
+and one of her real book titles**, used as a download-site filename test
+fixture and named twice more elsewhere (a `CHANGELOG` entry, a code
+comment) — **a third real author's name**, an example in one source
+comment and one test — and **one unrelated real book title** named once
+in a `CHANGELOG` entry describing a real import. 1 618 candidate values
+checked (from titles, authors, sort names, publishers, series, tags,
+shelves and folder names in the current index, plus top-level folder
+names); 11 skipped as under 5 characters, 3 skipped as already
+known-generic. A second full-repo pass afterwards found **0 remaining
+hits** for any of the four. `git log -S` against `main`'s history — not
+changed, only counted — still holds these commits: 9 for the first name,
+3 for the second author's name, 2 each for her book title, the
+download-site domain, the third author's name, and the unrelated book
+title. History is not rewritten (`CLAUDE.md`); what the count means for a
+public repository already known to a mirror or a clone is Erik's own
+judgement, not this session's.
