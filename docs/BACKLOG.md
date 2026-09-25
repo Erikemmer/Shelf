@@ -1537,3 +1537,23 @@ correctly by its own rule even though the action is narrower than
 resetting the icon cache outright. Erik running it himself
 (`lsregister -f -R -trusted <path to Shelf.app>`, no `sudo` needed), or a
 normal restart, is expected to clear it.
+
+## `make smoke` failed twice, real, right after `make app` rebuilt the 1.2.0 binary — then passed clean · 25 September 2026
+
+Not a code defect, checked rather than assumed: the same rebuilt bundle,
+driven by hand with a longer wait (15 s instead of the script's own
+4 s + 2 s + up to 5×1 s retry budget), showed a completely normal welcome
+screen — every expected control present in the accessibility tree — and
+a plain re-run of `make smoke` straight after that, no changes, passed
+first try with no retries needed at all. The pattern (slow exactly once,
+right after a fresh build, fast on every later launch of the identical
+bytes) matches Gatekeeper/XProtect's first-run scan of a newly-written,
+ad-hoc-signed executable rather than anything about the app itself —
+`log show --predicate 'process == "Shelf"'` for the slow run shows the
+process alive and answering the whole time, no crash, just a long gap
+between launch and its first window. Not fixed here — `SMOKE_ALLOW_
+OFFSCREEN=1` was not used, since the point was to find out whether a
+window was really there, not to skip the question — and not enough
+evidence yet to say the retry budget itself should grow; if it recurs
+after `make app`/`make release`, that is the next thing to try before
+assuming a real regression.

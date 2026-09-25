@@ -3,6 +3,8 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+<!-- shelf-release: v1.2.0 · 25 September 2026 -->
+
 ## Sprint 19, Teil B2 — a 429 now stops that service for the rest of the run · 25 September 2026
 
 The Title+Author route into `description` (`DescriptionFill`'s own four
