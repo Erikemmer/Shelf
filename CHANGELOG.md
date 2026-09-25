@@ -3,6 +3,22 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Sprint 23, Teil A — the DRM badge, checked against the real library rather than assumed · 25 September 2026
+
+Sprint 22 found 15 real files with DRM (7 AZW3 + 7 MOBI Kindle, 1 EPUB Adobe
+ADEPT), against a single one previously believed — but never checked whether
+the window actually shows a lock for all 15. A temporary, never-committed
+read-only driver (`shelf-tool drm-audit`, the same shape as Sprint 22's own
+`a1-probe`/`a2-probe`) compared every one of the 366 books' 714 examinable
+files (EPUB, MOBI, AZW3 — KFX excluded per ADR 0011) against what
+`DRMProbe` reads off the actual bytes today: **0 discrepancies.** The stored
+index already agrees with the live probe on all 714 files, and already
+shows exactly 15 as locked — `entry.drm` (`LibraryIndex.swift`), the
+property `CoverGridView`/`InspectorView` draw the badge from, is a direct
+read of the same per-format `drm` column the audit compared. **No bug
+found; no fix needed.** The temporary command was reverted afterwards
+(`git checkout`), never committed.
+
 ## Sprint 22, Teil A — why Calibre and the book files themselves have nothing
 left to give "Fill Missing Fields…", measured rather than assumed · 25 September 2026
 
