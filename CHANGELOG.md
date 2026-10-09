@@ -3,6 +3,16 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Housekeeping — the original concept and start prompts kept in `docs/origin/` · 9 October 2026
+
+`SHELF-CONCEPT.md`, `SHELF-BUILDER-PROMPT.md` and `SHELF-REVIEWER-PROMPT.md`
+(the starting point of 16 September 2026) existed only in the old Selector
+working folder, where git ignores them. Copied unchanged into `docs/origin/`
+(SHA-256 compared against the originals: identical), with a short README
+saying `docs/CONCEPT.md` is the authoritative, further-developed concept
+(375 lines against 297). Documentation only; no code, tests or behaviour
+changed, and nothing was run beyond the checksum comparison.
+
 ## Sprint 23, Teil A — the DRM badge, checked against the real library rather than assumed · 25 September 2026
 
 Sprint 22 found 15 real files with DRM (7 AZW3 + 7 MOBI Kindle, 1 EPUB Adobe
