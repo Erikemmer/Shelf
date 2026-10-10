@@ -3,6 +3,14 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Fix — the KFX "cannot read" note translates · 10 October 2026
+
+`InspectorView.formatRow` drew `unreadableNote` as `Text(note)`, so the KFX
+caption stayed English in a German window. It now goes through `Loc.core`, the
+German sentence is in the catalogue, and the catalogue test walks
+`BookFileFormat.unreadableNote`. Not checked by eye in a German window; the
+catalogue test and the build are what were run.
+
 ## Fix — Cancel during an import examination: stale tasks no longer win · 10 October 2026
 
 Review of the fix below found real holes. `buildPlan()` awaits several index

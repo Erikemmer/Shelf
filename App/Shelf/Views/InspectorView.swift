@@ -716,7 +716,9 @@ struct InspectorView: View {
                 .truncationMode(.middle)
 
             if let note = format.format.unreadableNote {
-                Text(note)
+                // A variable, not a literal, so it needs `Loc.core` by hand;
+                // the localisation scan cannot see it.
+                Text(Loc.core(note))
                     .font(.caption2)
                     .foregroundStyle(Slate.textSecondary)
             }

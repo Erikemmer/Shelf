@@ -667,18 +667,14 @@ is currently assumed.
       either way; nothing needed changing there. `CHANGELOG.md`, Sprint 16,
       Teil F, has the full account.
 
-- [ ] **A KFX row's own unreadable-note caption never translates.** Found
-      by accident in Sprint 17, Teil A's own German screenshot:
-      `InspectorView.formatRow` draws `format.format.unreadableNote` as
-      `Text(note)` directly – never `Loc.core(note)` – so "Shelf cannot
-      read KFX. The file is kept, named and counted, and nothing more."
-      stays English in a German window while every other line around it
-      turned over. `LocalisationTests.nothingIsDrawnDirectly` cannot see
-      it: the scan only catches a literal handed to `Text(…)`, and this is
-      a variable. Not fixed here – out of Teil A's own scope – but the two
-      new DRM-unknown sentences beside it went through `Loc.string`
-      correctly, so the fix is the same one-line shape whenever this is
-      picked up.
+- [x] **A KFX row's own unreadable-note caption never translated.** Done
+      on 10 October 2026. `InspectorView.formatRow` now draws the note
+      through `Loc.core`, the German sentence is in `Localizable.xcstrings`,
+      and `LocalisationTests.coreSentences` walks
+      `BookFileFormat.unreadableNote` so a missing translation fails the
+      day a format gets a note. Found in Sprint 17, Teil A's German
+      screenshot; the scan for literals could not see it because the note
+      is a variable.
 
 - [x] **Move the arrow keys off the menu bar.** Done in Sprint 7,
       [ADR 0017](adr/0017-the-arrow-keys-leave-the-menu-bar.md). Measured again

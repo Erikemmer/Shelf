@@ -157,6 +157,7 @@ struct LocalisationTests {
         all += CalibreCustomColumn.Kind.allCases.map(\.label)
         all += ShortcutReference.all.map(\.label)
         all += ShortcutGroup.allCases.map(\.rawValue)
+        all += BookFileFormat.allCases.compactMap(\.unreadableNote)
 
         // Sprint 8. A `NameKind` says four things and a `NameMerge` says the
         // rest; the refusals and the undo name are built from a template, so

@@ -5336,6 +5336,23 @@
         }
       }
     },
+    "Shelf cannot read KFX. The file is kept, named and counted, and nothing more.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shelf kann KFX nicht lesen. Die Datei bleibt erhalten, wird benannt und mitgezählt – mehr nicht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shelf cannot read KFX. The file is kept, named and counted, and nothing more."
+          }
+        }
+      }
+    },
     "Language": {
       "extractionState": "manual",
       "localizations": {
