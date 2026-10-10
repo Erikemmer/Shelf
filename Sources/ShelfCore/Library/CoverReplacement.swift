@@ -14,8 +14,10 @@ import Foundation
 /// - The old file being *gone* rather than recoverable. A cover is often
 ///   somebody's own scan, and it is replaced by a person who may be wrong
 ///   about which book they had selected. So it goes through `FolderDisposal` —
-///   the Trash on a Mac — and a disposal that cannot take it means nothing is
-///   written at all. Overwriting it is the one thing Shelf does not do.
+///   the Trash on a Mac. Overwriting it is the one thing Shelf does not do. On
+///   a replacement the old file is renamed aside first, the new one renamed in,
+///   and only then is the Trash asked — never a window with no cover at all
+///   while `trashItem` runs.
 /// - The new file being *there* while the window draws the old one. The cover
 ///   cache is keyed by UUID, size and generation (ADR 0005, decision 4), and
 ///   the generation is the only part of that key a replaced cover can move.
@@ -49,14 +51,19 @@ public enum CoverReplacement {
         /// What the book's `coverGeneration` becomes. The caller writes it into
         /// the book; this type does not touch `metadata.opf`.
         public var generation: Int
+        /// Paths (relative to the book folder) of displaced covers the Trash
+        /// refused *after* the swap. The book is correct; these stay in a hidden
+        /// `.shelf-cover-aside-` folder, never swept. Empty in the ordinary case.
+        public var leftBehind: [String] = []
     }
 
     public enum Refusal: Error, Equatable, Sendable {
         /// The magic number is not one `CoverFile` knows. Checked first, so a
         /// book cannot lose its picture to a file that was never one.
         case notAnImage
-        /// The cover that was there could not be moved out of the way. The old
-        /// file is still exactly where it was.
+        /// `remove` only: the cover could not be moved to the Trash. The old
+        /// file is still exactly where it was. (`replace` no longer throws
+        /// this: its Trash comes after the swap.)
         case cannotDisplace(String)
         case cannotWrite(String)
 
@@ -157,6 +164,8 @@ public enum CoverReplacement {
     /// `copyAndVerify` uses it: the new file is complete on disk **before**
     /// anything is taken away, so a full disk or a crash between the two steps
     /// leaves the book with the cover it already had rather than with none.
+    /// The Trash comes last, after the swap, and a refusal there is reported
+    /// in `Result.leftBehind` rather than thrown.
     @discardableResult
     public static func replace(
         with data: Data, in folder: URL, previousGeneration: Int,
@@ -176,24 +185,83 @@ public enum CoverReplacement {
 
         // **Every** cover, not the first one found. A surviving `cover.jpeg`
         // beside a freshly written `cover.png` is drawn in preference to it.
-        var displaced: [String] = []
-        for existing in CoverFile.urls(in: folder) {
-            do {
-                try disposal.dispose(existing)
-                displaced.append(existing.lastPathComponent)
-            } catch {
-                try? FileManager.default.removeItem(at: part)
-                throw Refusal.cannotDisplace(error.localizedDescription)
-            }
-        }
-
+        //
+        // The swap is renames inside the folder, with the Trash last — the
+        // fix `EPUBFileReplacement` got in Korrektur 1. `trashItem` is not a
+        // rename; with the Trash first, a process dying while it ran left
+        // the book with no cover at all and the OPF claiming otherwise.
+        let existing = CoverFile.urls(in: folder)
+        let asides: [(original: URL, aside: URL)]
         do {
-            try FileManager.default.moveItem(at: part, to: target)
+            asides = try setAside(existing, in: folder)
         } catch {
             try? FileManager.default.removeItem(at: part)
             throw Refusal.cannotWrite(error.localizedDescription)
         }
-        return Result(written: target, displaced: displaced, generation: previousGeneration + 1)
+        do {
+            try FileManager.default.moveItem(at: part, to: target)
+        } catch {
+            // Roll back: every cover goes back to its own path.
+            for pair in asides { try? FileManager.default.moveItem(at: pair.aside, to: pair.original) }
+            try? FileManager.default.removeItem(at: part)
+            throw Refusal.cannotWrite(error.localizedDescription)
+        }
+
+        // The book is correct from here on. A disposal that now refuses is
+        // a fact in the result, not a throw: throwing would make `commit`
+        // revert the generation for a picture that did change.
+        var displaced: [String] = []
+        var leftBehind: [String] = []
+        for pair in asides {
+            displaced.append(pair.original.lastPathComponent)
+            do {
+                try disposal.dispose(pair.aside)
+            } catch {
+                leftBehind.append(
+                    pair.aside.deletingLastPathComponent().lastPathComponent + "/"
+                        + pair.aside.lastPathComponent)
+            }
+        }
+        // The holder goes only if empty (`rmdir` semantics: a non-empty
+        // directory is refused), so a refused picture is never taken with it.
+        if let holder = asides.first?.aside.deletingLastPathComponent() {
+            rmdir(holder.path)
+        }
+        return Result(
+            written: target, displaced: displaced, generation: previousGeneration + 1,
+            leftBehind: leftBehind)
+    }
+
+    /// The prefix of the hidden folder covers are renamed into during a swap.
+    /// Deliberately *not* ending in `.part`, so `sweepPartials` never deletes
+    /// it: what is inside is a person's picture, and if the Trash refuses it
+    /// (or the process dies mid-swap) it must stay findable rather than be
+    /// swept as debris. A folder, not a renamed file, so the picture keeps its
+    /// own name — that is what the person sees in the Trash.
+    static let asidePrefix = ".shelf-cover-aside-"
+
+    /// Renames each cover into one hidden sibling folder; undoes the renames
+    /// made so far if one fails.
+    private static func setAside(
+        _ covers: [URL], in folder: URL
+    ) throws -> [(original: URL, aside: URL)] {
+        guard !covers.isEmpty else { return [] }
+        let holder = folder.appendingPathComponent(
+            "\(asidePrefix)\(UUID().uuidString.prefix(8))", isDirectory: true)
+        try FileManager.default.createDirectory(at: holder, withIntermediateDirectories: false)
+        var done: [(original: URL, aside: URL)] = []
+        do {
+            for cover in covers {
+                let aside = holder.appendingPathComponent(cover.lastPathComponent)
+                try FileManager.default.moveItem(at: cover, to: aside)
+                done.append((cover, aside))
+            }
+        } catch {
+            for pair in done { try? FileManager.default.moveItem(at: pair.aside, to: pair.original) }
+            try? FileManager.default.removeItem(at: holder)
+            throw error
+        }
+        return done
     }
 }
 

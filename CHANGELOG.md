@@ -3,6 +3,24 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Fix — replacing a cover no longer has a gap with no cover · 10 October 2026
+
+`CoverReplacement.replace` asked the Trash for the old cover before the new
+one was in place — the same gap Korrektur 1 closed for `EPUBFileReplacement`.
+It now renames every existing cover into a hidden `.shelf-cover-aside-*`
+folder, renames the new picture to its path, and only then disposes of the
+old ones. A Trash that refuses at that point is a fact (`Result.leftBehind`),
+not a throw: the book is already correct, so `commit` keeps the new generation
+instead of reverting it. The refused picture stays in the hidden folder, which
+`sweepPartials` does not touch (it is not `.part`), so it is never deleted as
+debris. The picture keeps its own name in the Trash. `Remove Cover` is
+unchanged (nothing to swap in). Three tests changed or were added: the new
+cover is in place when the Trash is asked; a refusing Trash is reported and
+the old cover kept; the generation revert is now driven through Remove Cover.
+Not tested: the rollback when renaming the new file onto its path fails (no
+reliable way to provoke it); `leftBehind` is not yet shown in the window.
+Run on this Mac: `make test` only before this entry.
+
 ## Fix — the KFX "cannot read" note translates · 10 October 2026
 
 `InspectorView.formatRow` drew `unreadableNote` as `Text(note)`, so the KFX

@@ -107,24 +107,55 @@ struct CoverReplacementTests {
         #expect(recovered == Self.jpeg(0xAB))
     }
 
-    /// A disposal that cannot move the old file leaves everything exactly as it
-    /// was. The alternative is to overwrite it, which is the one thing this
-    /// project does not do.
-    @Test("a disposal that fails means nothing is written and nothing is lost")
-    func aFailedDisposalChangesNothing() throws {
+    /// **The gap, closed.** The Trash used to be asked first, so while
+    /// `trashItem` ran (or if the process died there) the book had no cover
+    /// and the OPF claimed otherwise. Now the new picture is already at its
+    /// path when the disposal is asked — checked from inside the disposal.
+    @Test("the new cover is already in place when the Trash is asked for the old one")
+    func newCoverIsInPlaceBeforeDisposal() throws {
+        let temporary = try TemporaryFolder()
+        let folder = try temporary.folder("Austen, Jane/Emma (1)")
+        try Self.jpeg(0xAB).write(to: folder.appendingPathComponent("cover.jpg"))
+        let seen = Seen()
+        let disposal = FolderDisposal { url in
+            seen.coverAtDisposal = try? Data(contentsOf: folder.appendingPathComponent("cover.png"))
+            return nil
+        }
+
+        try CoverReplacement.replace(
+            with: Self.png(), in: folder, previousGeneration: 0, disposal: disposal)
+
+        #expect(seen.coverAtDisposal == Self.png())
+    }
+
+    private final class Seen: @unchecked Sendable { var coverAtDisposal: Data? }
+
+    /// The book is already correct when the Trash refuses, so that is a fact
+    /// in the result and not a throw. The old picture is not lost and not
+    /// swept: it stays in the folder under a hidden name that is not `.part`.
+    @Test("a disposal that fails after the swap is reported, and the old cover is kept")
+    func aFailedDisposalIsAFactNotAThrow() throws {
         let temporary = try TemporaryFolder()
         let folder = try temporary.folder("Austen, Jane/Emma (1)")
         try Self.jpeg(0xAB).write(to: folder.appendingPathComponent("cover.jpg"))
 
-        #expect(throws: CoverReplacement.Refusal.self) {
-            try CoverReplacement.replace(
-                with: Self.png(), in: folder, previousGeneration: 0, disposal: .none)
-        }
+        let result = try CoverReplacement.replace(
+            with: Self.png(), in: folder, previousGeneration: 0, disposal: .none)
 
-        let untouched = try Data(contentsOf: folder.appendingPathComponent("cover.jpg"))
-        #expect(untouched == Self.jpeg(0xAB))
-        // And no half-written file left beside it.
-        #expect(temporary.names(in: "Austen, Jane/Emma (1)") == ["cover.jpg"])
+        #expect(result.generation == 1)
+        #expect(result.written?.lastPathComponent == "cover.png")
+        #expect(result.displaced == ["cover.jpg"])
+        #expect(result.leftBehind.count == 1)
+        let kept = try #require(result.leftBehind.first)
+        #expect(kept.hasPrefix(CoverReplacement.asidePrefix))
+        #expect(kept.hasSuffix("/cover.jpg"))
+        #expect(try Data(contentsOf: folder.appendingPathComponent(kept)) == Self.jpeg(0xAB))
+        #expect(CoverFile.url(in: folder)?.lastPathComponent == "cover.png")
+
+        // The next write into that folder does not take it away.
+        try CoverReplacement.replace(
+            with: Self.png(0x33), in: folder, previousGeneration: 1, disposal: .none)
+        #expect(FileManager.default.fileExists(atPath: folder.appendingPathComponent(kept).path))
     }
 
     /// The old cover is `cover.png` and the new one is a JPEG: writing
@@ -552,18 +583,19 @@ struct CoverChangeCommitTests {
         #expect(indexed?.book.coverGeneration == 1)
     }
 
-    /// **The test this whole fix hangs on.** A disposal that cannot move the
-    /// existing cover fails the picture half of the write; the generation was
-    /// already bumped in the first half. Left alone, `metadata.opf` would
-    /// claim the cover was replaced when the folder says otherwise — a small,
-    /// permanent lie in the one file that is supposed to be the truth.
+    /// **The test this whole fix hangs on.** A failed picture write fails the
+    /// second half of the write; the generation was already bumped in the
+    /// first. Left alone, `metadata.opf` would claim the cover was changed
+    /// when the folder says otherwise. Driven through Remove Cover, whose
+    /// disposal still runs before anything else and can still refuse
+    /// (`replace` no longer can: its disposal comes after the swap).
     @Test("a failed picture write reverts the generation, so the OPF does not lie about it")
     func failedPictureWriteRevertsTheGeneration() async throws {
         let temporary = try TemporaryFolder()
         let (library, entry, folder, index) = try await book(in: temporary, withCover: true)
 
         let outcome = try await CoverReplacement.commit(
-            png(2), to: entry, library: library, index: index, disposal: .none)
+            nil, to: entry, library: library, index: index, disposal: .none)
 
         guard case .refused(let refusal) = outcome else {
             Issue.record("expected .refused, got \(outcome)")
@@ -573,15 +605,30 @@ struct CoverChangeCommitTests {
             Issue.record("expected .cannotDisplace, got \(refusal)")
             return
         }
-        // The generation is back to what it was before `commit` touched it —
-        // not left at 1 for a replacement that never happened.
         let onDisk = try OPFDocument.read(
             Data(contentsOf: folder.appendingPathComponent("metadata.opf")), fallbackTitle: "x")
         #expect(onDisk.book.coverGeneration == 0)
         let indexed = try await index.entry(id: entry.id)
         #expect(indexed?.book.coverGeneration == 0)
-        // And the picture that was there is exactly what it was: `.none`
-        // refuses to move anything, so the original file is untouched.
         #expect(try Data(contentsOf: folder.appendingPathComponent("cover.png")) == png(9))
+    }
+
+    /// The other side of the same change: a Trash that refuses after a
+    /// replacement's swap must NOT revert the generation — the picture did
+    /// change, and reverting would make the window draw the old thumbnail.
+    @Test("a Trash that refuses after the swap keeps the new generation")
+    func disposalFailureAfterSwapKeepsTheGeneration() async throws {
+        let temporary = try TemporaryFolder()
+        let (library, entry, folder, index) = try await book(in: temporary, withCover: true)
+
+        let outcome = try await CoverReplacement.commit(
+            png(2), to: entry, library: library, index: index, disposal: .none)
+
+        guard case .wrote(let updated) = outcome else {
+            Issue.record("expected .wrote, got \(outcome)")
+            return
+        }
+        #expect(updated.book.coverGeneration == 1)
+        #expect(try Data(contentsOf: folder.appendingPathComponent("cover.png")) == png(2))
     }
 }

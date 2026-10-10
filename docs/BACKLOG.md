@@ -1174,11 +1174,10 @@ as it was.
       production callers that only use `dispose` for its side effect
       (`CoverReplacement.swift`, `OrganizeRunner.swift`) needed none, and
       now carry a harmless "result unused" warning apiece. `CHANGELOG.md`.
-- [ ] **`CoverReplacement` has the same trash-before-swap gap, deliberately
-      left alone.** Erik's call: a cover is a small picture kept in memory
-      and worth less than a book kept nowhere for however long `trashItem`
-      takes to answer; Korrektur 1 above fixes it for `EPUBFileReplacement`
-      only. Worth the same fix later, at lower urgency.
+- [x] **`CoverReplacement` had the same trash-before-swap gap — fixed
+      10 October 2026.** Renames aside, renames in, Trash last; a refusing
+      Trash is `Result.leftBehind`, not a throw. `leftBehind` is not yet
+      surfaced in the window. `CHANGELOG.md`.
 - [x] **`FileManager.trashItem` fails reproducibly inside the `swift test`
       runner process, not in `shelf-tool` or the app.** Confirmed with two
       standalone `swift` scripts that ran the identical write-then-trash
