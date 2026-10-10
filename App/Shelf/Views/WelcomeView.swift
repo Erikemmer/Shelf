@@ -89,6 +89,9 @@ struct RecentLibraryRow: View {
         ) {
             model.open(recent: entry)
         }
+        .contextMenu {
+            Button(Loc.string("Remove from Recent")) { model.recents.removeRecent(path: entry.path) }
+        }
     }
 
     private var summary: String? {

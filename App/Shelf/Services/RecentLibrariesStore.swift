@@ -16,7 +16,8 @@ final class RecentLibrariesStore {
     private static let limit = 8
 
     private(set) var entries: [RecentLibrary] = []
-    /// Paths whose folder could not be found – shown greyed out, never removed.
+    /// Paths whose folder could not be found – shown greyed out, never removed
+    /// automatically (a person can remove one with `removeRecent`).
     /// A disconnected drive is a normal Tuesday, and a list that silently loses
     /// rows teaches people not to trust it.
     private(set) var unreachablePaths: Set<String> = []
@@ -54,6 +55,14 @@ final class RecentLibrariesStore {
     /// See `RecentLibrary.updateBookCount`; the rule is in the core so it is tested.
     func updateBookCount(path: String, to count: Int) {
         if RecentLibrary.updateBookCount(in: &entries, path: path, to: count) { save() }
+    }
+
+    /// Removes one entry, reachable or not. Only the list row goes; the folder
+    /// is never touched. The rule is in the core so it is tested.
+    func removeRecent(path: String) {
+        guard RecentLibrary.remove(from: &entries, path: path) else { return }
+        unreachablePaths.remove(path)
+        save()
     }
 
     func clear() {

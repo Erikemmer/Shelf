@@ -35,4 +35,23 @@ final class RecentLibraryTests: XCTestCase {
         XCTAssertFalse(RecentLibrary.updateBookCount(in: &list, path: "/b", to: 5))
         XCTAssertEqual(list, sample())
     }
+
+    func testRemovesOnlyTheNamedRowKeepingTheOrderOfTheRest() {
+        var list = sample() + [row("/c", 3, 7, 10)]
+        XCTAssertTrue(RecentLibrary.remove(from: &list, path: "/b"))
+        XCTAssertEqual(list.map(\.path), ["/a", "/c"])
+        XCTAssertEqual(list[0], sample()[0])
+    }
+
+    func testRemovingAnUnknownPathChangesNothing() {
+        var list = sample()
+        XCTAssertFalse(RecentLibrary.remove(from: &list, path: "/zzz"))
+        XCTAssertEqual(list, sample())
+    }
+
+    func testRemovingTheLastRowLeavesAnEmptyList() {
+        var list = [row("/a", 1, 0, 100)]
+        XCTAssertTrue(RecentLibrary.remove(from: &list, path: "/a"))
+        XCTAssertTrue(list.isEmpty)
+    }
 }

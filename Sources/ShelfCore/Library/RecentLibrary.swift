@@ -34,4 +34,16 @@ public struct RecentLibrary: Codable, Equatable, Identifiable, Sendable {
         list[row].bookCount = count
         return true
     }
+
+    /// Drops one library from the list and nothing else: the folder itself is
+    /// not touched, and the other rows keep their order. This is the way out
+    /// for a single dead entry (a folder that is gone stays greyed out by
+    /// design, so without this only "Clear Menu" could ever remove it).
+    /// Returns whether a row was removed, so the caller saves only then.
+    @discardableResult
+    public static func remove(from list: inout [RecentLibrary], path: String) -> Bool {
+        let before = list.count
+        list.removeAll { $0.path == path }
+        return list.count != before
+    }
 }

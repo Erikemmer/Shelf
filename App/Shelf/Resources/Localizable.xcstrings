@@ -7859,6 +7859,23 @@
         }
       }
     },
+    "Remove from Recent": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus „Zuletzt benutzt“ entfernen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove from Recent"
+          }
+        }
+      }
+    },
     "Recently Added": {
       "extractionState": "manual",
       "localizations": {

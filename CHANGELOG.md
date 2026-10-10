@@ -3,6 +3,18 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Feature — remove a single entry from "Recent" · 10 October 2026
+
+A dead entry in "Recent" could only be cleared together with all others
+("Clear Menu"). Now a row on the welcome screen has "Remove from Recent" in
+its context menu, and File ▸ Open Recent has a "Remove from Recent" submenu
+listing each entry. The rule is `RecentLibrary.remove(from:path:)` in
+ShelfCore (three tests: only the named row goes and order stays, unknown path
+changes nothing, last row leaves an empty list); the store's `removeRecent`
+adds the save and clears the unreachable mark. The folder on disk is never
+touched. German string added. Not observed in the running app: the context
+menu and the submenu were not clicked through by hand.
+
 ## Fix — Recent count: race on a library switch, and a test · 10 October 2026
 
 Review of the fix below found two real problems. (1) `reload()` captured

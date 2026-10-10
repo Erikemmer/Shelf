@@ -704,7 +704,7 @@ is currently assumed.
       `App/Shelf` does not, so a `ZipWriter` in the window would not compile;
       two tests say the same thing by name, so a copy pasted in fails too.
 
-- [ ] **A single dead entry in "Recent" cannot be removed — only all of
+- [x] **A single dead entry in "Recent" cannot be removed — only all of
       them at once.** `RecentLibrariesStore` (`App/Shelf/Services/
       RecentLibrariesStore.swift`) offers `record(_:bookCount:)` and
       `clear()` and nothing between: a folder that is gone is marked
@@ -718,6 +718,11 @@ is currently assumed.
       state without also risking a live entry. Ships a `removeRecent(path:)`
       on the store, a row-level control in both places it is read from —
       not built here, per instruction for this session.
+      Done 10 October 2026: `RecentLibrary.remove(from:path:)` in ShelfCore
+      (tested), `RecentLibrariesStore.removeRecent(path:)`, a right-click
+      "Remove from Recent" on each welcome-screen row, and a File ▸ Open
+      Recent ▸ Remove from Recent submenu listing every entry. Only the list
+      row goes, never the folder.
 
 - [x] **A library's "Recent" book count goes stale the moment something is
       imported into it, and stays stale until the library is closed and

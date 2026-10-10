@@ -148,7 +148,15 @@ struct ShelfApp: App {
                 Button(entry.name) { model.open(recent: entry) }
                     .disabled(!model.recents.isReachable(entry))
             }
-            if !model.recents.entries.isEmpty { Divider() }
+            if !model.recents.entries.isEmpty {
+                Divider()
+                // One row at a time: a dead entry no longer needs "Clear Menu".
+                Menu(Loc.string("Remove from Recent")) {
+                    ForEach(model.recents.entries) { entry in
+                        Button(entry.name) { model.recents.removeRecent(path: entry.path) }
+                    }
+                }
+            }
             Button(Loc.string("Clear Menu")) { model.recents.clear() }
                 .disabled(model.recents.entries.isEmpty)
         }
