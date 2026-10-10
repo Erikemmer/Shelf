@@ -3,6 +3,25 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Fix — Cancel during an import examination: stale tasks no longer win · 10 October 2026
+
+Review of the fix below found real holes. `buildPlan()` awaits several index
+calls that cannot be cancelled; a Cancel or a newer examination arriving there
+still let the old task run to its end and assign `plan` / `phase = .ready`, so
+the plan came back after Cancel (or an old run overwrote a newer one). It now
+checks `Task.isCancelled` after each await and before it writes the Calibre
+column definitions or assigns the plan. The examination `Task` moved into
+`SupersedingTask` (ShelfCore), whose `run` forwards the caller's cancellation
+(a dismissed sheet used to leave the examination running). The flaky
+spin-wait in `CancellableDetachedTests` now waits on a semaphore and the
+cancellation itself. Four tests cover `SupersedingTask`. Limits, stated
+plainly: the metadata.db read and one `reclaimOrphans` pass already under way
+(adopting orphan folders into the index, idempotent) cannot be interrupted,
+and the Calibre column definitions (library descriptor and index) are written
+right after a check, so they can still land if the cancel arrives between that
+check and the end of the write. The `buildPlan` guards themselves have no
+test: `ImportModel` lives in the app target, which has no tests.
+
 ## Fix — Cancel while examining an import now cancels · 10 October 2026
 
 `ImportModel.cancel()` called `task?.cancel()` on a property that was never

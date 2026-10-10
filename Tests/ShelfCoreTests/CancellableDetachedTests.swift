@@ -9,35 +9,31 @@ import Testing
 @Suite("Cancellable detached work")
 struct CancellableDetachedTests {
 
-    /// Counts how far a polling loop got; the loop stops once it sees the
-    /// cancellation.
-    private final class Counter: @unchecked Sendable {
-        private let lock = NSLock()
-        private var value = 0
-        func bump() -> Int { lock.lock(); defer { lock.unlock() }; value += 1; return value }
-        var current: Int { lock.lock(); defer { lock.unlock() }; return value }
-    }
-
-    @Test("cancelling the caller stops the loop early")
+    @Test("cancelling the caller reaches the work")
     func cancellationReachesTheWork() async {
-        let started = Counter()
-        let steps = Counter()
+        let started = DispatchSemaphore(value: 0)
         let task = Task {
-            await CancellableDetached.run {
-                _ = started.bump()
-                for _ in 0..<10_000 {
-                    if Task.isCancelled { return true }
-                    _ = steps.bump()
+            await CancellableDetached.run { () -> Bool in
+                started.signal()
+                // Waits for the cancellation, not for a step count; the
+                // deadline only keeps a broken helper from hanging the suite.
+                let deadline = Date().addingTimeInterval(20)
+                while !Task.isCancelled && Date() < deadline {
                     Thread.sleep(forTimeInterval: 0.001)
                 }
-                return false
+                return Task.isCancelled
             }
         }
-        while started.current == 0 { try? await Task.sleep(for: .milliseconds(5)) }
+        // Blocks a background thread, not the cooperative pool, until the work
+        // has really started.
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global().async {
+                started.wait()
+                continuation.resume()
+            }
+        }
         task.cancel()
-        let sawCancel = await task.value
-        #expect(sawCancel)
-        #expect(steps.current < 10_000)
+        #expect(await task.value)
     }
 
     @Test("without a cancellation the work runs to its end")

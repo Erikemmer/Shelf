@@ -57,7 +57,7 @@ final class ImportModel {
     private let library: Library
     @ObservationIgnored private let index: LibraryIndex
     @ObservationIgnored private var candidates: [ImportCandidate] = []
-    @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored private let examination = SupersedingTask()
 
     init(library: Library, index: LibraryIndex) {
         self.library = library
@@ -77,10 +77,7 @@ final class ImportModel {
     /// Runs one examination as the model's own `Task`, so `cancel()` has
     /// something real to cancel, and a newer examination cancels an older one.
     private func supersede(_ body: @escaping @MainActor () async -> Void) async {
-        task?.cancel()
-        let work = Task { await body() }
-        task = work
-        await work.value
+        await examination.run(body)
     }
 
     private func performExamineCalibre(_ folder: URL) async {
@@ -200,7 +197,12 @@ final class ImportModel {
             // import carries are read into the index here, so the planner then
             // sees a library that already holds them and the ordinary duplicate
             // rules do the rest.
+            // Every `await` below is a point where `cancel()` or a newer
+            // examination may have run; the guard after each keeps a stale task
+            // from writing or from bringing a plan back to life.
+            guard !Task.isCancelled else { return }
             try await reclaimOrphans()
+            guard !Task.isCancelled else { return }
 
             let knowledge = ImportKnowledge(
                 digests: try await index.allFormatDigests(),
@@ -208,6 +210,7 @@ final class ImportModel {
                 titleKeys: try await index.allTitleKeys(),
                 formatsByBook: try await formatsByBook(),
                 foldersByBook: try await foldersByBook())
+            guard !Task.isCancelled else { return }
             var descriptor = try library.readDescriptor()
             // The columns' definitions before the books, for the same reason the
             // shelf tree goes first (ADR 0008): a value whose column the index
@@ -216,6 +219,7 @@ final class ImportModel {
                 descriptor.customColumns = calibreColumns
                 try library.write(descriptor)
                 try await index.saveCustomColumns(calibreColumns)
+                guard !Task.isCancelled else { return }
             }
             nextBookNumber = descriptor.nextBookNumber
             // The stored counter, or the highest number already on the disk if a
@@ -223,6 +227,7 @@ final class ImportModel {
             // backwards, so a deleted book's number is still not reused.
             let startingNumber = max(
                 descriptor.nextBookNumber, try await index.highestBookNumber() + 1)
+            guard !Task.isCancelled else { return }
             plan = ImportPlanner.plan(
                 candidates: candidates,
                 knowledge: knowledge,
@@ -417,8 +422,7 @@ final class ImportModel {
     /// `LibraryModel.cancelImportRun()`.
     func cancel() {
         guard case .examining = phase else { return }
-        task?.cancel()
-        task = nil
+        examination.cancel()
         reset()
     }
 
