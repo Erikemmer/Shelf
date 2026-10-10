@@ -719,7 +719,7 @@ is currently assumed.
       on the store, a row-level control in both places it is read from —
       not built here, per instruction for this session.
 
-- [ ] **A library's "Recent" book count goes stale the moment something is
+- [x] **A library's "Recent" book count goes stale the moment something is
       imported into it, and stays stale until the library is closed and
       opened again.** `recents.record(library, bookCount: entries.count)`
       (`App/Shelf/Services/LibraryModel.swift:328`) has exactly one call
@@ -735,6 +735,11 @@ is currently assumed.
       building session) — a fix belongs where `ImportRunner`'s outcome is
       applied, re-recording the open library rather than waiting for the
       next `open(_:)`.
+
+      **Done, 10 October 2026:** `reload()` — the one place every change to
+      the entries passes through — now calls the new
+      `RecentLibrariesStore.updateBookCount(path:to:)`, which corrects the
+      count in place without moving the row or touching `lastOpened`.
 
 ## Sprint 8 – ordering the library, and the way out of it · done
 

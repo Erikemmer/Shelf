@@ -65,6 +65,18 @@ final class RecentLibrariesStore {
         save()
     }
 
+    /// Corrects the count of a library already in the list, without touching
+    /// its position, bookmark or `lastOpened`: an import changes how many
+    /// books a library holds, not when it was last opened. A path that is not
+    /// in the list is ignored, so a closing library cannot re-add itself.
+    func updateBookCount(path: String, to count: Int) {
+        guard let row = entries.firstIndex(where: { $0.path == path }),
+            entries[row].bookCount != count
+        else { return }
+        entries[row].bookCount = count
+        save()
+    }
+
     func clear() {
         entries = []
         unreachablePaths = []

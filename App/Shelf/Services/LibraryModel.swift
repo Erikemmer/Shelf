@@ -469,6 +469,10 @@ final class LibraryModel {
         guard let index else { return }
         do {
             entries = try await index.allEntries(sortedBy: order)
+            // Every change to the book count (an import, a delete, a Calibre
+            // sync) passes through here, so the welcome screen's "Recent"
+            // count is refreshed at the one place that cannot be forgotten.
+            if let library { recents.updateBookCount(path: library.root.path, to: entries.count) }
             // Before the totals and before the filter, because both of them
             // ask it. It was neither: the set came from the cover *cache* and
             // was refreshed at a different moment, so `Missing Cover` counted

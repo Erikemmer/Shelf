@@ -3,6 +3,18 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Fix — the "Recent" book count follows the open library · 10 October 2026
+
+The welcome screen's count for a library was recorded once, in `open(_:)`,
+and stayed stale after an import until the library was reopened (seen in
+Sprint 16: "0 books" next to a library holding 40). `LibraryModel.reload()`
+now re-records the count through the new
+`RecentLibrariesStore.updateBookCount(path:to:)`, which changes only the
+count: order, bookmark and `lastOpened` stay. Measured: `make test` green
+(973 tests). Not covered by a unit test: the store lives in the app target,
+which has no test target; the behaviour was not observed in the running app
+with an import either.
+
 ## Housekeeping — the original concept and start prompts kept in `docs/origin/` · 9 October 2026
 
 `SHELF-CONCEPT.md`, `SHELF-BUILDER-PROMPT.md` and `SHELF-REVIEWER-PROMPT.md`
