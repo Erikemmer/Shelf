@@ -3,6 +3,19 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Fix — Recent count: race on a library switch, and a test · 10 October 2026
+
+Review of the fix below found two real problems. (1) `reload()` captured
+`index` before its `await` but read `library` after it, so a reload in flight
+during a library switch could write the old library's count under the new
+one's path; `library` is now captured together with `index`. (2) The count
+rule had no test; it moved into ShelfCore as
+`RecentLibrary.updateBookCount(in:path:to:)` (with `RecentLibrary` itself) and
+`RecentLibraryTests` covers unknown path, unchanged count, and that order,
+bookmark and `lastOpened` stay. The store only calls it and saves. The race
+itself is not covered by a test (it needs the app target); the third review
+point (trailer wording) is a note about a past commit message, not changed.
+
 ## Fix — the "Recent" book count follows the open library · 10 October 2026
 
 The welcome screen's count for a library was recorded once, in `open(_:)`,

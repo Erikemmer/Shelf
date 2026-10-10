@@ -2,20 +2,6 @@ import AppKit
 import Observation
 import ShelfCore
 
-/// One library the user had open before.
-struct RecentLibrary: Codable, Equatable, Identifiable, Sendable {
-    var id: String { path }
-
-    var path: String
-    var name: String
-    /// A sandboxed app loses the right to read a folder when it quits, so a
-    /// plain path would be useless on the next launch. The bookmark is what
-    /// makes "Recent" work at all; the path is only for display.
-    var bookmark: Data?
-    var bookCount: Int?
-    var lastOpened: Date
-}
-
 /// Remembers the libraries the user opened, for the welcome screen and
 /// File ▸ Open Recent.
 ///
@@ -65,16 +51,9 @@ final class RecentLibrariesStore {
         save()
     }
 
-    /// Corrects the count of a library already in the list, without touching
-    /// its position, bookmark or `lastOpened`: an import changes how many
-    /// books a library holds, not when it was last opened. A path that is not
-    /// in the list is ignored, so a closing library cannot re-add itself.
+    /// See `RecentLibrary.updateBookCount`; the rule is in the core so it is tested.
     func updateBookCount(path: String, to count: Int) {
-        guard let row = entries.firstIndex(where: { $0.path == path }),
-            entries[row].bookCount != count
-        else { return }
-        entries[row].bookCount = count
-        save()
+        if RecentLibrary.updateBookCount(in: &entries, path: path, to: count) { save() }
     }
 
     func clear() {

@@ -467,12 +467,15 @@ final class LibraryModel {
     /// Everything the window shows about a library, in one pass.
     func reload() async {
         guard let index else { return }
+        // Captured with `index`: if load(_:) switches libraries while this
+        // runs, the count must not land under the new library's path.
+        let reloading = library
         do {
             entries = try await index.allEntries(sortedBy: order)
             // Every change to the book count (an import, a delete, a Calibre
             // sync) passes through here, so the welcome screen's "Recent"
             // count is refreshed at the one place that cannot be forgotten.
-            if let library { recents.updateBookCount(path: library.root.path, to: entries.count) }
+            if let reloading { recents.updateBookCount(path: reloading.root.path, to: entries.count) }
             // Before the totals and before the filter, because both of them
             // ask it. It was neither: the set came from the cover *cache* and
             // was refreshed at a different moment, so `Missing Cover` counted
