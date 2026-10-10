@@ -268,18 +268,16 @@ change of controls, not of layout.
       `Tests/ShelfCoreTests/IndexCancellationTests.swift`,
       `Scripts/import-cancel-proof.sh`,
       `docs/screenshots/sprint-14-import-cancel/`
-- [ ] **`ImportModel`'s own `cancel()` cancels nothing.** Found while wiring
-      Sprint 13's termination-safe cancellation, and left exactly as found,
-      per instruction — not this sprint's task. `ImportModel.task` is
-      declared and read (`task?.cancel()` at the top of `examine()` and
-      `examineCalibre()`) but never once assigned, so those two calls have
-      always been no-ops; only `.running`'s Cancel button was fixed
-      (`LibraryModel.cancelImportRun()`, a separate, real `Task`), because
-      that one writes to disk and this one only reads and hashes candidates.
-      Pressing Cancel while Shelf is still *examining* a large drop or a
-      Calibre library does not actually stop the scan early — harmless
-      today (nothing is written yet), but worth the same fix if `examine()`
-      ever gets slow enough for someone to reach for that button
+- [x] **`ImportModel`'s own `cancel()` cancels nothing.** Fixed: `examine()`
+      and `examineCalibre()` now run as a `Task` the model keeps in `task`,
+      and their slow work goes through `CancellableDetached.run`, which
+      forwards a cancellation into the detached loop (a bare `Task.detached`
+      never saw it). `cancel()` puts the sheet back to idle; a late result is
+      dropped and a cancelled index read no longer shows the "Could not read
+      the library index" banner. Limit: the Calibre `metadata.db` read is one
+      synchronous call and finishes before the cancel takes effect.
+      `Tests/ShelfCoreTests/CancellableDetachedTests.swift`; `ImportModel`
+      itself has no app-side test target, so the wiring is not under test
 - [x] **`Missing Cover` counts every book in a freshly imported library.**
       Fixed in Sprint 7: it is a question about the **folders**, and
       `CoverFile.booksWithACover` asks them. Measured against the 26-book

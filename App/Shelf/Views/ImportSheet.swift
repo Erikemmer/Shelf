@@ -295,8 +295,8 @@ struct ImportSheet: View {
                     // impatient one (Sprint 13, Teil B).
                     SlateSecondaryButton(Loc.string("Quit Now Anyway")) { model.forceQuitNow() }
                 } else {
-                    // The real, running `Task` — not `importModel.cancel()`,
-                    // which cancels nothing: see `LibraryModel.importRunTask`.
+                    // The real, running `Task` — `importModel.cancel()` only
+                    // stops an examination: see `LibraryModel.importRunTask`.
                     SlateSecondaryButton(Loc.string("Cancel")) { model.cancelImportRun() }
                 }
             case .ready:

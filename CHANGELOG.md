@@ -3,6 +3,19 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Fix — Cancel while examining an import now cancels · 10 October 2026
+
+`ImportModel.cancel()` called `task?.cancel()` on a property that was never
+assigned, so pressing Cancel while Shelf examined a dropped folder or a Calibre
+library stopped nothing. `examine()` / `examineCalibre()` now run as a kept
+`Task`, and the detached read goes through `CancellableDetached.run`
+(ShelfCore), which passes the cancellation into the loop; a new examination
+also cancels an older one. Cancel returns the sheet to idle and a late result
+is discarded. Three tests cover the helper (cancellation reaches the work, it
+runs to its end otherwise, a bare `Task.detached` does not see it). Not
+covered by a test: the `ImportModel` wiring (no app test target) and the
+Calibre `metadata.db` read, which is a single call and not interruptible.
+
 ## Feature — remove a single entry from "Recent" · 10 October 2026
 
 A dead entry in "Recent" could only be cleared together with all others

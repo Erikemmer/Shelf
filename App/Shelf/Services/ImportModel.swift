@@ -71,7 +71,19 @@ final class ImportModel {
     /// and the Calibre folder is only read — `metadata.db` through a copy
     /// (ADR 0009).
     func examineCalibre(_ folder: URL) async {
+        await supersede { await self.performExamineCalibre(folder) }
+    }
+
+    /// Runs one examination as the model's own `Task`, so `cancel()` has
+    /// something real to cancel, and a newer examination cancels an older one.
+    private func supersede(_ body: @escaping @MainActor () async -> Void) async {
         task?.cancel()
+        let work = Task { await body() }
+        task = work
+        await work.value
+    }
+
+    private func performExamineCalibre(_ folder: URL) async {
         reset()
         sourceDescription = Loc.string("Calibre library %@", folder.lastPathComponent)
         phase = .examining(done: 0, total: 0)
@@ -80,7 +92,7 @@ final class ImportModel {
         let cache = Self.calibreCacheDirectory
         // Detached: reading the database and hashing every file is the slow
         // part of a large library, and none of it belongs on the main actor.
-        let outcome = await Task.detached(priority: .userInitiated) {
+        let outcome = await CancellableDetached.run {
             () -> Result<(CalibreLibrary, CalibreCensus, [ImportCandidate]), any Error> in
             do {
                 let calibre = try CalibreReader().read(folder: folder, cacheDirectory: cache)
@@ -90,8 +102,12 @@ final class ImportModel {
             } catch {
                 return .failure(error)
             }
-        }.value
+        }
 
+        // Cancelled while reading: `cancel()` has already put the sheet back;
+        // a late result must not bring a plan back to life. The database read
+        // itself is one synchronous call and cannot be interrupted midway.
+        guard !Task.isCancelled else { return }
         switch outcome {
         case .failure(let error):
             phase = .idle
@@ -133,7 +149,10 @@ final class ImportModel {
 
     /// Reads the dropped files and works out the plan. Nothing is written.
     func examine(_ urls: [URL]) async {
-        task?.cancel()
+        await supersede { await self.performExamine(urls) }
+    }
+
+    private func performExamine(_ urls: [URL]) async {
         reset()
         let files = Self.books(in: urls)
         sourceDescription = Self.describe(urls, fileCount: files.count)
@@ -151,7 +170,7 @@ final class ImportModel {
         phase = .examining(done: 0, total: files.count)
         // Detached so reading several thousand files does not block the window.
         // `ImportCandidate` is `Sendable`, so the result crosses back cleanly.
-        let read = await Task.detached(priority: .userInitiated) { () -> [ImportCandidate] in
+        let read = await CancellableDetached.run { () -> [ImportCandidate] in
             var result: [ImportCandidate] = []
             result.reserveCapacity(files.count)
             for url in files {
@@ -159,8 +178,9 @@ final class ImportModel {
                 if let candidate = Self.candidate(for: url) { result.append(candidate) }
             }
             return result
-        }.value
+        }
 
+        guard !Task.isCancelled else { return }
         candidates = read
         await buildPlan()
     }
@@ -210,6 +230,8 @@ final class ImportModel {
                 existingFolders: Self.existingFolders(library))
             phase = .ready
         } catch {
+            // A cancelled examination is not a broken index (Sprint 15, Teil A).
+            guard !Task.isCancelled else { return }
             errorMessage = Loc.string("Could not read the library index: %@", (error as NSError).localizedDescription)
             phase = .idle
         }
@@ -390,9 +412,14 @@ final class ImportModel {
         }
     }
 
+    /// Stops an examination in progress and puts the sheet back to idle. A
+    /// running copy is not this method's business: that is
+    /// `LibraryModel.cancelImportRun()`.
     func cancel() {
+        guard case .examining = phase else { return }
         task?.cancel()
         task = nil
+        reset()
     }
 
     func reset() {
