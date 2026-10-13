@@ -924,6 +924,13 @@ struct InspectorCover: View {
                 .fixedSize()
                 .accessibilityLabel(Loc.string("Change the cover of %@", entry.book.title))
 
+            if !model.coverLeftBehind.isEmpty {
+                Text(Loc.core(CoverReplacement.leftBehindNote))
+                    .font(.caption2)
+                    .foregroundStyle(Slate.accent)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let refusal = model.coverRefusal {
                 VStack(spacing: 2) {
                     Text(Loc.core(refusal.message))

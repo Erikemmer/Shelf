@@ -158,6 +158,123 @@ struct CoverReplacementTests {
         #expect(FileManager.default.fileExists(atPath: folder.appendingPathComponent(kept).path))
     }
 
+    // MARK: The failure branches of the swap
+
+    /// The new picture cannot be renamed onto its path: a dangling symlink
+    /// named `cover.png` is not "a cover" to `CoverFile.urls` (it follows the
+    /// link), so it is not set aside, and `moveItem` refuses to land on it.
+    /// Every cover that was set aside goes back to its own name.
+    @Test("a failed rename of the new cover puts the old ones back")
+    func failedLandingRollsBack() throws {
+        let temporary = try TemporaryFolder()
+        let folder = try temporary.folder("Austen, Jane/Emma (1)")
+        try Self.jpeg(0xAB).write(to: folder.appendingPathComponent("cover.jpg"))
+        try FileManager.default.createSymbolicLink(
+            atPath: folder.appendingPathComponent("cover.png").path,
+            withDestinationPath: "/nonexistent-shelf-test-target")
+
+        #expect(throws: CoverReplacement.Refusal.self) {
+            try CoverReplacement.replace(
+                with: Self.png(), in: folder, previousGeneration: 0, disposal: .none)
+        }
+
+        #expect(try Data(contentsOf: folder.appendingPathComponent("cover.jpg")) == Self.jpeg(0xAB))
+        let names = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        #expect(!names.contains { $0.hasPrefix(CoverReplacement.asidePrefix) })
+        #expect(!names.contains { $0.hasSuffix(".part") })
+    }
+
+    /// Two covers, the second cannot be renamed into the holder (a directory
+    /// without write permission cannot change its parent): the first, already
+    /// moved, goes back, the holder goes, nothing is written.
+    @Test("a rename that fails inside setAside puts the earlier ones back")
+    func failedSetAsideRollsBack() throws {
+        let temporary = try TemporaryFolder()
+        let folder = try temporary.folder("Austen, Jane/Emma (1)")
+        try Self.jpeg(0xA1).write(to: folder.appendingPathComponent("cover.jpg"))
+        let stuck = folder.appendingPathComponent("cover.jpeg", isDirectory: true)
+        try FileManager.default.createDirectory(at: stuck, withIntermediateDirectories: false)
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: stuck.path)
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o755], ofItemAtPath: stuck.path)
+        }
+
+        #expect(throws: CoverReplacement.Refusal.self) {
+            try CoverReplacement.replace(
+                with: Self.png(), in: folder, previousGeneration: 0, disposal: .none)
+        }
+
+        #expect(try Data(contentsOf: folder.appendingPathComponent("cover.jpg")) == Self.jpeg(0xA1))
+        let names = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        #expect(!names.contains { $0.hasPrefix(CoverReplacement.asidePrefix) })
+        #expect(!names.contains("cover.png"))
+        #expect(!names.contains { $0.hasSuffix(".part") })
+    }
+
+    // MARK: Recovery of what an earlier swap left
+
+    /// A crash between `setAside` and the landing of the new file leaves a
+    /// book with no cover and the picture in a holder. The next replace
+    /// brings it back before it does anything else, so it ends up in the
+    /// Trash by the normal route instead of in a hidden folder for ever.
+    @Test("a cover stranded in a holder by a crash is recovered by the next replace")
+    func strandedCoverIsRecovered() throws {
+        let temporary = try TemporaryFolder()
+        let folder = try temporary.folder("Austen, Jane/Emma (1)")
+        let bin = try Bin(in: temporary.url)
+        let holder = folder.appendingPathComponent("\(CoverReplacement.asidePrefix)deadbeef")
+        try FileManager.default.createDirectory(at: holder, withIntermediateDirectories: false)
+        try Self.jpeg(0xAB).write(to: holder.appendingPathComponent("cover.jpg"))
+
+        let result = try CoverReplacement.replace(
+            with: Self.png(), in: folder, previousGeneration: 0, disposal: bin.disposal)
+
+        #expect(result.leftBehind.isEmpty)
+        #expect(result.displaced == ["cover.jpg"])
+        #expect(bin.taken == ["cover.jpg"])
+        #expect(!FileManager.default.fileExists(atPath: holder.path))
+        #expect(CoverFile.url(in: folder)?.lastPathComponent == "cover.png")
+    }
+
+    /// Refusals must not pile up: once the Trash works again, the next
+    /// replace disposes of what an earlier refusal left and removes the holder.
+    @Test("a picture an earlier refusal left behind goes to the Trash on the next replace")
+    func refusedPictureIsRetried() throws {
+        let temporary = try TemporaryFolder()
+        let folder = try temporary.folder("Austen, Jane/Emma (1)")
+        let bin = try Bin(in: temporary.url)
+        try Self.jpeg(0xAB).write(to: folder.appendingPathComponent("cover.jpg"))
+        let first = try CoverReplacement.replace(
+            with: Self.png(), in: folder, previousGeneration: 0, disposal: .none)
+        #expect(first.leftBehind.count == 1)
+
+        let second = try CoverReplacement.replace(
+            with: Self.png(0x33), in: folder, previousGeneration: 1, disposal: bin.disposal)
+
+        #expect(second.leftBehind.isEmpty)
+        #expect(bin.taken.sorted() == ["cover.jpg", "cover.png"])
+        let names = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        #expect(!names.contains { $0.hasPrefix(CoverReplacement.asidePrefix) })
+    }
+
+    @Test("a refusing Trash on the retry leaves the picture and still reports it")
+    func refusedPictureStaysReported() throws {
+        let temporary = try TemporaryFolder()
+        let folder = try temporary.folder("Austen, Jane/Emma (1)")
+        try Self.jpeg(0xAB).write(to: folder.appendingPathComponent("cover.jpg"))
+        try CoverReplacement.replace(
+            with: Self.png(), in: folder, previousGeneration: 0, disposal: .none)
+
+        let second = try CoverReplacement.replace(
+            with: Self.png(0x33), in: folder, previousGeneration: 1, disposal: .none)
+
+        let kept = second.leftBehind.filter { $0.hasSuffix("/cover.jpg") }
+        #expect(kept.count == 1)
+        let path = try #require(kept.first)
+        #expect(try Data(contentsOf: folder.appendingPathComponent(path)) == Self.jpeg(0xAB))
+    }
+
     /// The old cover is `cover.png` and the new one is a JPEG: writing
     /// `cover.jpg` beside it would leave two covers in the folder, and
     /// `CoverFile.url` answers with whichever comes first in its list — so the
@@ -533,6 +650,25 @@ struct CoverChangeCommitTests {
         return (library, entry, folder, index)
     }
 
+    /// The Trash refusing after the swap used to vanish between `replace` and
+    /// the window. `commit` now carries it, and the generation stays raised.
+    @Test("a Trash that refuses after the swap reaches the caller through commit")
+    func leftBehindSurvivesCommit() async throws {
+        let temporary = try TemporaryFolder()
+        let (library, entry, _, index) = try await book(in: temporary, withCover: true)
+
+        let outcome = try await CoverReplacement.commit(
+            png(2), to: entry, library: library, index: index, disposal: .none)
+
+        guard case .wrote(let updated, let leftBehind) = outcome else {
+            Issue.record("expected .wrote, got \(outcome)")
+            return
+        }
+        #expect(updated.book.coverGeneration == 1)
+        #expect(leftBehind.count == 1)
+        #expect(leftBehind.first?.hasSuffix("/cover.png") == true)
+    }
+
     @Test("a successful commit writes the picture and the generation together")
     func successWritesBoth() async throws {
         let temporary = try TemporaryFolder()
@@ -541,7 +677,7 @@ struct CoverChangeCommitTests {
         let outcome = try await CoverReplacement.commit(
             png(), to: entry, library: library, index: index)
 
-        guard case .wrote(let updated) = outcome else {
+        guard case .wrote(let updated, _) = outcome else {
             Issue.record("expected .wrote, got \(outcome)")
             return
         }
@@ -569,7 +705,7 @@ struct CoverChangeCommitTests {
         let outcome = try await CoverReplacement.commit(
             nil, to: entry, library: library, index: index)
 
-        guard case .wrote(let updated) = outcome else {
+        guard case .wrote(let updated, _) = outcome else {
             Issue.record("expected .wrote, got \(outcome)")
             return
         }
@@ -624,7 +760,7 @@ struct CoverChangeCommitTests {
         let outcome = try await CoverReplacement.commit(
             png(2), to: entry, library: library, index: index, disposal: .none)
 
-        guard case .wrote(let updated) = outcome else {
+        guard case .wrote(let updated, _) = outcome else {
             Issue.record("expected .wrote, got \(outcome)")
             return
         }

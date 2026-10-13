@@ -57,6 +57,12 @@ public enum CoverReplacement {
         public var leftBehind: [String] = []
     }
 
+    /// Said once, under the picture, when the Trash refused a displaced cover
+    /// after the swap. No names interpolated: they are in `Result.leftBehind`.
+    public static let leftBehindNote =
+        "The new cover is in place, but the old one could not be moved to the Trash "
+        + "and was kept in a hidden folder inside the book’s folder."
+
     public enum Refusal: Error, Equatable, Sendable {
         /// The magic number is not one `CoverFile` knows. Checked first, so a
         /// book cannot lose its picture to a file that was never one.
@@ -173,6 +179,9 @@ public enum CoverReplacement {
     ) throws -> Result {
         guard accepts(data) else { throw Refusal.notAnImage }
         sweepPartials(in: folder)
+        // What an earlier swap left behind comes first, so a book a crash left
+        // without a cover has it back before anything else is moved.
+        let earlier = recoverAsides(in: folder, disposal: disposal)
 
         let target = folder.appendingPathComponent(CoverFile.name(for: data))
         let part = folder.appendingPathComponent("\(partialPrefix)\(UUID().uuidString.prefix(8)).part")
@@ -203,6 +212,8 @@ public enum CoverReplacement {
         } catch {
             // Roll back: every cover goes back to its own path.
             for pair in asides { try? FileManager.default.moveItem(at: pair.aside, to: pair.original) }
+            // Empty now, and `rmdir` refuses a holder that is not.
+            if let holder = asides.first?.aside.deletingLastPathComponent() { rmdir(holder.path) }
             try? FileManager.default.removeItem(at: part)
             throw Refusal.cannotWrite(error.localizedDescription)
         }
@@ -211,7 +222,7 @@ public enum CoverReplacement {
         // a fact in the result, not a throw: throwing would make `commit`
         // revert the generation for a picture that did change.
         var displaced: [String] = []
-        var leftBehind: [String] = []
+        var leftBehind: [String] = earlier
         for pair in asides {
             displaced.append(pair.original.lastPathComponent)
             do {
@@ -239,6 +250,48 @@ public enum CoverReplacement {
     /// swept as debris. A folder, not a renamed file, so the picture keeps its
     /// own name — that is what the person sees in the Trash.
     static let asidePrefix = ".shelf-cover-aside-"
+
+    /// Deals with hidden `.shelf-cover-aside-*` folders an earlier swap left.
+    ///
+    /// Two states produce one, and they need opposite answers:
+    ///
+    /// - **The folder has no cover.** A swap died between `setAside` and the
+    ///   rename of the new picture, so the book lost its cover and the old one
+    ///   sits in the holder. Every picture goes back to its own name (never
+    ///   over a file already there).
+    /// - **The folder has a cover.** The swap finished and the Trash refused.
+    ///   Each picture is offered to the disposal again, so refusals do not pile
+    ///   up one holder per replacement for as long as the Trash works.
+    ///
+    /// Returns what is still sitting in a holder afterwards, relative to the
+    /// book folder, so the caller can say so. A holder is removed only when
+    /// empty (`rmdir`), so nothing a person might want is ever deleted here.
+    @discardableResult
+    static func recoverAsides(in folder: URL, disposal: FolderDisposal) -> [String] {
+        let fm = FileManager.default
+        let holders = ((try? fm.contentsOfDirectory(atPath: folder.path)) ?? [])
+            .filter { $0.hasPrefix(asidePrefix) }.sorted()
+        guard !holders.isEmpty else { return [] }
+        let hasCover = !CoverFile.urls(in: folder).isEmpty
+        var remaining: [String] = []
+        for name in holders {
+            let holder = folder.appendingPathComponent(name, isDirectory: true)
+            let items = (try? fm.contentsOfDirectory(atPath: holder.path)) ?? []
+            for item in items.sorted() {
+                let source = holder.appendingPathComponent(item)
+                let home = folder.appendingPathComponent(item)
+                if !hasCover, !fm.fileExists(atPath: home.path),
+                    (try? fm.moveItem(at: source, to: home)) != nil
+                {
+                    continue
+                }
+                if hasCover, (try? disposal.dispose(source)) != nil { continue }
+                remaining.append(name + "/" + item)
+            }
+            rmdir(holder.path)
+        }
+        return remaining
+    }
 
     /// Renames each cover into one hidden sibling folder; undoes the renames
     /// made so far if one fails.
@@ -269,7 +322,9 @@ extension CoverReplacement {
     /// What a commit turned out to do: the entry as it now is, or the refusal
     /// that stopped it.
     public enum Commit {
-        case wrote(LibraryEntry)
+        /// `leftBehind`: displaced covers the Trash refused after the swap,
+        /// still inside the book folder. The book itself is correct.
+        case wrote(LibraryEntry, leftBehind: [String] = [])
         case refused(Refusal)
     }
 
@@ -322,9 +377,13 @@ extension CoverReplacement {
         let bump = MetadataChange.make(from: entry.book) { $0.coverGeneration = generation }
         let bumped = try await editor.apply(bump, to: entry, in: index)
 
+        var leftBehind: [String] = []
         do {
             if let bytes {
-                try replace(with: bytes, in: folder, previousGeneration: entry.book.coverGeneration, disposal: disposal)
+                leftBehind = try replace(
+                    with: bytes, in: folder, previousGeneration: entry.book.coverGeneration,
+                    disposal: disposal
+                ).leftBehind
             } else {
                 try remove(in: folder, previousGeneration: entry.book.coverGeneration, disposal: disposal)
             }
@@ -333,6 +392,6 @@ extension CoverReplacement {
             try await editor.apply(revert, to: bumped, in: index)
             return .refused(refusal)
         }
-        return .wrote(bumped)
+        return .wrote(bumped, leftBehind: leftBehind)
     }
 }

@@ -176,6 +176,7 @@ struct LocalisationTests {
             .cannotDisplace(""),
             .cannotWrite(""),
         ].map(\.message)
+        all.append(CoverReplacement.leftBehindNote)
         all += ExportPreset.allCases.map(\.label)
         all += ExportPreset.allCases.map(\.explanation)
         all += ExportOptions.Structure.allCases.map(\.label)

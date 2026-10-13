@@ -1176,8 +1176,14 @@ as it was.
       now carry a harmless "result unused" warning apiece. `CHANGELOG.md`.
 - [x] **`CoverReplacement` had the same trash-before-swap gap — fixed
       10 October 2026.** Renames aside, renames in, Trash last; a refusing
-      Trash is `Result.leftBehind`, not a throw. `leftBehind` is not yet
-      surfaced in the window. `CHANGELOG.md`.
+      Trash is `Result.leftBehind`, not a throw — surfaced in the window
+      by the follow-up below. `CHANGELOG.md`.
+- [x] **Cover swap: a refused Trash is shown, stranded covers are recovered**
+      (10 October 2026). `Commit.wrote` carries `leftBehind`, the inspector
+      says so; `recoverAsides` restores or re-trashes `.shelf-cover-aside-*`
+      on the next replace; failure branches tested.
+- [ ] Run `recoverAsides` when a book is selected or a library opens, so a
+      book a crash left without a cover is restored without a replace.
 - [x] **`FileManager.trashItem` fails reproducibly inside the `swift test`
       runner process, not in `shelf-tool` or the app.** Confirmed with two
       standalone `swift` scripts that ran the identical write-then-trash

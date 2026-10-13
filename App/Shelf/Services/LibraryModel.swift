@@ -1542,6 +1542,11 @@ final class LibraryModel {
     /// under the picture in the inspector. Cleared by the next attempt.
     private(set) var coverRefusal: CoverReplacement.Refusal?
 
+    /// Displaced covers the Trash refused after a swap; the book is correct,
+    /// the old picture sits in a hidden folder in its folder. Cleared by the
+    /// next attempt, like `coverRefusal`.
+    private(set) var coverLeftBehind: [String] = []
+
     func clearCoverRefusal() { coverRefusal = nil }
 
     /// A picture that arrived as bytes rather than as a file: dragged out of a
@@ -1618,6 +1623,7 @@ final class LibraryModel {
     func applyCover(_ bytes: Data?, to entry: LibraryEntry, undoManager: UndoManager?) async {
         guard let library else { return }
         coverRefusal = nil
+        coverLeftBehind = []
         let folder = library.root.appendingPathComponent(entry.folder, isDirectory: true)
         guard case .proceed(let previous) = prepareCoverChange(bytes, in: folder) else { return }
         registerCoverUndo(previous: previous, entry: entry, undoManager: undoManager)
@@ -1674,6 +1680,7 @@ final class LibraryModel {
     private func performCoverUndo(_ bytes: Data?, to entry: LibraryEntry, undoManager: UndoManager?) {
         guard let library else { return }
         coverRefusal = nil
+        coverLeftBehind = []
         let folder = library.root.appendingPathComponent(entry.folder, isDirectory: true)
         guard case .proceed(let previous) = prepareCoverChange(bytes, in: folder) else { return }
         registerCoverUndo(previous: previous, entry: entry, undoManager: undoManager)
@@ -1725,10 +1732,11 @@ final class LibraryModel {
         let startedAt = ContinuousClock.now
         do {
             switch try await CoverReplacement.commit(bytes, to: entry, library: library, index: index) {
-            case .wrote(let updated):
+            case .wrote(let updated, let leftBehind):
                 TimingLog.shared.metadataWritten(MetadataChange.Field.cover.label, since: startedAt)
                 replace(updated)
                 errorMessage = nil
+                coverLeftBehind = leftBehind
             case .refused(let refusal):
                 coverRefusal = refusal
                 return

@@ -9583,6 +9583,23 @@
         }
       }
     },
+    "The new cover is in place, but the old one could not be moved to the Trash and was kept in a hidden folder inside the book’s folder.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das neue Cover ist gesetzt, aber das alte konnte nicht in den Papierkorb gelegt werden und liegt in einem versteckten Ordner im Buchordner."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The new cover is in place, but the old one could not be moved to the Trash and was kept in a hidden folder inside the book’s folder."
+          }
+        }
+      }
+    },
     "The cover could not be written, so the book still has the one it had.": {
       "extractionState": "manual",
       "localizations": {

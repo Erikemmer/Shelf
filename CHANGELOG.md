@@ -3,6 +3,27 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Fix — a refused Trash after a cover swap is shown, recovered and tested · 10 October 2026
+
+Review of the cover-swap fix below found three real gaps, all confirmed.
+(1) `Result.leftBehind` was dropped by `commit` and never shown: `Commit.wrote`
+now carries it, `LibraryModel.coverLeftBehind` holds it and the inspector says,
+in English and German, that the old cover was kept in a hidden folder.
+(2) Nothing ever looked at `.shelf-cover-aside-*` again. `replace` now starts
+with `recoverAsides`: with no cover in the folder (a crash between the two
+renames) the pictures go back to their own names; with a cover present (a
+refused Trash) each is offered to the Trash again, so holders do not pile up
+while the Trash works. Anything still refused stays and is reported.
+Recovery runs on the next replace in that folder, not on opening a library, so
+a crashed book shows no cover until then. (3) Tests added for the rollback when
+the new file cannot land, the rollback inside `setAside`, recovery, the retry,
+a refusing retry and `leftBehind` through `commit`. The first one found a real
+bug: the landing rollback left an empty holder behind; fixed (`rmdir`).
+`Remove Cover` keeps its order (Trash first, nothing swapped in).
+Run on this Mac: `make test`, `make app`, `make lint`, `make smoke`.
+Not tested: a real process death between the renames, and the German sentence
+by eye in a window.
+
 ## Fix — replacing a cover no longer has a gap with no cover · 10 October 2026
 
 `CoverReplacement.replace` asked the Trash for the old cover before the new
