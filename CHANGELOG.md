@@ -3,6 +3,17 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Test — the 60 MB EPUB round trip is judged on CPU time, not wall clock · 10 October 2026
+
+`EPUBArchiveWriterTests`' 60 MB strict round trip had a 10-second wall-clock
+ceiling. On this Mac, loaded by a parallel build, the same run measured 2.1 s
+and 39 s of wall time on 10 October 2026, so the ceiling judged the machine
+rather than the writer. It now measures this thread's CPU time
+(`CLOCK_THREAD_CPUTIME_ID`, on Darwin and Glibc alike) against the same
+10 seconds and prints both. Test-only; the writer is unchanged. Run on this
+Mac: `make test`, `make app`, `make lint`, `make smoke`. Not run: the Linux
+CI job, where the Glibc branch of `clock_gettime` is assumed rather than seen.
+
 ## Fix — a refused Trash after a cover swap is shown, recovered and tested · 10 October 2026
 
 Review of the cover-swap fix below found three real gaps, all confirmed.

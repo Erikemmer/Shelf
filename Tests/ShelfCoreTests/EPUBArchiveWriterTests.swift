@@ -473,11 +473,13 @@ struct EPUBArchiveWriterTests {
 
         let before = Self.residentMemoryBytes()
         let start = ContinuousClock.now
+        let cpuStart = Self.threadCPUTime()
         try assertStrictRoundTrip(entries)
+        let cpu = Self.threadCPUTime() - cpuStart
         let elapsed = ContinuousClock.now - start
         let after = Self.residentMemoryBytes()
 
-        print("EPUBArchiveWriter strict round trip, ~60 MB entry: \(elapsed)")
+        print("EPUBArchiveWriter strict round trip, ~60 MB entry: \(elapsed) wall, \(cpu) CPU")
         if let before, let after {
             let deltaMB = Double(after - before) / 1_000_000
             print(
@@ -486,7 +488,19 @@ struct EPUBArchiveWriterTests {
         } else {
             print("resident memory: not measured on this platform")
         }
-        #expect(elapsed < .seconds(10), "a 60 MB round trip took \(elapsed) – worth a look before this ships")
+        // CPU time, not wall clock: on a loaded Mac the same run measured
+        // 2.1 s and 39 s of wall time (10 October 2026), so a wall-clock
+        // ceiling judged the machine, not the writer. The round trip is
+        // synchronous, so this thread's CPU time is the writer's own cost.
+        #expect(cpu < .seconds(10), "a 60 MB round trip took \(cpu) of CPU – worth a look before this ships")
+    }
+
+    /// CPU time this thread has used so far. Darwin and Glibc both have
+    /// `CLOCK_THREAD_CPUTIME_ID`, so the ceiling above holds on Linux CI too.
+    private static func threadCPUTime() -> Duration {
+        var spec = timespec()
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &spec)
+        return .seconds(spec.tv_sec) + .nanoseconds(spec.tv_nsec)
     }
 
     /// Resident memory of this process, in bytes. macOS only, the same
