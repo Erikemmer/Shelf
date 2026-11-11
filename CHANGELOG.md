@@ -3,7 +3,7 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
-## Test — the first app-side test target covers `CoverImage` · 11 October 2026
+## Test — the first app-side test target covers `CoverImage` · 11 November 2026
 
 `ShelfAppTests` (`project.yml`, `App/ShelfTests/`): an unhosted unit-test
 bundle that compiles `CoverImage.swift` and `Strings.swift` into itself, so
