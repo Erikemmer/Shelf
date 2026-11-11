@@ -492,7 +492,14 @@ struct EPUBArchiveWriterTests {
         // 2.1 s and 39 s of wall time (10 October 2026), so a wall-clock
         // ceiling judged the machine, not the writer. The round trip is
         // synchronous, so this thread's CPU time is the writer's own cost.
-        #expect(cpu < .seconds(10), "a 60 MB round trip took \(cpu) of CPU – worth a look before this ships")
+        //
+        // 30 s, not 10: the ceiling has to hold on the slowest machine that
+        // runs it. Fourteen CI runs on 11 November 2026 measured 4.8–13.3 s
+        // of CPU for this same code (2 s on the Mac it was written on), and
+        // five of them failed a 10 s ceiling that nothing in the writer had
+        // changed against. 30 s is a little over twice the slowest of those
+        // and still far below what a writer gone quadratic would need.
+        #expect(cpu < .seconds(30), "a 60 MB round trip took \(cpu) of CPU – worth a look before this ships")
     }
 
     /// CPU time this thread has used so far. Darwin and Glibc both have
