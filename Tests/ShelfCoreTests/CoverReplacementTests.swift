@@ -187,7 +187,11 @@ struct CoverReplacementTests {
     /// Two covers, the second cannot be renamed into the holder (a directory
     /// without write permission cannot change its parent): the first, already
     /// moved, goes back, the holder goes, nothing is written.
-    @Test("a rename that fails inside setAside puts the earlier ones back")
+    @Test(
+        "a rename that fails inside setAside puts the earlier ones back",
+        .enabled(
+            if: geteuid() != 0,
+            "root ignores directory permissions, so the rename cannot be made to fail this way"))
     func failedSetAsideRollsBack() throws {
         let temporary = try TemporaryFolder()
         let folder = try temporary.folder("Austen, Jane/Emma (1)")
@@ -702,8 +706,17 @@ struct CoverChangeCommitTests {
         let temporary = try TemporaryFolder()
         let (library, entry, folder, index) = try await book(in: temporary, withCover: true)
 
+        // A disposal of the test's own: the real Trash does not exist in the
+        // Linux container, and the swift-test runner cannot use it reliably
+        // on macOS either (docs/BACKLOG.md, Sprint 10, Schritt E1).
+        let bin = try temporary.folder("bin")
+        let disposal = FolderDisposal { url in
+            let target = bin.appendingPathComponent(url.lastPathComponent)
+            try FileManager.default.moveItem(at: url, to: target)
+            return target
+        }
         let outcome = try await CoverReplacement.commit(
-            nil, to: entry, library: library, index: index)
+            nil, to: entry, library: library, index: index, disposal: disposal)
 
         guard case .wrote(let updated, _) = outcome else {
             Issue.record("expected .wrote, got \(outcome)")
@@ -711,6 +724,7 @@ struct CoverChangeCommitTests {
         }
         #expect(updated.book.coverGeneration == 1)
         #expect(CoverFile.url(in: folder) == nil)
+        #expect(FileManager.default.fileExists(atPath: bin.appendingPathComponent("cover.png").path))
 
         let onDisk = try OPFDocument.read(
             Data(contentsOf: folder.appendingPathComponent("metadata.opf")), fallbackTitle: "x")
