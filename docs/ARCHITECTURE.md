@@ -217,9 +217,14 @@ split between the core and the window is the same one `EmptiedFolder` has from
 | | where | does |
 |---|---|---|
 | `CoverImageRule` | core | *decides*: may these bytes be written as they are, or re-encoded to what long edge. Pure, no image code, tested on Linux. |
-| `CoverImage` | `App/Shelf` | *measures* the picture with ImageIO and carries the decision out. The only part that needs a Mac. |
+| `CoverImage` | `App/Shelf` | *measures* the picture with ImageIO and carries the decision out. The only part that needs a Mac; tested by `ShelfAppTests`. |
 | `CoverReplacement` | core | writes the file: `.part` first, then every `cover.*` in the folder to `FolderDisposal`, then the rename. Answers the new generation. |
 | `LibraryModel.applyCover` | `App/Shelf` | the one path all four ways in go down — file, drop, book file, net — with the undo and the order. |
+
+**`ShelfAppTests`** (`App/ShelfTests/`) is the project's one app-side test
+target, added for this pair: an unhosted bundle that compiles `CoverImage.swift`
+and `Strings.swift` into itself, so no app and no window start
+(`docs/adr/0023-…`). `make test` runs it after `swift test`; Linux CI does not.
 
 The core never opens an image. It knows a magic number (`CoverFile`) and a
 ceiling (`CoverImageRule.maxEdgePixels`, 1 600 px, which is 1.6× the largest

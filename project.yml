@@ -147,6 +147,27 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
+  # The first app-side test target (docs/adr/0023-…). Deliberately *not* hosted
+  # by the Shelf app: a hosted bundle starts the whole app (window, Sparkle,
+  # the library it last opened) for every test run, which the project's own
+  # guards exist to prevent. Instead the app's UI-free files that need ImageIO
+  # are compiled straight into this bundle. A file added here must import
+  # nothing from the rest of App/Shelf except what is listed beside it.
+  ShelfAppTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: App/ShelfTests
+      - path: App/Shelf/Services/CoverImage.swift
+      - path: App/Shelf/Views/Strings.swift
+    dependencies:
+      - package: ShelfCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.erikemmer.shelf.apptests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "-"
+
 schemes:
   Shelf:
     build:
@@ -161,3 +182,4 @@ schemes:
       config: Debug
       targets:
         - package: ShelfCore/ShelfCoreTests
+        - ShelfAppTests

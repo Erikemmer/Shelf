@@ -3,6 +3,20 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Test — the first app-side test target covers `CoverImage` · 11 November 2026
+
+`ShelfAppTests` (`project.yml`, `App/ShelfTests/`): an unhosted unit-test
+bundle that compiles `CoverImage.swift` and `Strings.swift` into itself, so
+ImageIO code is tested without starting the app (`docs/adr/0023-…`). Eleven
+tests, pictures drawn in memory as JPEG, PNG, HEIC and TIFF: pixel size read,
+a long edge over 1 600 px scaled with the aspect ratio kept, nothing under it
+enlarged, small JPEG/PNG written byte-for-byte, small HEIC/TIFF becoming JPEG,
+the result decoding, EXIF rotation applied, empty/garbage/truncated bytes and a
+missing file refused, `describe`. No defect in `CoverImage` was found.
+`make test` now runs `swift test` and then `make test-app`; `make test-core`
+is the first half alone. Not covered: Linux CI does not run the new target — a
+macOS job calling `make test-app` is the follow-up in `ci.yml`.
+
 ## Docs — HANDOFF brought current to `main`, one list of what is open · 11 November 2026
 
 `docs/HANDOFF.md` ended its overview at Sprint 23, Teil C (25 September) and its

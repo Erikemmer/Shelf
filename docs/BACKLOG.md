@@ -933,7 +933,7 @@ the most visible hole in the grid.
       .remove` through `LibraryModel.applyCover(nil, …)`). Disabled during
       a multiple selection and on a book that already has none, both
       photographed dimmed rather than merely asserted
-- [ ] **Tests for the picture half.** `CoverImage` — measuring a file, scaling
+- [x] **Tests for the picture half.** *(Done 11 Oct 2026: `ShelfAppTests`, ADR 0023.)* `CoverImage` — measuring a file, scaling
       it, writing it again as JPEG, and therefore everything specific to HEIC
       and TIFF — needs ImageIO, so it cannot run in `ShelfCoreTests`, which is
       the target that runs on Linux and the only test target this project has.
