@@ -23,6 +23,17 @@ library proof, done in Sprint 16 Teil G; line 799, a stored `authorSort`, done i
 Sprint 18 Teil C1). Not checked: that the CI failure since 19 September is as
 described (only `gh run list` showed the last four runs on `main` failing).
 
+## Test — the 60 MB round trip's CPU ceiling is 30 s, because CI runners need up to 13 · 11 November 2026
+
+The 10-second CPU ceiling on `EPUBArchiveWriterTests`' 60 MB strict round trip
+held on this Mac (about 2 s) and failed on GitHub's runners about one run in
+three. Measured across fourteen CI jobs on 11 November 2026, same writer
+throughout: 4.8–9.6 s on Linux, 7.0–13.3 s on macOS; five macOS jobs went over
+10 s and failed two pull requests that changed no code under test. The ceiling
+is now 30 s, a little over twice the slowest run. Test-only; the writer is
+unchanged. Run on this Mac: `make test`, `make app`, `make lint`, `make smoke`.
+Not known: why the macOS runners vary by a factor of two between runs.
+
 ## Fix — `make app` built an app that could not start once a Developer ID existed · 11 November 2026
 
 `make app` turned Hardened Runtime on whenever the keychain held a "Developer
