@@ -3,6 +3,29 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Fix — CI is green again: Sendable `Commit`, Linux-honest cover tests, checkout v5 · 11 November 2026
+
+CI had been red since 19 September 2026 while `make test && make app && make
+lint && make smoke` stayed green locally. Measured on run 38428391986
+(`b9ec59f`), three causes:
+
+- **App build (macOS)**: Xcode 16.4 (Swift 6.1) rejects
+  `LibraryModel.swift:1734`, "non-sendable result type
+  'CoverReplacement.Commit' cannot be sent from nonisolated context"; the
+  local Xcode 27.2 does not. `Commit` holds a `LibraryEntry`, `[String]` and
+  `Refusal`, all already `Sendable`, so it now says so.
+- **ShelfCore tests (Linux)**, 3 issues in 2 tests: the Remove Cover commit
+  test used the real Trash, which a Linux container has not (`.noTrashHere`);
+  it now injects a disposal of its own and also checks the file landed in it.
+  The `setAside` rollback test makes a rename fail with a `0o555` directory,
+  which root (the container user) ignores; it is now enabled only when
+  `geteuid() != 0`. It still runs on the Mac and on any non-root Linux. No
+  expectation was weakened.
+- `actions/checkout` v4 → v5 (v4 runs on the deprecated Node 20).
+
+Run on this Mac: `make test`, `make lint`, `make app`, `make smoke`. The
+Linux and Xcode 16.4 jobs are judged by the CI run on the PR.
+
 ## Test — the 60 MB EPUB round trip is judged on CPU time, not wall clock · 10 October 2026
 
 `EPUBArchiveWriterTests`' 60 MB strict round trip had a 10-second wall-clock
