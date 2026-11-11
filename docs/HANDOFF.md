@@ -25,9 +25,10 @@ where a later section overtakes an older one, the older one says so.
 - **Sprints:** 0–23 are done or closed; Sprint 23's Teil C4 (the real
   "Write into the Book File" run over the real library) is *paused*, not
   finished — see "Only Erik can do" below.
-- **CI is red on `main`** since 19 September 2026, per the coordinating
-  session (`gh run list`: the last four runs on `main` all `failure`, newest
-  13 October). Being repaired in a separate pull request; see "Running now".
+- **CI is green again.** It was red on `main` from 19 September to
+  11 November 2026 (163 runs) while the local checks stayed green; repaired in
+  [Erikemmer/Shelf#1](https://github.com/Erikemmer/Shelf/pull/1), merged
+  11 November 2026. `CHANGELOG.md` has the three causes.
 
 ### What changed after Sprint 23, Teil C (25 September) — 9–13 October 2026
 
@@ -112,16 +113,17 @@ so **39 open**. Of those, the ones that are *not* hardware or Erik's own are:
   1105, 1185 (`recoverAsides` also on selection or library open — still
   true after the 10 October fix), 1276, 1284, 1319, 1329.
 
-**3. Running now**
+**3. Merged or running on 11 November 2026**
 
-- **CI repair** — separate pull request: the app build fails on Xcode 16.4 with
-  a Sendable error, and three `CoverReplacementTests` fail on Linux.
-- **`make app` signing fix** — PR [Erikemmer/Shelf#4](https://github.com/Erikemmer/Shelf/pull/4):
+- **CI repair** — merged, [Erikemmer/Shelf#1](https://github.com/Erikemmer/Shelf/pull/1).
+- **`make app` signing fix** — merged, [Erikemmer/Shelf#4](https://github.com/Erikemmer/Shelf/pull/4):
   with a Developer ID in the keychain the old `app` target built ad hoc with
   hardened runtime, and the result crashed at start (dyld refused Sparkle for
-  differing team IDs). The fix signs with the Developer ID and verifies the
-  signature; `SHELF_ADHOC=1 make app` builds ad hoc.
-- **An app test target** in `project.yml`/`Makefile` — separate pull request.
+  differing team IDs). `Scripts/build-app.sh` signs with the Developer ID and
+  verifies the signature; `SHELF_ADHOC=1 make app` builds ad hoc.
+- **An app test target** (`ShelfAppTests`, covering `CoverImage`) — open as
+  [Erikemmer/Shelf#3](https://github.com/Erikemmer/Shelf/pull/3) when this was
+  written. It does not yet run in CI.
 - **1.3.0** — deferred by Erik. The next release carries everything since
   1.2.0 in one step.
 
