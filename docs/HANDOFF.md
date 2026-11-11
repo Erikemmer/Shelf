@@ -12,8 +12,10 @@ where a later section overtakes an older one, the older one says so.
 - **Released: v1.2.0** (tag on `a8928d3`, 25 September 2026; `project.yml`:
   `MARKETING_VERSION` 1.2.0, build 5). Nothing newer is tagged. **26 commits**
   sit on `main` since that tag (`git log v1.2.0..HEAD`), none released.
-- **Not yet notarised.** No Developer ID certificate and no notarytool profile
-  exist, so nothing Shelf has ever shipped is notarised (`docs/RELEASE.md`).
+- **Not yet notarised.** A Developer ID Application certificate has been in
+  Erik's keychain since 19 October 2026 (reported by the coordinating session,
+  not re-checked here). Whether a notarytool profile exists is **for Erik to
+  confirm**; nothing Shelf has ever shipped has been notarised (`docs/RELEASE.md`).
   Releases go out signed with Sparkle's EdDSA key (ADR 0022) and are installed
   through Sparkle's own update panel.
 - **SlateKit** is pinned at `0.4.1` (`project.yml`, `exactVersion`) and is
@@ -58,10 +60,12 @@ named at the end of the list.
 
 **1. Only Erik can do these**
 
-1. **Developer ID certificate and notarytool profile.** Both cost a yearly
-   Apple Developer Program membership; `docs/RELEASE.md` has the steps.
-   `make release` then runs steps 6 and 7, which have never run
-   (`docs/BACKLOG.md` line 619).
+1. **Notarisation: confirm the notarytool profile.** The Developer ID
+   certificate exists (see above), so "certificate missing" is out of date.
+   Still Erik's to confirm: whether the notarytool keychain profile exists.
+   Until it does, `make release` steps 6 and 7 have never run
+   (`docs/BACKLOG.md` line 619, which still says both are missing;
+   `docs/RELEASE.md` has the steps).
 2. **Real hardware.** A real e-reader on a cable, a real `KoboReader.sqlite`,
    a real KEPUB, a Kobo's full `.kobo/` folder, exFAT, a book over 4 GB, a
    nearly full device, a cable pulled mid-transfer (BACKLOG lines 370–454).
@@ -112,6 +116,11 @@ so **39 open**. Of those, the ones that are *not* hardware or Erik's own are:
 
 - **CI repair** — separate pull request: the app build fails on Xcode 16.4 with
   a Sendable error, and three `CoverReplacementTests` fail on Linux.
+- **`make app` signing fix** — PR [Erikemmer/Shelf#4](https://github.com/Erikemmer/Shelf/pull/4):
+  with a Developer ID in the keychain the old `app` target built ad hoc with
+  hardened runtime, and the result crashed at start (dyld refused Sparkle for
+  differing team IDs). The fix signs with the Developer ID and verifies the
+  signature; `SHELF_ADHOC=1 make app` builds ad hoc.
 - **An app test target** in `project.yml`/`Makefile` — separate pull request.
 - **1.3.0** — deferred by Erik. The next release carries everything since
   1.2.0 in one step.
