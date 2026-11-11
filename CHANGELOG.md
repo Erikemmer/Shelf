@@ -3,6 +3,27 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Fix — `make app` built an app that could not start once a Developer ID existed · 11 November 2026
+
+`make app` turned Hardened Runtime on whenever the keychain held a "Developer
+ID Application" certificate, but never told `xcodebuild` to sign with it. The
+build stayed ad hoc, and an ad-hoc build with Hardened Runtime cannot load the
+embedded `Sparkle.framework`: dyld ends the process before `main` ("different
+Team IDs"). Harmless while no certificate existed; one was issued on
+19 October 2026, and the first `make app` after that — three parallel sessions
+on 11 November — left eight crash reports in two minutes. The build now lives
+in `Scripts/build-app.sh`: the identity that decides Hardened Runtime is the
+identity the build is signed with, as `Scripts/release.sh` already did, and the
+signature is read back afterwards — ad hoc with `runtime`, or an app and a
+framework from different teams, fails the target instead of reaching
+`make smoke`. `SHELF_ADHOC=1 make app` builds ad hoc whatever the keychain
+holds. Measured on this Mac: Developer ID path, flags `runtime`,
+`codesign --verify --deep --strict` ok, `make smoke` ok; `SHELF_ADHOC=1` path,
+flags `adhoc`, `make smoke` ok; then `make test` (988), `make app`, `make lint`,
+`make smoke`. No keychain prompt appeared. Not tested: the guard's failing
+branch against a real broken bundle (the script can no longer produce one),
+notarisation, and a Mac whose keychain asks before using the key.
+
 ## Test — the 60 MB EPUB round trip is judged on CPU time, not wall clock · 10 October 2026
 
 `EPUBArchiveWriterTests`' 60 MB strict round trip had a 10-second wall-clock
