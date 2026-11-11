@@ -1,5 +1,139 @@
 # Handoff – where Shelf stands, and what is left
 
+## Where Shelf stands, and what is open · 11 November 2026
+
+**Read this section and stop.** It was written against `main` at `b9ec59f`
+(13 October 2026) and re-checked against `docs/BACKLOG.md` and `CHANGELOG.md`
+on 11 November 2026. Everything below it is history, kept as it was written;
+where a later section overtakes an older one, the older one says so.
+
+### State of `main`
+
+- **Released: v1.2.0** (tag on `a8928d3`, 25 September 2026; `project.yml`:
+  `MARKETING_VERSION` 1.2.0, build 5). Nothing newer is tagged. **26 commits**
+  sit on `main` since that tag (`git log v1.2.0..HEAD`), none released.
+- **Not yet notarised.** A Developer ID Application certificate has been in
+  Erik's keychain since 19 October 2026 (reported by the coordinating session,
+  not re-checked here). Whether a notarytool profile exists is **for Erik to
+  confirm**; nothing Shelf has ever shipped has been notarised (`docs/RELEASE.md`).
+  Releases go out signed with Sparkle's EdDSA key (ADR 0022) and are installed
+  through Sparkle's own update panel.
+- **SlateKit** is pinned at `0.4.1` (`project.yml`, `exactVersion`) and is
+  Shelf's alone since 22 September 2026.
+- **ADRs 0001–0022** in `docs/adr/`. **Tests: 988 tests in 94 suites, all passing** (`make test`, 11 November
+  2026, ShelfCore target, on macOS).
+- **Sprints:** 0–23 are done or closed; Sprint 23's Teil C4 (the real
+  "Write into the Book File" run over the real library) is *paused*, not
+  finished — see "Only Erik can do" below.
+- **CI is green again.** It was red on `main` from 19 September to
+  11 November 2026 (163 runs) while the local checks stayed green; repaired in
+  [Erikemmer/Shelf#1](https://github.com/Erikemmer/Shelf/pull/1), merged
+  11 November 2026. `CHANGELOG.md` has the three causes.
+
+### What changed after Sprint 23, Teil C (25 September) — 9–13 October 2026
+
+All of it is in `CHANGELOG.md`, newest first, with the numbers.
+
+- **Recent:** one entry can be removed from the welcome screen and from File ▸
+  Open Recent; the Recent book count follows an import and no longer races a
+  library switch (`5d67cdf`, `dd0fe1b`, `0beb82a`).
+- **`ImportModel.cancel()`** now also cancels `examine()` and
+  `examineCalibre()`, and a stale examination task can no longer bring a plan
+  back after Cancel or after being superseded (`7a6ce61`, `f0e5c14`).
+- **Cover swap before the Trash.** `CoverReplacement.replace` renames the old
+  cover into a hidden `.shelf-cover-aside-*` folder, puts the new one in place,
+  and only then trashes the old one, so a book is never without a cover. A
+  refused Trash is shown in the inspector (English and German); `recoverAsides`
+  restores or re-offers stranded covers at the start of the *next replace in
+  that folder* (`7b20fd2`, `77f7eca`).
+- **KFX "cannot read" note** goes through `Loc.core` and has a German string
+  (`82bd9e7`).
+- **The 60 MB EPUB round-trip test** is judged on this thread's CPU time, not
+  wall clock (`b9ec59f`).
+- **Docs:** the original Shelf concept and start prompts were preserved
+  (`a335dbd`).
+
+### Open, as of 11 November 2026
+
+One list. Every item was checked against `docs/BACKLOG.md` and `CHANGELOG.md`
+before it was carried over; two BACKLOG items turned out to be done and are
+named at the end of the list.
+
+**1. Only Erik can do these**
+
+1. **Notarisation: confirm the notarytool profile.** The Developer ID
+   certificate exists (see above), so "certificate missing" is out of date.
+   Still Erik's to confirm: whether the notarytool keychain profile exists.
+   Until it does, `make release` steps 6 and 7 have never run
+   (`docs/BACKLOG.md` line 619, which still says both are missing;
+   `docs/RELEASE.md` has the steps).
+2. **Real hardware.** A real e-reader on a cable, a real `KoboReader.sqlite`,
+   a real KEPUB, a Kobo's full `.kobo/` folder, exFAT, a book over 4 GB, a
+   nearly full device, a cable pulled mid-transfer (BACKLOG lines 370–454).
+   Plus a real MOBI, AZW3, CBR and DRM-protected file (line 328). The first
+   one decides whether device auto-detection works at all under the sandbox
+   (line 380).
+3. **The four cover judgements** (section "What Erik has to do" below, item
+   2): the 1 600 px ceiling, whether *Replace Cover* warns enough in both
+   languages, no cover for a multiple selection, `Take Cover from Book File`.
+4. **The Dock/About icon after a plain rebuild.** `lsregister -f -R -trusted
+   <path to Shelf.app>` (no `sudo`; BACKLOG line 1547). A real Sparkle
+   install did *not* show the stale icon (1.2.0 section below), so this only
+   matters for local rebuilds.
+5. **Sprint 23, Teil C4 — a decision.** Four of the 292 descriptions that
+   would be written already carry markup (a `<div>`, `**bold**`) in Shelf's own
+   sidecar. "Write into the Book File" writes what the sidecar says, by design.
+   Decide: clean those four first, or write as they are. Until then the real
+   run stays paused; the backup (366 books, 1 450-line manifest) was proven and
+   the library was left byte-identical. The trial-library proof (16 of 16
+   books written and independently checked) stands.
+6. **Things a person has to look at:** VoiceOver reading order; trackpad
+   smoothness while the cover cache fills (BACKLOG line 867).
+7. **Google Books** answers HTTP 429 to anonymous requests; only a key would
+   change that, and a key is a secret in a shipped app (BACKLOG lines 483,
+   505).
+8. **A real Calibre reading one of Shelf's exports** — would write into Erik's
+   own Calibre library, so it is his.
+
+**2. A session can do these** (`docs/BACKLOG.md`, by line; nothing copied
+here so it cannot go stale twice)
+
+41 unchecked `- [ ]` lines on 11 November 2026, 2 of them already done (below),
+so **39 open**. Of those, the ones that are *not* hardware or Erik's own are:
+
+- Product gaps: 110 (publisher/language/date across a selection), 123
+  (reorder shelves among their sisters), 133 and 134 (⌘-click filters, series
+  view with missing volumes), 804 (Organize "move only these"), 807 (export
+  resume), 924 (a cover for a selection), 1094 (add/remove an author in the
+  OPF), 626 (translate device-profile notes).
+- Quality, measurement, tests: 151, 248 (`NSApp.terminate` intermittently
+  not reaching `applicationShouldTerminate`; 15 s backstop in place), 491,
+  496, 502, 630 (five sheets never photographed in German), 936 (tests for
+  the ImageIO half of covers), 1021 (mostly-deflated archive timing), 1100,
+  1105, 1185 (`recoverAsides` also on selection or library open — still
+  true after the 10 October fix), 1276, 1284, 1319, 1329.
+
+**3. Merged or running on 11 November 2026**
+
+- **CI repair** — merged, [Erikemmer/Shelf#1](https://github.com/Erikemmer/Shelf/pull/1).
+- **`make app` signing fix** — merged, [Erikemmer/Shelf#4](https://github.com/Erikemmer/Shelf/pull/4):
+  with a Developer ID in the keychain the old `app` target built ad hoc with
+  hardened runtime, and the result crashed at start (dyld refused Sparkle for
+  differing team IDs). `Scripts/build-app.sh` signs with the Developer ID and
+  verifies the signature; `SHELF_ADHOC=1 make app` builds ad hoc.
+- **An app test target** (`ShelfAppTests`, covering `CoverImage`) — open as
+  [Erikemmer/Shelf#3](https://github.com/Erikemmer/Shelf/pull/3) when this was
+  written. It does not yet run in CI.
+- **1.3.0** — deferred by Erik. The next release carries everything since
+  1.2.0 in one step.
+
+**Found already done, not carried over:** BACKLOG line 215 (a proof run
+against a real Calibre library — done 24 September, Sprint 16 Teil G) and line
+799 (a stored `authorSort` — done in Sprint 18, Teil C1). Both are still shown
+as open in `docs/BACKLOG.md`; that file was deliberately not edited here.
+
+---
+
 ## Sprint 23, Teil C — a trial run proves the mechanism; the real run is paused on a real finding · 25 September 2026
 
 **Teil A and B are done and shipped** (`CHANGELOG.md` has the numbers):
@@ -701,6 +835,8 @@ and [ADR 0019](adr/0019-export-the-opf-decides-what-an-export-is.md).
 
 ## What Erik has to do, and nobody else can
 
+> **Superseded 11 November 2026** — the current list is "Open, as of 11 November 2026" at the top. Item 2 (the four cover judgements) and item 3 (real hardware) are still true and are referenced from there. Kept as written.
+
 **Three things**, one of which is only a judgement. Everything else that used to
 be on this list has been done.
 
@@ -768,6 +904,8 @@ All of these are in `docs/BACKLOG.md` with what each would settle:
 
 ## What is no longer on that list
 
+> **Superseded 11 November 2026** — history only; nothing here is open. Kept as written.
+
 Three things were, until 19 September 2026, and all three are done:
 
 - **GitHub Actions had not run since Sprint 4** — every job ended after seven
@@ -818,6 +956,8 @@ them:
 
 ## If the next session is a v1.1
 
+> **Superseded 11 November 2026** — item 3 (a stored `authorSort`) was done in Sprint 18, Teil C1; 1 and 2 are still open (`docs/BACKLOG.md`). The current list is at the top. Kept as written.
+
 `docs/BACKLOG.md` is the list. The first of Sprint 7's three was fixed in
 Sprint 8; the obvious first three now are:
 
@@ -836,6 +976,62 @@ Sprint 8; the obvious first three now are:
 ---
 
 ## Prompt for a fresh session
+
+Copy the block below into a new Claude Code session in `~/Developer/Shelf`
+(written 11 November 2026; the v1.0 prompt it replaces is kept under it).
+
+---
+
+Du arbeitest mit mir (Erik Emmer) an **Shelf**, einem Mac-only eBook-Manager im
+Look & Feel von Selector. Repo: https://github.com/Erikemmer/Shelf (lokal
+`~/Developer/Shelf`). Shelf ist ein modern aussehendes Calibre: Bibliothek,
+Metadaten, Calibre-Import, Geräte, Online-Metadaten – kein Reader, keine
+Konvertierung. **Stand: v1.2.0 ist veröffentlicht** (Tag auf `a8928d3`,
+`project.yml`: 1.2.0, Build 5, SlateKit-Pin `0.4.1`), die Sprints 0–23 sind
+erledigt oder geschlossen, die ADRs reichen von 0001 bis 0022. Auf `main` liegen
+seit v1.2.0 weitere Commits, die nicht veröffentlicht sind; 1.3.0 hat Erik
+zurückgestellt. `make test`: 988 Tests (Stand 11.11.2026). Notarisiert ist
+noch nichts – es gibt kein Developer-ID-Zertifikat.
+
+**Lies zuerst, in dieser Reihenfolge:** `Programmier-Leitlinie.md` (bindend),
+`CLAUDE.md` (bindend, enthält die nicht verhandelbaren Regeln), dann in dieser
+Datei **nur den obersten Abschnitt** („Where Shelf stands, and what is open“) –
+alles darunter ist Verlauf –, danach `CHANGELOG.md` (oben der letzte Stand),
+`docs/BACKLOG.md`, `docs/RUNBOOK.md`. Fachliches steht in `docs/CONCEPT.md`, das
+Datenmodell in `docs/DATA-MODEL.md`, die Entscheidungen in `docs/adr/`.
+
+**Rollen und Arbeitsweise**
+
+- Du schreibst den Code, prüfst, committest und pushst selbst, auf einem Branch
+  und mit einem PR gegen `main`. Ich lese Berichte und entscheide bei echten
+  Entscheidungen. Frag mich nur, wenn eine Entscheidung wirklich offen ist oder
+  etwas Irreversibles anstünde; sonst entscheide selbst und schreib die
+  Entscheidung in den Bericht.
+- Vor jeder Änderung: Ziel in einem Satz, betroffene Dateien, Risiken. Kleine
+  lauffähige Schritte. Zu jeder Änderung Tests und Doku. Jeder Bericht trennt:
+  **gemessen, angenommen, nicht geprüft**, und endet mit einer Zusammenfassung in
+  einfacher Sprache.
+- **Prüfkette vor jedem Commit: `make test && make app && make lint &&
+  make smoke`.** Alle vier grün, oder es wird nicht committet.
+- **Eine Buchdatei wird nie aus Versehen geschrieben, gelöscht oder
+  überschrieben.** Seit ADR 0021 darf eine EPUB-Datei *auf ausdrücklichen Wunsch*
+  beschrieben werden („Write into the Book File“, nur dort, mit Vorprüfung,
+  Bestätigung, verifiziertem Umschreiben und dem Original im Papierkorb). Jede
+  andere Änderung geht nur in `metadata.opf` und den Index. Calibre wird nur
+  gelesen; DRM nie angefasst; auf Geräten nur nach Bestätigung mit Namensliste
+  gelöscht. Die echte Bibliothek `~/Bücher` nur anfassen, wenn die Aufgabe es
+  ausdrücklich sagt, und vorher mit Backup (`docs/RUNBOOK.md` §2).
+- **SlateKit gehört seit dem 22.09.2026 allein Shelf.** Änderungen direkt in
+  `~/Documents/SlateKit`, Tag setzen, dann `exactVersion` in `project.yml`
+  anheben (Weg in `CLAUDE.md`).
+- Unter `~/Library/Caches/Shelf/` nur löschen, was diese Sitzung angelegt und im
+  Bericht genannt hat. Einen fremden laufenden Prozess (Xcode, eine von Erik
+  gestartete Shelf-Instanz) beendest du nie.
+- **Einen Release-Tag setzt du nie ohne mein Wort**, mit Namen, im Prompt.
+
+---
+
+### Superseded: the v1.0 prompt, as it was written
 
 Copy the block below into a new Claude Code session in `~/Documents/Shelf`.
 

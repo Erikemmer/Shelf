@@ -17,6 +17,70 @@ missing file refused, `describe`. No defect in `CoverImage` was found.
 is the first half alone. Not covered: Linux CI does not run the new target — a
 macOS job calling `make test-app` is the follow-up in `ci.yml`.
 
+## Docs — HANDOFF brought current to `main`, one list of what is open · 11 November 2026
+
+`docs/HANDOFF.md` ended its overview at Sprint 23, Teil C (25 September) and its
+start prompt still described v1.0. Added at the top: the state of `main` at
+`b9ec59f`, a summary of the 9–13 October commits, and a single "Open, as of
+11 November 2026" list in three groups (only Erik / a session / running now),
+each item checked against `docs/BACKLOG.md` and this file. The start prompt is
+rewritten for today (path `~/Developer/Shelf`, v1.2.0, 988 tests, ADRs 0001–0022,
+SlateKit Shelf-only, ADR 0021's qualification of "no book file is written");
+the v1.0 prompt and the older "what Erik has to do" sections stay, marked
+superseded. `CLAUDE.md`'s "What this is" and "Roadmap" gain a short current-state
+paragraph; its rules are unchanged.
+
+Measured: `make test` on this Mac, 11 November 2026 — 988 tests in 94 suites,
+passing. Found while checking, not fixed (outside these three files):
+`docs/BACKLOG.md` still shows two done items as open (line 215, a real Calibre
+library proof, done in Sprint 16 Teil G; line 799, a stored `authorSort`, done in
+Sprint 18 Teil C1). Not checked: that the CI failure since 19 September is as
+described (only `gh run list` showed the last four runs on `main` failing).
+
+## Fix — `make app` built an app that could not start once a Developer ID existed · 11 November 2026
+
+`make app` turned Hardened Runtime on whenever the keychain held a "Developer
+ID Application" certificate, but never told `xcodebuild` to sign with it. The
+build stayed ad hoc, and an ad-hoc build with Hardened Runtime cannot load the
+embedded `Sparkle.framework`: dyld ends the process before `main` ("different
+Team IDs"). Harmless while no certificate existed; one was issued on
+19 October 2026, and the first `make app` after that — three parallel sessions
+on 11 November — left eight crash reports in two minutes. The build now lives
+in `Scripts/build-app.sh`: the identity that decides Hardened Runtime is the
+identity the build is signed with, as `Scripts/release.sh` already did, and the
+signature is read back afterwards — ad hoc with `runtime`, or an app and a
+framework from different teams, fails the target instead of reaching
+`make smoke`. `SHELF_ADHOC=1 make app` builds ad hoc whatever the keychain
+holds. Measured on this Mac: Developer ID path, flags `runtime`,
+`codesign --verify --deep --strict` ok, `make smoke` ok; `SHELF_ADHOC=1` path,
+flags `adhoc`, `make smoke` ok; then `make test` (988), `make app`, `make lint`,
+`make smoke`. No keychain prompt appeared. Not tested: the guard's failing
+branch against a real broken bundle (the script can no longer produce one),
+notarisation, and a Mac whose keychain asks before using the key.
+
+## Fix — CI is green again: Sendable `Commit`, Linux-honest cover tests, checkout v5 · 11 November 2026
+
+CI had been red since 19 September 2026 while `make test && make app && make
+lint && make smoke` stayed green locally. Measured on run 38428391986
+(`b9ec59f`), three causes:
+
+- **App build (macOS)**: Xcode 16.4 (Swift 6.1) rejects
+  `LibraryModel.swift:1734`, "non-sendable result type
+  'CoverReplacement.Commit' cannot be sent from nonisolated context"; the
+  local Xcode 27.2 does not. `Commit` holds a `LibraryEntry`, `[String]` and
+  `Refusal`, all already `Sendable`, so it now says so.
+- **ShelfCore tests (Linux)**, 3 issues in 2 tests: the Remove Cover commit
+  test used the real Trash, which a Linux container has not (`.noTrashHere`);
+  it now injects a disposal of its own and also checks the file landed in it.
+  The `setAside` rollback test makes a rename fail with a `0o555` directory,
+  which root (the container user) ignores; it is now enabled only when
+  `geteuid() != 0`. It still runs on the Mac and on any non-root Linux. No
+  expectation was weakened.
+- `actions/checkout` v4 → v5 (v4 runs on the deprecated Node 20).
+
+Run on this Mac: `make test`, `make lint`, `make app`, `make smoke`. The
+Linux and Xcode 16.4 jobs are judged by the CI run on the PR.
+
 ## Test — the 60 MB EPUB round trip is judged on CPU time, not wall clock · 10 October 2026
 
 `EPUBArchiveWriterTests`' 60 MB strict round trip had a 10-second wall-clock

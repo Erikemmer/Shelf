@@ -321,7 +321,7 @@ public enum CoverReplacement {
 extension CoverReplacement {
     /// What a commit turned out to do: the entry as it now is, or the refusal
     /// that stopped it.
-    public enum Commit {
+    public enum Commit: Sendable {
         /// `leftBehind`: displaced covers the Trash refused after the swap,
         /// still inside the book folder. The book itself is correct.
         case wrote(LibraryEntry, leftBehind: [String] = [])

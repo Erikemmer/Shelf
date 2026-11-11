@@ -62,13 +62,10 @@ project: ## Generate Shelf.xcodeproj from project.yml (needs: brew install xcode
 	xcodegen generate
 
 app: project ## Build the macOS app, Release (needs Xcode) – this is what gets started
-	@if security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID Application"; then \
-		echo "app: Developer ID identity found — Hardened Runtime on"; \
-		xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Release SHELF_HARDENED=YES build SHELF_BUILD_COMMIT="$$(git rev-parse HEAD)"; \
-	else \
-		echo "app: no Developer ID identity — ad-hoc build, Hardened Runtime off (see docs/adr/0022-updates-separate-delivery-sparkle.md)"; \
-		xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Release SHELF_HARDENED=NO build SHELF_BUILD_COMMIT="$$(git rev-parse HEAD)"; \
-	fi
+	@# Signs with a Developer ID if the keychain has one (SHELF_ADHOC=1 to not),
+	@# and reads the signature back: Hardened Runtime on an ad-hoc build cannot
+	@# load Sparkle.framework and never reaches a window.
+	@Scripts/build-app.sh
 
 app-debug: project ## Build the macOS app with assertions and symbols, for chasing a crash
 	xcodebuild -project Shelf.xcodeproj -scheme Shelf -configuration Debug build SHELF_BUILD_COMMIT="$$(git rev-parse HEAD)"

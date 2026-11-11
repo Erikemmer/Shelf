@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     container: swift:6.1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # GRDB reaches the system SQLite through a `systemLibrary` target on
       # Linux, so the headers have to be there. Ubuntu's libsqlite3 is built
       # with FTS5, which the index needs.
@@ -34,7 +34,7 @@ jobs:
     name: ShelfCore tests (macOS)
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s /Applications/Xcode.app
       - run: swift --version
@@ -54,7 +54,7 @@ jobs:
     name: App build (macOS)
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s /Applications/Xcode.app
       - name: Install XcodeGen

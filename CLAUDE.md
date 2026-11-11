@@ -6,7 +6,10 @@ project-specific part.
 ## What this is
 macOS-only eBook manager in the look and feel of **Selector**: a modern-looking
 Calibre. Library, metadata, Calibre import, devices – **no reader, no format
-conversion** in v1.0. Core logic in the Swift package `ShelfCore` (UI-free,
+conversion** in v1.0. **Today (11 November 2026): v1.2.0 is published**
+(25 September 2026), Sprints 0–23 are done or closed, and `main` carries
+unreleased work since; `docs/HANDOFF.md`, top section, has the current state
+and the one list of what is open. Core logic in the Swift package `ShelfCore` (UI-free,
 builds on Linux), UI in `App/Shelf` (SwiftUI + AppKit) on top of the
 `SlateKit` package — Shelf's own since 22 September 2026, no longer shared
 with Selector. Concept: `docs/CONCEPT.md`. Architecture:
@@ -176,3 +179,10 @@ Sprint 0 SlateKit (done, in Selector) → **1 scaffolding & EPUB** → 2 metadat
 editing, shelves, search → 3 Calibre import → 4 MOBI/AZW3/PDF/CBZ/CBR →
 5 devices → 6 online metadata → 7 polish, German, notarisation → **v1.0**.
 Details in `docs/CONCEPT.md` §11 and `docs/BACKLOG.md`.
+
+**Since v1.0 (added 11 November 2026):** v1.0.0 and v1.1.0 are tagged; v1.2.0
+was published on 25 September 2026 and installed through Sparkle. Sprints 8–23
+followed v1.0 (organise/export, covers, writing into an EPUB under ADR 0021,
+online metadata, `authorSort`, Fill Missing Fields from Calibre and ISBN, DRM
+badge checks). 1.3.0 is deferred by Erik; the next release carries everything on
+`main` since 1.2.0. What is open: `docs/HANDOFF.md`, top section.
