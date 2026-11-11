@@ -14,7 +14,7 @@ SCRATCH ?= $(HOME)/Library/Caches/Shelf/build
 CACHE ?= $(HOME)/Library/Caches/Shelf
 SYNTHETIC ?= $(CACHE)/synthetic
 
-.PHONY: help bootstrap test build lint format project app app-debug smoke synthetic synthetic-clean proof \
+.PHONY: help bootstrap test test-core test-app build lint format project app app-debug smoke synthetic synthetic-clean proof \
 	online-proof online-library online-shots german-shots contrast accessibility runbook \
 	organize-library organize-shots release release-dry clean
 
@@ -33,8 +33,17 @@ bootstrap: ## First-time setup on a Mac: check Xcode, install XcodeGen, run test
 	open Shelf.xcodeproj
 	@echo "✅ Bootstrap done – press ⌘R in Xcode to run Shelf."
 
-test: ## Run ShelfCore unit tests (works on macOS and Linux)
+test: ## Run ShelfCore unit tests (macOS and Linux), then the app-side tests (macOS only, docs/adr/0023-…)
 	swift test --scratch-path $(SCRATCH)
+	$(MAKE) test-app
+
+test-core: ## Run only the ShelfCore unit tests
+	swift test --scratch-path $(SCRATCH)
+
+test-app: project ## Run the app-side unit tests (ShelfAppTests): ImageIO and other Mac-only code, no window
+	xcodebuild test -project Shelf.xcodeproj -scheme Shelf -configuration Debug \
+		-destination 'platform=macOS' -derivedDataPath $(SCRATCH)/xcode-tests \
+		-only-testing:ShelfAppTests CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 
 build: ## Build ShelfCore
 	swift build --scratch-path $(SCRATCH)
