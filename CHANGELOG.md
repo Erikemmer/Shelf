@@ -3,6 +3,26 @@
 Newest first. Measured numbers belong here, with the machine they were measured
 on and what was *not* measured.
 
+## Docs — HANDOFF brought current to `main`, one list of what is open · 11 November 2026
+
+`docs/HANDOFF.md` ended its overview at Sprint 23, Teil C (25 September) and its
+start prompt still described v1.0. Added at the top: the state of `main` at
+`b9ec59f`, a summary of the 9–13 October commits, and a single "Open, as of
+11 November 2026" list in three groups (only Erik / a session / running now),
+each item checked against `docs/BACKLOG.md` and this file. The start prompt is
+rewritten for today (path `~/Developer/Shelf`, v1.2.0, 988 tests, ADRs 0001–0022,
+SlateKit Shelf-only, ADR 0021's qualification of "no book file is written");
+the v1.0 prompt and the older "what Erik has to do" sections stay, marked
+superseded. `CLAUDE.md`'s "What this is" and "Roadmap" gain a short current-state
+paragraph; its rules are unchanged.
+
+Measured: `make test` on this Mac, 11 November 2026 — 988 tests in 94 suites,
+passing. Found while checking, not fixed (outside these three files):
+`docs/BACKLOG.md` still shows two done items as open (line 215, a real Calibre
+library proof, done in Sprint 16 Teil G; line 799, a stored `authorSort`, done in
+Sprint 18 Teil C1). Not checked: that the CI failure since 19 September is as
+described (only `gh run list` showed the last four runs on `main` failing).
+
 ## Test — the 60 MB round trip's CPU ceiling is 30 s, because CI runners need up to 13 · 11 November 2026
 
 The 10-second CPU ceiling on `EPUBArchiveWriterTests`' 60 MB strict round trip
